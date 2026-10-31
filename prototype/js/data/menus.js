@@ -1,6 +1,7 @@
 // Menu catalogue, following the team lead's "Application Menu Structure" sheet.
-// stretch: the build stretch that delivers the screen (1 = built now; later ones show a "coming" page).
+// stretch: the build stretch that delivers the screen; menus above BUILT_STRETCH show a "coming" page.
 export const GROUPS = ['Dashboard', 'Master', 'Transactions', 'Admin Setup'];
+export const BUILT_STRETCH = 2;
 
 export const MENUS = [
   { key: 'dashboard', label: 'Dashboard', group: 'Dashboard', icon: '◧', route: 'home', stretch: 1 },
@@ -19,15 +20,15 @@ export const MENUS = [
 
   { key: 'enquiry', label: 'Sales Enquiry', group: 'Transactions', icon: '✎', route: 'enquiries', stretch: 1 },
   { key: 'inspection', label: 'Site Inspection', group: 'Transactions', icon: '⌖', route: 'inspections', stretch: 1 },
-  { key: 'estimation', label: 'Estimation', group: 'Transactions', icon: '∑', stretch: 2 },
-  { key: 'quotation', label: 'Sales Quotation', group: 'Transactions', icon: '▤', stretch: 2 },
-  { key: 'job', label: 'Job Execution', group: 'Transactions', icon: '⚑', stretch: 2 },
+  { key: 'estimation', label: 'Estimation', group: 'Transactions', icon: '∑', route: 'estimates', stretch: 2 },
+  { key: 'quotation', label: 'Sales Quotation', group: 'Transactions', icon: '▤', route: 'quotations', stretch: 2 },
+  { key: 'job', label: 'Job Execution', group: 'Transactions', icon: '⚑', route: 'jobs', stretch: 2 },
   { key: 'amcContract', label: 'AMC Contract', group: 'Transactions', icon: '▦', stretch: 3 },
   { key: 'amcScheduling', label: 'AMC Scheduling', group: 'Transactions', icon: '◷', stretch: 3 },
   { key: 'amcExecution', label: 'AMC Execution', group: 'Transactions', icon: '✓', stretch: 3 },
-  { key: 'closure', label: 'Job Closure', group: 'Transactions', icon: '⊠', stretch: 2 },
-  { key: 'invoice', label: 'Invoice', group: 'Transactions', icon: '▧', stretch: 2 },
-  { key: 'payment', label: 'Payment Collection', group: 'Transactions', icon: '$', stretch: 2 },
+  { key: 'closure', label: 'Job Closure', group: 'Transactions', icon: '⊠', route: 'closure', stretch: 2 },
+  { key: 'invoice', label: 'Invoice', group: 'Transactions', icon: '▧', route: 'invoices', stretch: 2 },
+  { key: 'payment', label: 'Payment Collection', group: 'Transactions', icon: '$', route: 'payments', stretch: 2 },
 
   { key: 'companySetup', label: 'Company Setup', group: 'Admin Setup', icon: '⌂', route: 'admin/companySetup', stretch: 3, preview: true },
   { key: 'transactionSetup', label: 'Transaction Setup', group: 'Admin Setup', icon: '#', route: 'admin/transactionSetup', stretch: 3, preview: true },
@@ -45,7 +46,7 @@ export const MOBILE_TABS = [
   { key: 'home', label: 'Home', icon: '⌂', route: 'm/home', needs: null },
   { key: 'jobs', label: 'My jobs', icon: '☰', route: 'm/jobs', needs: ['inspection', 'job', 'amcExecution'], ownOnly: true },
   { key: 'enquiries', label: 'Enquiries', icon: '✎', route: 'm/enquiries', needs: ['enquiry'] },
-  { key: 'approvals', label: 'Approvals', icon: '✓', route: 'm/soon/approvals', needs: ['quotation'], action: 'approve' },
+  { key: 'tasks', label: 'Tasks', icon: '✓', route: 'm/tasks' },
   { key: 'more', label: 'More', icon: '⋯', route: 'm/more', needs: null },
 ];
 

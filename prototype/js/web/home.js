@@ -8,6 +8,9 @@ import { enquiryTiles, setEnquiryTile } from './enquiry-list.js';
 import { clockHtml } from './site-inspection.js';
 import { pageHead } from './shell.js';
 import { switchView } from '../app.js';
+import { myTasks } from '../core/workflow.js';
+import { openInvoices } from '../core/billing.js';
+import { canCreateFor } from '../core/estimates.js';
 
 export function renderHome(el) {
   const u = auth.user(), r = auth.role(), c = auth.company();
@@ -19,6 +22,7 @@ export function renderHome(el) {
     return;
   }
   const enquiries = store.list('enquiries');
+  const tasks = auth.hasTasks('web') ? myTasks() : [];
   const open = store.list('inspections', i => ['To assign', 'Assigned', 'Report in progress'].includes(i.status) && auth.seesInspection(i))
     .map(i => ({ i, e: store.get('enquiries', i.enquiryId) })).filter(x => x.e)
     .sort((a, b) => a.e.receivedAt.localeCompare(b.e.receivedAt));
@@ -32,10 +36,20 @@ export function renderHome(el) {
         ${open.map(x => html`<tr class="click" data-go="inspections/${x.i.id}"><td class="lnk">${x.e.no}</td><td>${x.e.customerName}</td><td><span class="zone-chip">${zoneCode(x.i.zoneId)}</span></td>
           <td>${empName(x.i.technicianId) || '—'}</td><td>${fmtDateTime(x.i.visitAt)}</td><td style="min-width:200px">${clockHtml(inspectionClock(x.e, c))}</td><td>${pill(x.i.status)}</td></tr>`)}
       </tbody></table></div>` : html`<div class="muted">Nothing waiting.</div>`}</div>` : ''}
-    ${auth.can('quotation', 'approve') ? html`<div class="card"><h2>My approvals</h2><p class="muted" style="margin-top:6px">Quotation counter-checks and payment-term approvals arrive here in Stretch 2.</p></div>` : ''}
+    ${auth.hasTasks('web') ? html`<div class="card"><div class="card-head"><h2>My tasks</h2><a href="#/tasks">Open my tasks</a></div>
+      ${tasks.length ? html`<div class="tbl-wrap" style="max-height:none"><table class="tbl"><thead><tr><th>Document</th><th>Task</th><th>Customer</th><th>Waiting since</th></tr></thead><tbody>
+        ${tasks.map(t => html`<tr class="click" data-go="tasks"><td class="lnk">${t.docNo}</td><td>${t.title}</td><td>${t.customer}</td><td>${fmtDateTime(t.createdAt)}</td></tr>`)}</tbody></table></div>` : html`<div class="muted">Nothing is waiting for you.</div>`}</div>` : ''}
+    ${auth.can('estimation') || auth.can('job') || auth.can('payment') ? html`<h2 style="margin:14px 0 8px">Money side of repair jobs</h2>${tiles([
+      ...(auth.can('estimation') ? [{ key: 'est', label: 'Inspected, to estimate', count: enquiries.filter(canCreateFor).length, tone: 'warn', sub: 'click to open the estimates' }] : []),
+      ...(auth.can('quotation') ? [{ key: 'qt', label: 'Quotations to send', count: store.list('quotations', q => q.status === 'Approved').length, tone: 'warn', sub: 'counter-checked' }] : []),
+      ...(auth.can('job') ? [{ key: 'job', label: 'Jobs to schedule', count: store.list('jobs', j => j.status === 'To schedule').length, tone: 'warn' }] : []),
+      ...(auth.can('invoice') ? [{ key: 'inv', label: 'Invoices to post', count: store.list('invoices', i => i.status === 'Draft').length }] : []),
+      ...(auth.can('payment') ? [{ key: 'pay', label: 'Overdue invoices', count: openInvoices().filter(o => o.dueIn < 0).length, tone: 'bad' }] : []),
+    ], '', 'tiles money')}` : ''}
   </div>`);
 
-  on(el, 'click', '[data-tile]', (e, b) => { setEnquiryTile(b.dataset.tile); go('enquiries'); });
+  const MONEY = { est: 'estimates', qt: 'quotations', job: 'jobs', inv: 'invoices', pay: 'payments' };
+  on(el, 'click', '[data-tile]', (e, b) => { if (MONEY[b.dataset.tile]) return go(MONEY[b.dataset.tile]); setEnquiryTile(b.dataset.tile); go('enquiries'); });
   on(el, 'click', '[data-go]', (e, tr) => go(tr.dataset.go));
   el.querySelector('#paste')?.addEventListener('click', () => { sessionStorage.setItem('rsmOpenPaste', '1'); go('enquiries/new'); });
 }

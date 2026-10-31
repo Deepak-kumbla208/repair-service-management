@@ -16,8 +16,7 @@ const LATER = {
   amcContract: 'AMC contract with sites, covered shutters, visit plan and billing plan.',
   amcScheduling: 'Calendar of planned visits by month and zone.',
   amcExecution: 'Checklist per shutter on the phone; a failed item creates a repair enquiry.',
-  authWorkflow: 'Editing screen for the approval rules (the engine itself arrives in Stretch 2).',
-  approvals: 'Quotation counter-checks and payment-term approvals on the phone.',
+  authWorkflow: 'Editing screen for the approval rules. The engine and its preset rules are already working (see Transaction Setup).',
 };
 
 export function renderSoon(el, key) {
@@ -40,7 +39,16 @@ function companySetup(c) {
 
 function transactionSetup() {
   const year = new Date().getFullYear();
-  return html`<div class="tbl-wrap" style="max-height:none"><table class="tbl"><thead><tr><th>Document</th><th>Prefix</th><th>Format</th><th>Reset</th><th>Last number ${year}</th></tr></thead><tbody>
+  const d = auth.company().txDefaults || {};
+  const label = (set, v) => store.findOne('valueSets', x => x.code === set)?.values.find(x => x.code === v)?.label || v;
+  return html`<div class="card" style="margin-bottom:10px"><div class="card-head"><h2>Defaults for new estimates and quotations</h2></div><div class="kv">
+      <div><div class="k">Costing Level</div><div class="v">${label('COSTING_LEVEL', d.costingLevel)}</div></div><div><div class="k">Shared Costs</div><div class="v">${label('SHARED_COSTS', d.sharedCosts)}</div></div>
+      <div><div class="k">Overheads</div><div class="v">${d.overheadPct} % of direct cost</div></div><div><div class="k">Margin</div><div class="v">${label('MARGIN_BASIS', d.marginBasis)} ${d.marginPct} %</div></div>
+      <div><div class="k">Quotation validity</div><div class="v">${d.quoteValidityDays} days (Terms master, term 6)</div></div></div></div>
+    <div class="card" style="margin-bottom:10px"><div class="card-head"><h2>Approval rules</h2><span class="muted small">preset; the editing screen is the Authorization Workflow Master (Stretch 3)</span></div>
+      <div class="tbl-wrap" style="max-height:none"><table class="tbl"><thead><tr><th>Rule</th><th>When</th><th>Level</th><th>Approver role</th></tr></thead><tbody>
+        ${store.list('approvalRules').map(r => html`<tr><td>${r.name}</td><td class="wrap">${r.when}</td><td>${r.level}</td><td>${store.findOne('roles', x => x.code === r.roleCode)?.name || r.roleCode}</td></tr>`)}</tbody></table></div></div>
+    <div class="tbl-wrap" style="max-height:none"><table class="tbl"><thead><tr><th>Document</th><th>Prefix</th><th>Format</th><th>Reset</th><th>Last number ${year}</th></tr></thead><tbody>
     ${store.list('series').map(s => html`<tr><td>${s.name}</td><td>${s.prefix}</td><td>${s.prefix}-${year}-${'0'.repeat(s.padding - 1)}1</td><td>${s.reset}</td><td>${s.lastByYear[year] || 0}</td></tr>`)}
   </tbody></table></div>`;
 }

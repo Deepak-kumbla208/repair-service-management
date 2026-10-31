@@ -1,4 +1,4 @@
-// Phone: My jobs (only the technician's own site inspections), with search and tiles, and the job details.
+// Phone: My jobs (the technician's own site inspections and repair jobs), with search and tiles, and the inspection details.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, on, go, debounce, tiles, pill, fmtDate, fmtTime, toast } from '../core/ui.js';
@@ -6,14 +6,20 @@ import { zoneLabel, findSite, empName } from '../core/lookups.js';
 import { isToday } from '../core/enquiries.js';
 import { startReport } from '../core/inspections.js';
 import { getUrl } from '../core/media.js';
+import { seesJob } from '../core/jobs.js';
+import { repairCard } from './repair-job.js';
 
 const DONE = 'Report submitted';
 
-function myJobs() {
-  return store.list('inspections', i => i.status !== 'Cancelled' && auth.seesInspection(i) && i.technicianId)
+// My work: site inspections and scheduled repair jobs assigned to me, by visit time.
+export function myWork() {
+  const insp = store.list('inspections', i => i.status !== 'Cancelled' && auth.seesInspection(i) && i.technicianId)
     .map(i => ({ i, e: store.get('enquiries', i.enquiryId), r: i.reportId ? store.get('siteReports', i.reportId) : null }))
     .filter(x => x.e)
-    .sort((a, b) => (a.i.visitAt || '').localeCompare(b.i.visitAt || ''));
+    .map(x => ({ at: x.i.visitAt, done: x.i.status === DONE, text: [x.e.no, x.e.customerName, x.e.siteName, x.r?.no, 'site inspection'], card: () => jobCard(x) }));
+  const jobs = !auth.can('job', 'view', 'mobile') ? [] : store.list('jobs', j => seesJob(j) && j.technicianId && j.start && j.status !== 'Cancelled')
+    .map(j => ({ at: j.start, done: !!j.steps?.checkOutAt || ['Completed & documented', 'Closed'].includes(j.status), text: [j.no, j.customer, j.site, j.quotationNo, 'repair job'], card: () => repairCard(j) }));
+  return [...insp, ...jobs].sort((a, b) => (a.at || '').localeCompare(b.at || ''));
 }
 
 function when(iso) {
@@ -53,17 +59,17 @@ export function mJobs(page) {
   const state = { tile: 'today', q: '', ...JSON.parse(sessionStorage.getItem(KEY) || '{}') };
   page.body.innerHTML = String(html`<input type="search" class="m-search" id="q" placeholder="Search my jobs: customer, site, enquiry no" value="${state.q}"><div id="tiles"></div><div id="list"></div>`);
   function paint() {
-    const all = myJobs();
+    const all = myWork();
     const defs = [
-      { key: 'today', label: 'Today', test: x => isToday(x.i.visitAt) && x.i.status !== DONE },
-      { key: 'upcoming', label: 'Upcoming', test: x => x.i.status !== DONE && !isToday(x.i.visitAt) },
-      { key: 'done', label: 'Done', test: x => x.i.status === DONE },
+      { key: 'today', label: 'Today', test: x => isToday(x.at) && !x.done },
+      { key: 'upcoming', label: 'Upcoming', test: x => !x.done && !isToday(x.at) },
+      { key: 'done', label: 'Done', test: x => x.done },
     ].map(d => ({ ...d, count: all.filter(d.test).length }));
     $('#tiles', page.body).innerHTML = String(tiles(defs, state.tile, 'm-tiles'));
     const tile = defs.find(d => d.key === state.tile);
     const terms = state.q.toLowerCase().split(/\s+/).filter(Boolean);
-    const shown = all.filter(x => (!tile || tile.test(x)) && terms.every(t => [x.e.no, x.e.customerName, x.e.siteName, x.r?.no].join(' ').toLowerCase().includes(t)));
-    $('#list', page.body).innerHTML = String(shown.length ? html`${shown.map(jobCard)}` : html`<div class="empty">${all.length ? 'No jobs here. Try another tile.' : 'No jobs assigned to you yet.'}</div>`);
+    const shown = all.filter(x => (!tile || tile.test(x)) && terms.every(t => x.text.join(' ').toLowerCase().includes(t)));
+    $('#list', page.body).innerHTML = String(shown.length ? html`${shown.map(x => x.card())}` : html`<div class="empty">${all.length ? 'No jobs here. Try another tile.' : 'No jobs assigned to you yet.'}</div>`);
     sessionStorage.setItem(KEY, JSON.stringify(state));
   }
   on(page.body, 'click', '[data-tile]', (e, b) => { state.tile = state.tile === b.dataset.tile ? '' : b.dataset.tile; paint(); });

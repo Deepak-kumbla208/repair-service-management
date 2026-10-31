@@ -11,6 +11,7 @@ import { saveReport, submitReport } from '../core/inspections.js';
 import { STEPS } from '../mobile/site-report.js';
 import { pageHead } from './shell.js';
 import { svrSheetHtml } from './print-svr.js';
+import { canCreateFor, createEstimate, currentEstimate } from '../core/estimates.js';
 
 const OPEN_KEY = 'rsmSvrSection';
 
@@ -36,7 +37,8 @@ function renderEditor(el, rep, insp) {
       <div class="page-meta">${e.customerName} · ${empName(rep.technicianId)}${insp.visitAt ? ` · visit ${fmtDateTime(insp.visitAt)}` : ''} · pre-filled from ${e.no} · the technician can continue it on the phone${rep.submittedAt ? ` · ${rep.paper ? 'received on paper' : 'submitted'} ${fmtDateTime(rep.submittedAt)}` : ''}</div></div>
       <div class="row"><button class="btn" id="saveBtn">Save</button>
         ${rep.status !== 'Submitted' ? html`<button class="btn" id="paperBtn" title="The technician filled the report on paper; you have typed it in">Mark received (paper)</button>` : ''}
-        ${auth.can('inspection', 'print') ? html`<button class="btn primary" id="printBtn">⎙ Print</button>` : ''}</div>
+        ${auth.can('inspection', 'print') ? html`<button class="btn" id="printBtn">⎙ Print</button>` : ''}
+        ${canCreateFor(e) ? html`<button class="btn primary" id="mkEst">Create estimate</button>` : currentEstimate(e.id) ? html`<a class="btn primary" href="#/estimates/${currentEstimate(e.id).id}">Open the estimate</a>` : ''}</div>
     </div>
     <div class="s3">
       <div class="card form-lines" id="acc"></div>
@@ -98,6 +100,7 @@ function renderEditor(el, rep, insp) {
 
   $('#saveBtn', el).onclick = async () => { await flush(); toast(`${rep.no} saved`); };
   $('#printBtn', el)?.addEventListener('click', async () => { await flush(); go(`reports/${rep.id}/print`); });
+  $('#mkEst', el)?.addEventListener('click', async () => { await flush(); go(`estimates/${createEstimate(e.id).id}`); });
   $('#paperBtn', el)?.addEventListener('click', async () => {
     await flush();
     const problems = submitReport(rep.id, { paper: true });

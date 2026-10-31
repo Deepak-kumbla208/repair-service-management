@@ -33,7 +33,7 @@ export function assignTechnician(inspId, { technicianId, visitAt, confirmedBy, n
 function materialRows(enq) {
   return (enq.lines || []).filter(l => l.itemRef?.startsWith('itm:')).map(l => {
     const it = store.get('items', l.itemRef.slice(4));
-    return { name: l.itemName, spec: it?.spec || '', qty: l.qty || 1, unit: it?.unit || '', remarks: l.description || '' };
+    return { name: l.itemName, spec: it?.spec || '', qty: l.qty || 1, unit: it?.unit || '', remarks: l.description || '', itemId: it?.id || null, shutterKey: '' };
   });
 }
 const pad2 = n => String(n).padStart(2, '0');

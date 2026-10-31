@@ -17,6 +17,18 @@ import { renderReport } from './web/report-view.js';
 import { renderPrintSvr } from './web/print-svr.js';
 import { renderMasterList, renderMasterForm } from './web/master-engine.js';
 import { renderAdmin, renderSoon } from './web/admin-preview.js';
+import { renderEstimateList, renderQuotationList } from './web/lists.js';
+import { renderEstimate } from './web/estimate-form.js';
+import { renderQuotation } from './web/quotation-view.js';
+import { renderTasks } from './web/tasks.js';
+import { renderJobBoard } from './web/job-board.js';
+import { renderJob, renderJobList } from './web/job-view.js';
+import { renderInvoiceList, renderInvoice } from './web/invoices.js';
+import { renderPayments } from './web/payments.js';
+import { renderClosureList, renderClosure } from './web/closure.js';
+import { renderPrintDoc } from './web/print-docs.js';
+import { mRepairJob, mRepairStep } from './mobile/repair-job.js';
+import { mTasks, mTask } from './mobile/tasks.js';
 import { mHome, mMore, mSoon } from './mobile/home.js';
 import { mJobs, mJob } from './mobile/jobs.js';
 import { mReport } from './mobile/site-report.js';
@@ -34,6 +46,19 @@ const WEB = [
   [/^inspections$/, 'inspection', renderInspectionList],
   [/^inspections\/([^/]+)$/, 'inspection', renderInspection],
   [/^reports\/([^/]+)$/, 'inspection', renderReport],
+  [/^estimates$/, 'estimation', renderEstimateList],
+  [/^estimates\/([^/]+)$/, 'estimation', renderEstimate],
+  [/^quotations$/, 'quotation', renderQuotationList],
+  [/^quotations\/([^/]+)$/, 'quotation', renderQuotation],
+  [/^tasks$/, null, renderTasks],
+  [/^jobs$/, 'job', renderJobBoard],
+  [/^jobs\/list$/, 'job', renderJobList],
+  [/^jobs\/([^/]+)$/, 'job', renderJob],
+  [/^invoices$/, 'invoice', renderInvoiceList],
+  [/^invoices\/([^/]+)$/, 'invoice', renderInvoice],
+  [/^payments$/, 'payment', renderPayments],
+  [/^closure$/, 'closure', renderClosureList],
+  [/^closure\/([^/]+)$/, 'closure', renderClosure],
   [/^master\/([^/]+)\/new$/, m => m[1], (el, key) => renderMasterForm(el, key, null)],
   [/^master\/([^/]+)\/([^/]+)$/, m => m[1], renderMasterForm],
   [/^master\/([^/]+)$/, m => m[1], renderMasterList],
@@ -48,6 +73,10 @@ const MOBILE = [
   [/^m\/report\/([^/]+)\/(\d)$/, mReport],
   [/^m\/enquiries$/, mEnquiries],
   [/^m\/enquiry\/([^/]+)$/, mEnquiry],
+  [/^m\/rjob\/([^/]+)$/, mRepairJob],
+  [/^m\/rjob\/([^/]+)\/(\w+)$/, mRepairStep],
+  [/^m\/tasks$/, mTasks],
+  [/^m\/task\/([^/]+)$/, mTask],
   [/^m\/more$/, mMore],
   [/^m\/soon\/([^/]+)$/, mSoon],
 ];
@@ -55,7 +84,8 @@ const MOBILE = [
 // Which sidebar item to highlight for a web route.
 function activeMenu(route) {
   const [a, b] = route.split('/');
-  return { home: 'dashboard', enquiries: 'enquiry', inspections: 'inspection', reports: 'inspection', master: b, admin: b, soon: b }[a] || '';
+  return { home: 'dashboard', tasks: 'dashboard', enquiries: 'enquiry', inspections: 'inspection', reports: 'inspection', estimates: 'estimation', quotations: 'quotation',
+    jobs: 'job', invoices: 'invoice', payments: 'payment', closure: 'closure', master: b, admin: b, soon: b }[a] || '';
 }
 
 // Keep the user on the same record when switching view, where the other view has that screen.
@@ -64,10 +94,14 @@ export function routeForView(route, view) {
   if (view === 'mobile') {
     if ((m = route.match(/^enquiries\/([^/]+)/)) && m[1] !== 'new') return `m/enquiry/${m[1]}`;
     if ((m = route.match(/^inspections\/([^/]+)/)) && auth.scope('inspection') === 'own') return `m/job/${m[1]}`;
+    if ((m = route.match(/^jobs\/([^/]+)$/)) && m[1] !== 'list') return `m/rjob/${m[1]}`;
+    if (route === 'tasks') return 'm/tasks';
     return route.startsWith('m/') ? route : 'm/home';
   }
   if ((m = route.match(/^m\/enquiry\/([^/]+)/))) return `enquiries/${m[1]}`;
   if ((m = route.match(/^m\/job\/([^/]+)/))) return `inspections/${m[1]}`;
+  if ((m = route.match(/^m\/rjob\/([^/]+)/))) return `jobs/${m[1]}`;
+  if (route === 'm/tasks' || route.startsWith('m/task/')) return 'tasks';
   return route.startsWith('m/') ? 'home' : route;
 }
 
@@ -93,6 +127,11 @@ export function render() {
 
   const print = route.match(/^reports\/([^/]+)\/print$/);
   if (print) return auth.can('inspection', 'print', 'web') ? renderPrintSvr(app, print[1]) : renderWebShell(app, route, '', el => renderNoAccess(el));
+  const doc = route.match(/^(quotations|invoices)\/([^/]+)\/print$/) || route.match(/^(jobs)\/([^/]+)\/workdone$/);
+  if (doc) {
+    const [kind, menu] = { quotations: ['quotation', 'quotation'], invoices: ['invoice', 'invoice'], jobs: ['workdone', 'job'] }[doc[1]];
+    return auth.can(menu, 'view', 'web') ? renderPrintDoc(app, kind, doc[2]) : renderWebShell(app, route, '', el => renderNoAccess(el));
+  }
 
   const hit = WEB.find(([re]) => re.test(route));
   if (!hit) return replaceRoute('home');

@@ -1,6 +1,7 @@
 // Demo data for both companies: profile, roles, users, menu access, number series, masters and sample enquiries.
 import { MENUS, ACTIONS } from './menus.js';
 import { singaporeMasters, uaeMasters } from './seed-masters.js';
+import { approvalRules, TX_DEFAULTS, kosmicRepair } from './seed-stretch2.js';
 
 const DSH = 'co_dsh';
 const GDD = 'co_gdd';
@@ -9,11 +10,13 @@ const COMPANIES = [
   { id: DSH, tenantId: DSH, code: 'DSH', name: 'Demo Shutters Pte Ltd', country: 'Singapore', currency: 'SGD',
     taxLabel: 'GST', taxRegLabel: 'GST Reg. No.', taxRegNo: 'M9-0000000-0', chargesTax: true, defaultTaxCode: 'SR9',
     regLabel: 'UEN', regNo: '200000000D', address: 'Blk 10 Demo Road, #01-01, Singapore 100010',
-    tel: '+65 6000 0000', mobile: '+65 8000 0000', email: 'sales@demo-shutters.example', inspectionTargetHours: 2, placeholders: ['taxRegNo', 'regNo'] },
+    tel: '+65 6000 0000', mobile: '+65 8000 0000', email: 'sales@demo-shutters.example', inspectionTargetHours: 2,
+    bank: 'Demo Bank Singapore · account 000-000000-0', payNow: 'PayNow to UEN 200000000D', txDefaults: TX_DEFAULTS, placeholders: ['taxRegNo', 'regNo', 'bank', 'payNow'] },
   { id: GDD, tenantId: GDD, code: 'GDD', name: 'Gulf Demo Doors LLC', country: 'United Arab Emirates', currency: 'AED',
     taxLabel: 'VAT', taxRegLabel: 'TRN', taxRegNo: '100000000000003', chargesTax: true, defaultTaxCode: 'VAT5',
     regLabel: 'Trade licence', regNo: '000000', address: 'Office 12, Demo Business Centre, Al Quoz, Dubai, UAE',
-    tel: '+971 4 000 0000', mobile: '+971 50 000 0000', email: 'sales@gulf-demo-doors.example', inspectionTargetHours: 2, placeholders: ['taxRegNo', 'regNo'] },
+    tel: '+971 4 000 0000', mobile: '+971 50 000 0000', email: 'sales@gulf-demo-doors.example', inspectionTargetHours: 2,
+    bank: 'Demo Bank UAE · IBAN AE00 0000 0000 0000 0000 000', payNow: '', txDefaults: TX_DEFAULTS, placeholders: ['taxRegNo', 'regNo', 'bank'] },
 ];
 
 const ROLES = [
@@ -42,17 +45,20 @@ function accessFor(role) {
     set('enquiry', 'both', RW);
     set('inspection', 'web', RW);
     set(DOCS, 'web', RW);
+    set('job', 'both', RW); // confirms leave-site requests on the phone too
   }
   if (role === 'APR') {
     set('dashboard', 'both', V);
     set(['customer', 'enquiry', 'estimation', 'amcContract', 'invoice', 'payment', 'closure'], 'web', V);
     set('inspection', 'web', VP);
     set('quotation', 'both', ['view', 'approve', 'print']);
-    set('job', 'web', ['view', 'approve']);
+    set('job', 'both', ['view', 'approve']);
   }
   if (role === 'TECH') {
     set('dashboard', 'mobile', V);
     set(['inspection', 'job', 'amcExecution'], 'mobile', ['view', 'edit'], 'own');
+    set('invoice', 'mobile', VP, 'own');
+    set('payment', 'mobile', ['view', 'create'], 'own');
     set('item', 'mobile', V);
   }
   if (role === 'MGT') {
@@ -60,6 +66,7 @@ function accessFor(role) {
     set(MASTERS, 'web', V);
     set(['inspection', ...DOCS, 'amcExecution'], 'web', VP);
     set('enquiry', 'both', VP);
+    set('quotation', 'both', ['view', 'approve', 'print']); // level-2 approvals (sample rule)
   }
   return a;
 }
@@ -119,7 +126,8 @@ function sampleTransactions(cust) {
   const visit = new Date(); visit.setDate(visit.getDate() + 1); visit.setHours(10, 0, 0, 0);
   const i2 = { id: `ins_${DSH}_2`, tenantId: DSH, enquiryId: e2.id, zoneId: e2.zoneId, technicianId: `emp_${DSH}_4`, visitAt: visit.toISOString(), confirmedBy: 'WhatsApp', notes: 'Customer confirmed by WhatsApp', assignedAt: e2Assigned, assignedBy: ops,
     status: 'Assigned', statusHistory: hist(['To assign', e2At, ops], ['Assigned', e2Assigned, ops, 'Technician B']), createdAt: e2At, updatedAt: e2Assigned };
-  return { enquiries: [e1, e2], inspections: [i2] };
+  const k = kosmicRepair(DSH, cust, at);
+  return { enquiries: [e1, e2, k.enquiry], inspections: [i2, k.inspection], siteReports: [k.report] };
 }
 
 function gulfTransactions(cust) {
@@ -135,7 +143,8 @@ function gulfTransactions(cust) {
 }
 
 export function buildSeed() {
-  const out = { companies: COMPANIES, users: [], roles: [], menuAccess: [], series: [], audit: [], siteReports: [], enquiries: [], inspections: [] };
+  const out = { companies: COMPANIES, users: [], roles: [], menuAccess: [], series: [], audit: [], siteReports: [], enquiries: [], inspections: [],
+    estimates: [], quotations: [], jobs: [], invoices: [], payments: [], followUps: [], tasks: [], approvalRules: [...approvalRules(DSH), ...approvalRules(GDD)] };
   const sg = singaporeMasters(DSH);
   const ae = uaeMasters(GDD);
   for (const coll of Object.keys(sg)) out[coll] = [...sg[coll], ...ae[coll]];
@@ -151,6 +160,7 @@ export function buildSeed() {
   const aeTx = gulfTransactions(ae.customers);
   out.enquiries = [...sgTx.enquiries, ...aeTx.enquiries];
   out.inspections = [...sgTx.inspections, ...aeTx.inspections];
-  out.series = [...series(DSH, { ENQ: 2 }), ...series(GDD, { ENQ: 1 })];
+  out.siteReports = sgTx.siteReports;
+  out.series = [...series(DSH, { ENQ: 3, SVR: 1 }), ...series(GDD, { ENQ: 1 })];
   return out;
 }

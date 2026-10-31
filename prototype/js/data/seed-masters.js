@@ -20,14 +20,20 @@ const VALUE_SETS = [
   ['WORK_COMPLETION', 'Work Completion Status', 'System', [['NOT_STARTED', 'Not started'], ['IN_PROGRESS', 'In progress'], ['COMPLETED', 'Completed']]],
   ['PAYMENT_RECEIVED', 'Payment Received', 'System', [['NOT_PAID', 'Not paid'], ['PARTLY', 'Partly paid'], ['PAID', 'Paid']]],
   ['STAGE', 'Stage (hidden, for the dashboard)', 'System', ['New', 'Inspection', 'Quoted', 'Won', 'Lost']],
+  ['MARGIN_BASIS', 'Margin Basis', 'System', [['MARKUP', 'Markup on cost'], ['MARGIN', 'Margin on price']]],
+  ['OVERHEAD_BASIS', 'Overhead Basis', 'System', [['PCT', '% of direct cost'], ['FIXED', 'Fixed amount']]],
+  ['PAYMENT_METHOD', 'Payment Method', 'Extensible', [['CASH', 'Cash'], ['CHEQUE', 'Cheque'], ['BANK', 'Bank transfer'], ['PAYNOW', 'PayNow']]],
+  ['ACCEPT_METHOD', 'Acceptance Method', 'Extensible', [['PO', 'Purchase order'], ['SIGNED', 'Signed quotation'], ['EMAIL', 'Email'], ['WHATSAPP', 'WhatsApp']]],
+  ['WORK_DONE', 'Work Done Status', 'System', [['DONE', 'Done'], ['PARTLY', 'Partly done'], ['NOT_DONE', 'Not done']]],
 ];
 
-function valueSets(t) {
+// inactive: value codes switched off for this company (e.g. PayNow outside Singapore).
+function valueSets(t, inactive = []) {
   return VALUE_SETS.map(([code, name, access, vals]) => base(t, `vs_${t}_${code}`, {
     code, name, access,
     values: vals.map((v, i) => {
       const [c, label] = Array.isArray(v) ? v : [v.toUpperCase().replace(/[^A-Z0-9]+/g, '_'), v];
-      return { code: c, label, order: i + 1, isDefault: i === 0 && code !== 'ENQ_STATUS', active: true };
+      return { code: c, label, order: i + 1, isDefault: i === 0 && code !== 'ENQ_STATUS', active: !inactive.includes(`${code}.${c}`) };
     }),
   }));
 }
@@ -107,6 +113,9 @@ export function singaporeMasters(t) {
       base(t, `emp_${t}_3`, { code: 'EMP-003', name: 'Technician A', designation: 'Technician', type: 'Technician', mainZoneId: `zon_${t}_A`, extraZoneIds: [`zon_${t}_B`], skills: 'Rolling, motor work', mobile: '8000 0003', email: '' }),
       base(t, `emp_${t}_4`, { code: 'EMP-004', name: 'Technician B', designation: 'Technician', type: 'Technician', mainZoneId: `zon_${t}_C`, extraZoneIds: [`zon_${t}_D`], skills: 'Rolling, collapsible, sectional', mobile: '8000 0004', email: '' }),
       base(t, `emp_${t}_5`, { code: 'EMP-005', name: 'Management', designation: 'General Manager', type: 'Office', mainZoneId: '', extraZoneIds: [], skills: '', mobile: '8000 0005', email: '' }),
+      // Helpers work in the "Standard Team (1+1)" with a technician; they do not use the app.
+      base(t, `emp_${t}_6`, { code: 'EMP-006', name: 'Helper 1', designation: 'Helper', type: 'Helper', mainZoneId: `zon_${t}_A`, extraZoneIds: [`zon_${t}_B`], skills: '', mobile: '8000 0006', email: '' }),
+      base(t, `emp_${t}_7`, { code: 'EMP-007', name: 'Helper 2', designation: 'Helper', type: 'Helper', mainZoneId: `zon_${t}_C`, extraZoneIds: [`zon_${t}_D`], skills: '', mobile: '8000 0007', email: '' }),
     ],
     equipment: [
       ['EQ-01', 'Scissor Lift', 'Rented', 'Day', 550], ['EQ-02', 'Lorry Crane', 'Rented', 'Trip', 500], ['EQ-03', 'Scaffold', 'Rented', 'Day', 500],
@@ -131,21 +140,33 @@ export function singaporeMasters(t) {
       base(t, `tax_${t}_SR8`, { code: 'SR8', name: 'GST standard-rated 8%', rate: 8, from: '2023-01-01', to: '2023-12-31', category: 'Standard-rated', status: 'Inactive' }),
       base(t, `tax_${t}_ZR`, { code: 'ZR', name: 'GST zero-rated', rate: 0, from: '2024-01-01', to: '', category: 'Zero-rated' }),
     ],
+    // The Excel's invoice terms, adapted for Singapore (PayNow, GST, S$); [X] values are placeholders.
     terms: terms(t, [
       ['Payment is due within the payment term shown on this invoice.'],
       ['Payment can be made by cash, cheque, bank transfer or PayNow. Cheques should be drawn in favour of "{company}".'],
       ['Bank details: [account name, account number, bank and branch].', true],
       ['Late payments will attract interest at [X]% per month on the outstanding amount.', true],
+      ['Cheque bounce charges of S$[amount] will apply.', true],
+      ['Prices include GST at the rate shown on this invoice.'],
+      ['Goods and parts supplied remain the property of {company} until full payment is received.'],
+      ['Any invoice discrepancy must be reported in writing within 7 days of receipt. After this period, the invoice is treated as accepted.'],
+      ['A warranty of [X] months applies to the parts and workmanship invoiced, from the date of completion. It covers the repaired or replaced parts only.', true],
+      ['The warranty does not cover damage from misuse, accidents, unauthorised repairs, or natural causes.'],
+      ['Replaced parts will be handed over only on request, at the time of service.'],
+      ['Work carried out after 5:30 pm or outside normal office hours is charged at 1.5 times the standard rate, as quoted.'],
+      ['Additional work not covered in the quotation is billed separately, after customer approval.'],
+      ['All disputes are subject to the jurisdiction of the courts of Singapore.'],
+      ['This is a computer-generated invoice and does not require a signature.'],
     ]),
     customers: [
-      customer(t, 'CUS-0001', { name: 'Kosmic M&E Services Pte Ltd', uen: '', taxRegistered: true, phone: '9876 5432', email: 'facilities@kosmic.example', address: 'IMM Building, Jurong East',
+      customer(t, 'CUS-0001', { name: 'Kosmic M&E Services Pte Ltd', uen: '', taxRegistered: true, paymentTerm: 'IMMEDIATE', phone: '9876 5432', email: 'facilities@kosmic.example', address: 'IMM Building, Jurong East',
         contacts: [{ id: `con_${t}_1`, name: 'Facilities Manager', designation: 'Facilities', mobile: '9876 5432', email: 'facilities@kosmic.example', primary: true }] },
       [{ name: 'IMM Building L1 Shop @ Jurong East', address: 'IMM Building, Jurong East', blockUnit: 'L1', zone: 'A',
         shutters: [['RS-1', 'Front shop', 'RS', 10, 9, 'ft', '400 kg single phase'], ['RS-2', 'Side godown', 'CS', 8, 7, 'ft', '']] }], sizeRows),
-      customer(t, 'CUS-0002', { name: 'ABC Industries', uen: '', taxRegistered: true, phone: '9012 3456', email: 'admin@abc-industries.example', address: 'Main warehouse',
+      customer(t, 'CUS-0002', { name: 'ABC Industries', uen: '', taxRegistered: true, paymentTerm: 'D30', phone: '9012 3456', email: 'admin@abc-industries.example', address: 'Main warehouse',
         contacts: [{ id: `con_${t}_2`, name: 'Admin Officer', designation: 'Admin', mobile: '9012 3456', email: 'admin@abc-industries.example', primary: true }] },
       [{ name: 'Main warehouse', address: 'Main warehouse', zone: 'A', shutters: warehouseShutters() }], sizeRows),
-      customer(t, 'CUS-0003', { name: 'Demo Retail Pte Ltd', uen: '', taxRegistered: false, phone: '9123 4567', email: 'shop@demo-retail.example', address: 'Raffles Place',
+      customer(t, 'CUS-0003', { name: 'Demo Retail Pte Ltd', uen: '', taxRegistered: false, paymentTerm: 'D15', phone: '9123 4567', email: 'shop@demo-retail.example', address: 'Raffles Place',
         contacts: [{ id: `con_${t}_3`, name: 'Shop Manager', designation: 'Shop', mobile: '9123 4567', email: 'shop@demo-retail.example', primary: true }] },
       [{ name: 'Raffles Place shop', address: 'Raffles Place', blockUnit: '#01-12', zone: 'C', shutters: [['RS-1', 'Shop front', 'RS', 4.2, 3, 'm', '']] }], sizeRows),
     ],
@@ -171,7 +192,7 @@ export function uaeMasters(t) {
     items: [['ITM-001', 'Tension spring', '', 'Nos', 300], ['ITM-002', 'Motor 500 kg single phase', '', 'Nos', 3900]]
       .map(([code, name, spec, unit, rate], i) => base(t, `itm_${t}_${i + 1}`, { code, name, spec, unit, rate, wastage: 0, leadDays: 5, category: 'Spare part', placeholders: ['rate'] })),
     sizes: sizeRows,
-    valueSets: valueSets(t),
+    valueSets: valueSets(t, ['PAYMENT_METHOD.PAYNOW']),
     taxes: [
       base(t, `tax_${t}_VAT5`, { code: 'VAT5', name: 'VAT standard 5%', rate: 5, from: '2018-01-01', to: '', category: 'Standard-rated' }),
       base(t, `tax_${t}_ZR`, { code: 'ZR', name: 'VAT zero-rated', rate: 0, from: '2018-01-01', to: '', category: 'Zero-rated' }),
@@ -182,7 +203,7 @@ export function uaeMasters(t) {
       ['Bank details: [account name, IBAN, bank and branch].', true],
     ]),
     customers: [
-      customer(t, 'CUS-0001', { name: 'Desert Demo Trading LLC', uen: '', taxRegistered: true, phone: '050 123 4567', email: 'warehouse@desert-demo.example', address: 'Al Quoz Industrial Area 3',
+      customer(t, 'CUS-0001', { name: 'Desert Demo Trading LLC', uen: '', taxRegistered: true, paymentTerm: 'IMMEDIATE', phone: '050 123 4567', email: 'warehouse@desert-demo.example', address: 'Al Quoz Industrial Area 3',
         contacts: [{ id: `con_${t}_1`, name: 'Warehouse Manager', designation: 'Warehouse', mobile: '050 123 4567', email: 'warehouse@desert-demo.example', primary: true }] },
       [{ name: 'Al Quoz warehouse', address: 'Al Quoz Industrial Area 3', zone: 'C', shutters: [['D-1', 'Gate 1', 'RS', 5, 4.5, 'm', ''], ['D-2', 'Gate 2', 'MR', 6, 4.5, 'm', '600 kg three phase']] }], sizeRows),
     ],

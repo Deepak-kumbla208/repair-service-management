@@ -98,7 +98,9 @@ const step5 = {
     <p class="small muted" style="margin:0 0 6px">Pick from the Material/Item master (type to search) or type a new part.</p>
     ${rep.s5.rows.map((r, i) => html`<div class="mat-row" data-row="${i}"><div class="row"><b>${i + 1}.</b><span class="grow"></span><button type="button" class="btn link small" data-delrow="${i}">Remove</button></div>
       <div class="grid g2">
-        <div class="field spanall"><label>Material / Spare Part</label><input list="itemList" data-c="name" value="${r.name}"></div>
+        <div class="field spanall"><label>Material / Spare Part</label><input list="itemList" data-c="name" value="${r.name}"><input type="hidden" data-c="itemId" value="${r.itemId || ''}"></div>
+        ${rep.shutters.length > 1 ? html`<div class="field spanall"><label>For shutter <span class="muted">(screen only, for the estimate lines)</span></label><select data-c="shutterKey"><option value="">Whole job</option>
+          ${rep.shutters.map(s => html`<option value="${s.key}" ${s.key === r.shutterKey ? 'selected' : ''}>${s.tag} ${s.location}</option>`)}</select></div>` : ''}
         <div class="field spanall"><label>Size / Spec / Model</label><input data-c="spec" value="${r.spec}"></div>
         <div class="field"><label>Qty</label><input type="number" data-c="qty" value="${r.qty ?? ''}"></div>
         <div class="field"><label>Unit</label><input data-c="unit" value="${r.unit}"></div>
@@ -110,6 +112,7 @@ const step5 = {
     const rows = $$('[data-row]', body).map(row => {
       const o = {};
       $$('[data-c]', row).forEach(inp => { o[inp.dataset.c] = inp.type === 'number' ? (inp.value === '' ? null : Number(inp.value)) : inp.value.trim(); });
+      if (rep.shutters.length === 1) o.shutterKey = rep.shutters[0].key;
       return o;
     });
     return { s5: { rows, consumables: readForm(body).s5_consumables ?? rep.s5.consumables } };
@@ -117,7 +120,7 @@ const step5 = {
   bind(body, rep, ctx) {
     $('#addRow', body).addEventListener('click', () => {
       const cur = step5.read(body, rep).s5;
-      ctx.save({ s5: { ...cur, rows: [...cur.rows, { name: '', spec: '', qty: 1, unit: '', remarks: '', itemId: null }] } });
+      ctx.save({ s5: { ...cur, rows: [...cur.rows, { name: '', spec: '', qty: 1, unit: '', remarks: '', itemId: null, shutterKey: '' }] } });
       ctx.repaint();
     });
     $$('[data-delrow]', body).forEach(b => b.addEventListener('click', () => {
@@ -130,7 +133,8 @@ const step5 = {
       if (e.target.dataset.c !== 'name') return;
       const it = items().find(i => i.name.toLowerCase() === e.target.value.trim().toLowerCase());
       const row = e.target.closest('[data-row]');
-      if (!it) return;
+      $('[data-c="itemId"]', row).value = it?.id || '';
+      if (!it) { ctx.save(step5.read(body, rep)); return; }
       const spec = $('[data-c="spec"]', row), unit = $('[data-c="unit"]', row);
       if (!spec.value) spec.value = it.spec || '';
       if (!unit.value) unit.value = it.unit;

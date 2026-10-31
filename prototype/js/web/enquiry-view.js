@@ -9,6 +9,9 @@ import { laterColumns, inspectionClock } from '../core/enquiries.js';
 import { stagesFor, currentStage } from '../core/flow.js';
 import { getUrl, fmtSize } from '../core/media.js';
 import { clockHtml } from './site-inspection.js';
+import { canCreateFor, createEstimate, currentEstimate } from '../core/estimates.js';
+import { currentQuotation } from '../core/quotations.js';
+import { jobForEnquiry } from '../core/jobs.js';
 import { linesTable } from './enquiry-parts.js';
 
 const row = (label, value) => html`<div class="field"><div class="field-label">${label}</div><div class="ro">${value || html`<span class="muted">—</span>`}</div></div>`;
@@ -26,10 +29,11 @@ export function workflowHtml(enq, { vertical = false } = {}) {
   })}</div>`;
 }
 
-export function activityHtml(enq) {
+// Status history and changes of any record (enquiries by default).
+export function activityHtml(enq, coll = 'enquiries') {
   const rows = [
     ...(enq.statusHistory || []).map(h => ({ at: h.at, by: h.by, text: html`Status ${pill(h.status)}${h.note ? ` · ${h.note}` : ''}` })),
-    ...store.auditFor('enquiries', enq.id).filter(a => a.action === 'update').map(a => ({ at: a.at, by: a.userId, text: a.summary })),
+    ...store.auditFor(coll, enq.id).filter(a => a.action === 'update').map(a => ({ at: a.at, by: a.userId, text: a.summary })),
   ].sort((a, b) => b.at.localeCompare(a.at));
   return html`<div class="activity">${rows.map(r => html`<div><span class="when">${fmtDateTime(r.at)}</span><span class="grow">${r.text}</span><span class="muted">${auth.userName(r.by)}</span></div>`)}</div>`;
 }
@@ -45,6 +49,12 @@ export function renderEnquiryView(el, id) {
   const l = laterColumns(e);
   const openInsp = insp && insp.status !== 'Cancelled';
   const canAssign = openInsp && ['To assign', 'Assigned'].includes(insp.status) && auth.can('inspection', 'edit');
+  const est = currentEstimate(e.id), q = currentQuotation(e.id), job = jobForEnquiry(e.id);
+  // The next document is one click away on the page where it is due.
+  const next = canCreateFor(e) ? html`<button class="btn primary" id="mkEst">Create estimate</button>`
+    : job ? html`<a class="btn primary" href="#/jobs/${job.id}">Open ${job.no}</a>`
+      : q ? html`<a class="btn primary" href="#/quotations/${q.id}">Open ${q.no} Rev ${q.rev}</a>`
+        : est ? html`<a class="btn primary" href="#/estimates/${est.id}">Open ${est.no} Rev ${est.rev}</a>` : '';
 
   el.innerHTML = String(html`<div class="page" style="max-width:1400px">
     <div class="page-head"><div class="grow">
@@ -56,6 +66,7 @@ export function renderEnquiryView(el, id) {
         ${auth.can('enquiry', 'edit') && e.status !== 'Cancelled' ? html`<a class="btn" href="#/enquiries/${e.id}/edit">✎ Edit</a>` : ''}
         ${report && auth.can('inspection', 'view') ? html`<a class="btn" href="#/reports/${report.id}">Site viewing report</a>` : ''}
         ${canAssign ? html`<a class="btn primary" href="#/inspections/${insp.id}">${insp.technicianId ? 'Change technician' : 'Assign technician'}</a>` : ''}
+        ${next}
       </div>
     </div>
     <div class="e2">
@@ -86,7 +97,7 @@ export function renderEnquiryView(el, id) {
         ${openInsp ? html`<div class="card"><div class="card-head"><h2>Site inspection</h2>${pill(insp.status)}</div>
           <div class="row wrap"><span>${insp.technicianId ? `Technician: ${empName(insp.technicianId)}` : 'No technician yet'}${insp.visitAt ? ` · visit ${fmtDateTime(insp.visitAt)}` : ''}</span><span class="grow"></span>
             ${report ? html`<span>${report.no} ${pill(report.status)}</span>` : ''}<a class="btn small" href="#/inspections/${insp.id}">Open the site inspection</a></div></div>` : ''}
-        <div class="card"><div class="card-head"><h2>Register columns filled automatically</h2><span class="muted small">from the quotation, job, invoice and payment (Stretch 2)</span></div>
+        <div class="card"><div class="card-head"><h2>Register columns filled automatically</h2><span class="muted small">from the quotation, job, invoice and payment</span></div>
           <div class="kv six">${[['Quotation Date', l.quotationDate], ['Quotation Status', l.quotationStatus], ['Quotation Value', l.quotationValue], ['Job Status', l.jobStatus],
             ['Work Completion Status', l.workCompletion], ['Work Completion Date', l.workCompletionDate], ['Invoice Date', l.invoiceDate], ['Invoice No', l.invoiceNo],
             ['Invoice Value', l.invoiceValue], ['Payment Received', l.paymentReceived]].map(([k, v]) => html`<div><div class="k">${k}</div><div class="v">${v || html`<span class="muted">—</span>`}</div></div>`)}</div></div>
@@ -99,6 +110,7 @@ export function renderEnquiryView(el, id) {
   </div>`);
 
   el.querySelector('#wfBtn').onclick = () => openWorkflow(e);
+  el.querySelector('#mkEst')?.addEventListener('click', () => { const x = createEstimate(e.id); location.hash = `#/estimates/${x.id}`; });
   el.querySelectorAll('[data-open]').forEach(a => a.addEventListener('click', async ev => { ev.preventDefault(); const u = await getUrl(a.dataset.open); if (u) window.open(u, '_blank'); }));
 }
 

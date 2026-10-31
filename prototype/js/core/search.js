@@ -42,6 +42,24 @@ export function globalSearch(query, channel = auth.view()) {
       .map(({ i, e, r }) => ({ icon: '⌖', title: `${r ? r.no : 'Site inspection'} · ${e.customerName}`, sub: `${e.no} · ${e.siteName} · ${i.status}`, route: mobile ? `m/job/${i.id}` : `inspections/${i.id}` })));
   }
 
+  // Stretch 2 documents (a technician finds only their own jobs).
+  if (can('job')) {
+    const own = auth.scope('job') === 'own';
+    add(own ? 'My repair jobs' : 'Jobs', store.list('jobs', j => !own || j.technicianId === auth.user()?.employeeId)
+      .filter(j => hit(j.no, j.customer, j.site, j.quotationNo, empName(j.technicianId)))
+      .map(j => ({ icon: '⚑', title: `${j.no} · ${j.customer}`, sub: `${j.site} · ${j.status}`, route: mobile ? `m/rjob/${j.id}` : `jobs/${j.id}` })));
+  }
+  if (!mobile) {
+    const docs = [
+      ['estimation', 'Estimates', 'estimates', '∑', e => e.status !== 'Superseded', e => [e.no, e.header.customer, e.header.site], e => `${e.no} Rev ${e.rev} · ${e.header.customer}`, e => `${e.header.site} · ${e.status}`, 'estimates'],
+      ['quotation', 'Quotations', 'quotations', '▤', q => q.status !== 'Superseded', q => [q.no, q.customer, q.site, q.acceptance?.poNo], q => `${q.no} Rev ${q.rev} · ${q.customer}`, q => `${q.site} · ${q.status}`, 'quotations'],
+      ['invoice', 'Invoices', 'invoices', '▧', () => true, i => [i.no, i.customer, i.jobNo, i.poNo], i => `${i.no || 'Draft invoice'} · ${i.customer}`, i => `${i.jobNo} · ${i.status}`, 'invoices'],
+      ['payment', 'Payments', 'payments', '$', () => true, p => [p.no, p.customer, p.invoiceNo, p.reference], p => `${p.no} · ${p.customer}`, p => `${p.invoiceNo} · ${Number(p.amount).toFixed(2)}`, null],
+    ];
+    docs.filter(([key]) => can(key)).forEach(([, group, coll, icon, keep, text, title, sub, route]) => add(group, store.list(coll, keep).filter(r => hit(text(r)))
+      .map(r => ({ icon, title: title(r), sub: sub(r), route: route ? `${route}/${r.id}` : `invoices/${r.invoiceId}` }))));
+  }
+
   if (can('customer') && !mobile) {
     const customers = store.list('customers');
     add('Customers', customers

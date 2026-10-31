@@ -3,7 +3,7 @@
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, $$, on, go, debounce, field, readForm, markInvalid, toast, openModal, pill, emptyRow, fmtNum } from '../core/ui.js';
-import { zones, zoneLabel, products, productName, sizes } from '../core/lookups.js';
+import { zones, zoneLabel, products, productName, sizes, vsOptions, vsDefault } from '../core/lookups.js';
 import { nextCode, findDuplicates, primaryContact, shutterCount, nextShutterTag } from '../core/customers.js';
 import { classifySize, toMetres } from '../core/costing.js';
 import { pageHead } from './shell.js';
@@ -64,6 +64,7 @@ export function renderCustomerForm(el, id) {
       ${field({ name: 'email', label: 'Email', type: 'email', value: draft.email, readonly: !editable })}
       ${field({ name: 'address', label: 'Billing address', value: draft.address, readonly: !editable })}
       <div class="field"><div class="field-label">Tax</div>${field({ name: 'taxRegistered', label: `${company.taxLabel}-registered customer`, type: 'checkbox', value: draft.taxRegistered, readonly: !editable })}</div>
+      ${field({ name: 'paymentTerm', label: 'Payment term', type: 'select', options: vsOptions('PAYMENT_TERMS'), value: draft.paymentTerm || vsDefault('PAYMENT_TERMS'), blank: false, readonly: !editable })}
     </div></form>
     <div class="card"><div class="card-head"><h2>Contacts</h2>${editable ? html`<button class="btn small" id="addContact">+ Add contact</button>` : ''}</div><div id="contacts"></div></div>
     <div class="card"><div class="card-head"><h2>Sites and shutters</h2>

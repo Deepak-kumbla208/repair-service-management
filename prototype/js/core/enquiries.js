@@ -5,7 +5,8 @@ import * as store from './store.js';
 import { quickCreate, addSite } from './customers.js';
 import { assignTechnician } from './inspections.js';
 
-export const ENQ_STATUSES = ['Waiting for inspection', 'Inspection assigned', 'Report in progress', 'Inspected', 'BOQ study', 'Waiting for estimate', 'Cancelled'];
+export const ENQ_STATUSES = ['Waiting for inspection', 'Inspection assigned', 'Report in progress', 'Inspected', 'BOQ study', 'Waiting for estimate',
+  'Estimating', 'Quotation in check', 'Quoted', 'Won', 'Completed', 'Closed', 'Lost', 'Cancelled'];
 
 // Enquiry Type decides the next step: Repair goes to site inspection; AMC and General Servicing go to BOQ study
 // (site inspection optional, decided by the "Site Inspection" Yes / No column).
@@ -94,11 +95,31 @@ export function saveEnquiryChanges(id, data, { newSite, assign } = {}) {
   return store.get('enquiries', id);
 }
 
-// Register columns 17–26 are filled from the linked documents (Stretch 2 adds quotation, job, invoice, payment).
-export function laterColumns() {
+// Register columns 17–26, filled from the linked documents (PLAN.md "How the register's status columns are filled"):
+// Quotation Status "Quoted" once a revision is sent; Job Status Pending (quoted) / Confirmed (accepted) / Cancelled;
+// Work Completion from the job; Payment Received from the invoice balance. Values are after tax.
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const money = n => (n == null || n === '' ? '' : Number(n).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const day = iso => { if (!iso) return ''; const d = new Date(iso.length === 10 ? `${iso}T00:00` : iso); return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`; };
+const label = (set, code) => store.findOne('valueSets', v => v.code === set)?.values.find(v => v.code === code)?.label || code || '';
+
+export function laterColumns(e) {
+  const qs = store.list('quotations', q => q.enquiryId === e.id).sort((a, b) => b.rev - a.rev);
+  const q = qs.find(x => x.status !== 'Superseded') || qs[0];
+  const sent = qs.find(x => x.sentAt);
+  const job = store.list('jobs', j => j.enquiryId === e.id)[0];
+  const inv = store.list('invoices', i => i.enquiryId === e.id && i.status === 'Posted')[0];
+  const paid = inv ? store.list('payments', p => p.invoiceId === inv.id).reduce((t, p) => t + Number(p.amount || 0), 0) : 0;
+  let jobStatus = '';
+  if (job?.status === 'Cancelled' || q?.status === 'Rejected') jobStatus = 'CANCELLED';
+  else if (job) jobStatus = 'CONFIRMED';
+  else if (sent) jobStatus = 'PENDING';
+  const wc = !job || job.status === 'Cancelled' ? '' : job.workDone?.signedAt ? 'COMPLETED' : ['On the way', 'On site'].includes(job.status) ? 'IN_PROGRESS' : 'NOT_STARTED';
   return {
-    quotationDate: '', quotationStatus: 'Not Quoted', quotationValue: '', jobStatus: '', workCompletion: '',
-    workCompletionDate: '', invoiceDate: '', invoiceNo: '', invoiceValue: '', paymentReceived: '',
+    quotationDate: sent ? day(sent.sentAt) : '', quotationStatus: label('QUOT_STATUS', sent ? 'QUOTED' : 'NOT_QUOTED'), quotationValue: sent ? money(q.total) : '',
+    jobStatus: label('JOB_STATUS', jobStatus), workCompletion: label('WORK_COMPLETION', wc), workCompletionDate: day(job?.workDone?.signedAt),
+    invoiceDate: inv ? day(inv.date) : '', invoiceNo: inv?.no || '', invoiceValue: inv ? money(inv.total) : '',
+    paymentReceived: inv ? label('PAYMENT_RECEIVED', paid <= 0 ? 'NOT_PAID' : paid + 0.004 >= inv.total ? 'PAID' : 'PARTLY') : '',
   };
 }
 

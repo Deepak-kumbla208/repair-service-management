@@ -60,9 +60,12 @@ export const scope = menuKey => accessRow(menuKey)?.scope || 'all';
 
 export const webMenus = () => MENUS.filter(m => can(m.key, 'view', 'web'));
 
+// Tasks: approvers, and roles that confirm technicians' leave-site requests (job edit on all data).
+export const hasTasks = (channel = view()) => can('quotation', 'approve', channel) || can('job', 'approve', channel) || (can('job', 'edit', channel) && scope('job') !== 'own');
+
 export function mobileTabs() {
-  return MOBILE_TABS.filter(t => !t.needs || t.needs.some(k =>
-    can(k, t.action || 'view', 'mobile') && (!t.ownOnly || scope(k) === 'own')));
+  return MOBILE_TABS.filter(t => (t.key === 'tasks' ? hasTasks('mobile') : !t.needs || t.needs.some(k =>
+    can(k, t.action || 'view', 'mobile') && (!t.ownOnly || scope(k) === 'own'))));
 }
 
 // Users of this company whose role may do an action on a menu (web or phone), e.g. who may record an enquiry.

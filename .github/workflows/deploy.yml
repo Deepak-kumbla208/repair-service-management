@@ -32,7 +32,7 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           # Point this to your prototype folder
-          path: './prototype'
+          path: './prototype/'
 
   deploy:
     environment:

@@ -32,4 +32,4 @@ Then open http://localhost:8000.
 
 ## Demo data
 
-All companies, customers, people, phone numbers and addresses in the demo data are made up. Data is kept in your browser only, and the app has a "Reset demo data" button.
+The demo data is sample test data. Documents the prototype prints (quotations, invoices, reports) are marked "DEMO" and are not valid business documents. Data is kept in your browser only, and the app has a "Reset demo data" button.

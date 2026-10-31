@@ -1,0 +1,47 @@
+/* Print previews (A4 sheets) and the DEMO mark carried by every printed document. */
+.print-view { background: #CFCDC5; min-height: 100vh; padding: 0 0 40px; }
+.print-bar {
+  position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; padding: 10px 18px;
+  background: var(--navy-900); color: var(--white);
+}
+.print-bar h1 { color: var(--white); font-size: 15px; flex: 1; }
+.print-bar .check { color: var(--blue-200); }
+.sheet {
+  width: 210mm; min-height: 297mm; margin: 18px auto 0; background: var(--white); padding: 12mm 13mm 14mm;
+  position: relative; overflow: hidden; color: #111; font-size: 10.5pt; box-shadow: 0 4px 18px rgba(0, 0, 0, .18);
+}
+.demo-banner {
+  border: 1.5px solid var(--red); color: var(--red); text-align: center; font-weight: 700; letter-spacing: .5px;
+  padding: 3px; margin-bottom: 8px; font-size: 9.5pt;
+}
+.demo-water {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none;
+}
+.demo-water span {
+  transform: rotate(-32deg); font-size: 64pt; font-weight: 800; color: rgba(163, 45, 45, .08); white-space: nowrap;
+}
+.sheet table { width: 100%; border-collapse: collapse; }
+.sheet td, .sheet th { border: 1px solid #555; padding: 4px 6px; vertical-align: top; text-align: left; font-weight: 400; }
+.sheet .lbl { width: 22%; background: #F2F2F2; font-weight: 600; }
+.sheet .sec td { background: var(--navy-900); color: #fff; font-weight: 700; letter-spacing: .3px; border-color: var(--navy-900); }
+.sheet .gap { height: 6px; border: 0; padding: 0; }
+.sheet .box { display: inline-block; width: 11px; height: 11px; border: 1px solid #333; margin-right: 5px; vertical-align: -1px; text-align: center; line-height: 9px; font-size: 9px; }
+.sheet .head { display: flex; align-items: stretch; border: 1px solid #555; margin-bottom: 8px; }
+.sheet .logo { width: 34mm; display: flex; align-items: center; justify-content: center; border-right: 1px solid #555; color: #888; font-size: 9pt; }
+.sheet .head-main { flex: 1; text-align: center; padding: 6px; }
+.sheet .head-main h1 { font-size: 15pt; letter-spacing: 1px; color: #111; }
+.sheet .head-main div { font-size: 9pt; }
+.sheet .foot { display: flex; justify-content: space-between; border-top: 1px solid #555; margin-top: 10px; padding-top: 4px; font-size: 8.5pt; color: #333; }
+.sheet .eoe { font-size: 8.5pt; font-style: italic; margin-top: 8px; }
+.sheet .sig { max-height: 22mm; }
+.sheet .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.sheet .photo-grid img { width: 100%; height: 55mm; object-fit: cover; border: 1px solid #999; }
+
+@media print {
+  @page { size: A4; margin: 0; }
+  body { background: #fff; }
+  .print-bar, .no-print { display: none !important; }
+  .print-view { background: #fff; padding: 0; }
+  .sheet { margin: 0; box-shadow: none; page-break-after: always; }
+  .sheet:last-child { page-break-after: auto; }
+}

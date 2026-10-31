@@ -1,0 +1,65 @@
+/* Colour and font tokens, reset, typography. Navy look chosen 31 Oct 2026 (PLAN.md "UI design"). */
+:root {
+  --navy-900: #042C53;
+  --navy-800: #0C447C;
+  --blue-600: #185FA5;
+  --blue-500: #378ADD;
+  --blue-200: #B5D4F4;
+  --blue-100: #E6F1FB;
+  --blue-50: #F3F8FD;
+
+  --ink: #2C2C2A;
+  --ink-2: #444441;
+  --muted: #5F5E5A;
+  --faint: #888780;
+  --line: #D3D1C7;
+  --line-soft: #EEEDE8;
+  --zebra: #F7F6F2;
+  --page: #F1EFE8;
+  --white: #FFFFFF;
+
+  --amber-bg: #FAEEDA;  --amber-ink: #633806;  --amber: #BA7517;
+  --green-bg: #EAF3DE;  --green-ink: #27500A;  --green: #3B6D11;
+  --red-bg: #FCEBEB;    --red-ink: #791F1F;    --red: #A32D2D;
+  --purple-bg: #EEEDFE; --purple-ink: #3C3489;
+  --gray-bg: #F1EFE8;   --gray-ink: #444441;
+
+  --radius: 5px;
+  --radius-lg: 8px;
+  --shadow-pop: 0 12px 32px rgba(4, 44, 83, .22);
+  --font: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  --mono: Consolas, "SFMono-Regular", Menlo, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  font: 13px/1.45 var(--font);
+  color: var(--ink);
+  background: var(--page);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4 { margin: 0; font-weight: 600; color: var(--ink); }
+h1 { font-size: 18px; }
+h2 { font-size: 15px; }
+h3 { font-size: 13px; }
+p { margin: 0 0 8px; }
+a { color: var(--blue-600); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button, input, select, textarea { font: inherit; color: inherit; }
+img { max-width: 100%; display: block; }
+table { border-collapse: collapse; }
+[hidden] { display: none !important; }
+
+.muted { color: var(--faint); }
+.small { font-size: 11px; }
+.strong { font-weight: 600; }
+.mono { font-family: var(--mono); }
+.nowrap { white-space: nowrap; }
+.grow { flex: 1; min-width: 0; }
+.row { display: flex; align-items: center; gap: 8px; }
+.row.wrap { flex-wrap: wrap; }
+.row.top { align-items: flex-start; }
+.stack > * + * { margin-top: 10px; }
+.right { text-align: right; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

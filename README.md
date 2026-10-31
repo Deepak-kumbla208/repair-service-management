@@ -9,7 +9,7 @@ It covers the whole job, from the first enquiry to the final payment:
 
 There's a web view for the office and a mobile view for technicians, and each user sees their own menu.
 
-**Status:** prototype in progress.
+**Status:** prototype in progress. Part 1 of 3 is built: masters, enquiries, site inspection and the technician's site report on the phone.
 
 ## What it covers
 
@@ -29,6 +29,13 @@ python -m http.server 8000
 ```
 
 Then open http://localhost:8000.
+
+## Try it
+
+- Log in as a demo user; there are no passwords. The made-up company "Demo Shutters Pte Ltd" has an Admin, an operations executive, an approver, two technicians and a management user. "Gulf Demo Doors LLC" is a second made-up company (UAE, AED) with its own data.
+- Use the Web / Mobile switch at the top. Technicians work in the Mobile view.
+- Press Ctrl+K to search everything your role can open.
+- Suggested walk-through: as the operations executive, use "Paste email" to enter an enquiry and assign a technician; then switch to Mobile, log in as that technician, fill in the site report and sign it; the report then appears on the web.
 
 ## Demo data
 

@@ -21,7 +21,7 @@ function choices(coId, view) {
     <div class="user-grid">${users.map(u => {
       const r = roles.find(x => x.id === u.roleId);
       return html`<button class="user-card" data-user="${u.id}"><span class="avatar">${initials(u.name)}</span>
-        <span><b>${u.name}</b><br><span class="small muted">${r?.name} · ${u.hint}</span></span></button>`;
+        <span><b>${u.name}</b><br><span class="small muted">${r && r.name !== u.name ? `${r.name} · ` : ''}${u.hint}</span></span></button>`;
     })}</div>
     <p style="margin-top:16px"><button class="btn link" id="reset">Reset demo data</button></p>`;
 }

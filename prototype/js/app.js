@@ -122,7 +122,11 @@ export function switchView(view) {
 }
 
 // ---------- Start ----------
-if (!store.isSeeded()) store.writeSeed(buildSeed());
+store.dropOldVersions();
+if (!store.isSeeded()) {
+  clearAllMedia().catch(() => {});
+  store.writeSeed(buildSeed());
+}
 auth.restore();
 window.addEventListener('hashchange', render);
 document.addEventListener('keydown', e => {

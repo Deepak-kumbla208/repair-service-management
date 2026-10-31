@@ -12,7 +12,7 @@ export function mHome(page) {
   const u = auth.user(), r = auth.role(), c = auth.company();
   page.setTitle('Home');
   const own = auth.scope('inspection') === 'own' && auth.can('inspection', 'view', 'mobile');
-  let body = html`<h2>Hello ${u.name}</h2><div class="muted" style="margin-bottom:12px">${r.name} · ${c.name}</div>`;
+  let body = html`<h2>Welcome, ${u.name}</h2><div class="muted" style="margin-bottom:12px">${r.name !== u.name ? `${r.name} · ` : ''}${c.name}</div>`;
   if (own) {
     const jobs = store.list('inspections', i => auth.seesInspection(i) && i.technicianId && i.status !== 'Cancelled')
       .map(i => ({ i, e: store.get('enquiries', i.enquiryId), r: i.reportId ? store.get('siteReports', i.reportId) : null })).filter(x => x.e);
@@ -43,7 +43,7 @@ export function mMore(page) {
   const u = auth.user(), r = auth.role(), c = auth.company();
   page.setTitle('More');
   page.body.innerHTML = String(html`
-    <div class="m-card"><b>${u.name}</b><br><span class="muted">${r.name}</span><br><span class="small">${c.name} · ${c.country}</span></div>
+    <div class="m-card"><b>${u.name}</b>${r.name !== u.name ? html`<br><span class="muted">${r.name}</span>` : ''}<br><span class="small">${c.name} · ${c.country}</span></div>
     <div class="stack">
       <button class="btn block" id="web">Switch to the Web view</button>
       <button class="btn block" id="user">Switch user</button>

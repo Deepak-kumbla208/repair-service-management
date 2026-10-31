@@ -74,8 +74,8 @@ function rolesAndAccess(t) {
 
 const USERS = [
   [DSH, 'admin', 'Admin', 'ADMIN', null, 'All menus, web and phone'],
-  [DSH, 'viji', 'Viji', 'OPS', 1, 'Enquiries and inspections · web and phone'],
-  [DSH, 'priya', 'Priya', 'APR', 2, 'Counter-checks quotations'],
+  [DSH, 'ops', 'Operations Executive', 'OPS', 1, 'Enquiries and inspections · web and phone'],
+  [DSH, 'approver', 'Approver', 'APR', 2, 'Counter-checks quotations'],
   [DSH, 'techA', 'Technician A', 'TECH', 3, 'Zone A (also B) · phone only'],
   [DSH, 'techB', 'Technician B', 'TECH', 4, 'Zone C (also D) · phone only'],
   [DSH, 'mgmt', 'Management', 'MGT', 5, 'Read-only, all transactions'],
@@ -104,21 +104,21 @@ function enquiry(t, n, d) {
 }
 
 function sampleTransactions(cust) {
-  const viji = 'usr_co_dsh_viji';
+  const ops = 'usr_co_dsh_ops';
   const abc = cust.find(c => c.code === 'CUS-0002');
   const retail = cust.find(c => c.code === 'CUS-0003');
   const fromCustomer = c => ({ customerId: c.id, customerName: c.name, contactId: c.contacts[0].id, contactName: c.contacts[0].name, mobile: c.contacts[0].mobile, email: c.contacts[0].email, siteId: c.sites[0].id, siteName: c.sites[0].name, zoneId: c.sites[0].zoneId });
 
   const e1At = at(2, 9, 5), e2At = at(1, 15, 40), e2Assigned = at(1, 16, 10);
-  const e1 = enquiry(DSH, 1, { receivedAt: e1At, channel: 'CALL', type: 'AMC', enquiryStatus: 'WARM', priority: 'LOW', siteInspection: 'NO', recordedBy: viji,
+  const e1 = enquiry(DSH, 1, { receivedAt: e1At, channel: 'CALL', type: 'AMC', enquiryStatus: 'WARM', priority: 'LOW', siteInspection: 'NO', recordedBy: ops,
     description: 'Annual maintenance contract for the 13 roller shutters at the main warehouse. BOQ to follow by email.', ...fromCustomer(abc),
-    status: 'BOQ study', stage: 'New', statusHistory: hist(['BOQ study', e1At, viji, 'AMC enquiry: BOQ study']) });
-  const e2 = enquiry(DSH, 2, { receivedAt: e2At, channel: 'WHATSAPP', type: 'REPAIR', enquiryStatus: 'HOT', priority: 'MEDIUM', siteInspection: 'YES', recordedBy: viji,
+    status: 'BOQ study', stage: 'New', statusHistory: hist(['BOQ study', e1At, ops, 'AMC enquiry: BOQ study']) });
+  const e2 = enquiry(DSH, 2, { receivedAt: e2At, channel: 'WHATSAPP', type: 'REPAIR', enquiryStatus: 'HOT', priority: 'MEDIUM', siteInspection: 'YES', recordedBy: ops,
     description: 'Shop-front shutter stuck halfway; cannot close it at night.', ...fromCustomer(retail), inspectionId: `ins_${DSH}_2`,
-    status: 'Inspection assigned', stage: 'Inspection', statusHistory: hist(['Waiting for inspection', e2At, viji], ['Inspection assigned', e2Assigned, viji, 'Technician B']) });
+    status: 'Inspection assigned', stage: 'Inspection', statusHistory: hist(['Waiting for inspection', e2At, ops], ['Inspection assigned', e2Assigned, ops, 'Technician B']) });
   const visit = new Date(); visit.setDate(visit.getDate() + 1); visit.setHours(10, 0, 0, 0);
-  const i2 = { id: `ins_${DSH}_2`, tenantId: DSH, enquiryId: e2.id, zoneId: e2.zoneId, technicianId: `emp_${DSH}_4`, visitAt: visit.toISOString(), confirmedBy: 'WhatsApp', notes: 'Customer confirmed by WhatsApp', assignedAt: e2Assigned, assignedBy: viji,
-    status: 'Assigned', statusHistory: hist(['To assign', e2At, viji], ['Assigned', e2Assigned, viji, 'Technician B']), createdAt: e2At, updatedAt: e2Assigned };
+  const i2 = { id: `ins_${DSH}_2`, tenantId: DSH, enquiryId: e2.id, zoneId: e2.zoneId, technicianId: `emp_${DSH}_4`, visitAt: visit.toISOString(), confirmedBy: 'WhatsApp', notes: 'Customer confirmed by WhatsApp', assignedAt: e2Assigned, assignedBy: ops,
+    status: 'Assigned', statusHistory: hist(['To assign', e2At, ops], ['Assigned', e2Assigned, ops, 'Technician B']), createdAt: e2At, updatedAt: e2Assigned };
   return { enquiries: [e1, e2], inspections: [i2] };
 }
 

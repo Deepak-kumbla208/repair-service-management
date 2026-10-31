@@ -28,6 +28,7 @@ function sidebar(activeKey) {
 
 export function renderWebShell(app, route, activeKey, page) {
   const u = auth.user(), c = auth.company(), r = auth.role();
+  const who = r.name !== u.name ? `${u.name} · ${r.name}` : u.name;
   app.innerHTML = String(html`<div class="web">
     <header class="topbar">
       <div class="brand"><span class="brand-mark">RSM</span><div>Repair &amp; Service<small>Prototype · demo data</small></div></div>
@@ -35,7 +36,7 @@ export function renderWebShell(app, route, activeKey, page) {
       <span class="grow"></span>
       <button class="company-btn" id="company" title="Company">${c.name} ▾</button>
       <div class="seg" role="group" aria-label="View"><button class="on">Web</button><button id="toMobile">Mobile</button></div>
-      <button class="avatar" id="me" title="${u.name} · ${r.name}">${initials(u.name)}</button>
+      <button class="avatar" id="me" title="${who}">${initials(u.name)}</button>
     </header>
     <div class="web-body">${sidebar(activeKey)}<main class="content" id="content"></main></div>
   </div>`);
@@ -48,7 +49,7 @@ export function renderWebShell(app, route, activeKey, page) {
     { label: 'Switch company…', onClick: () => logoutTo(c.id === 'co_dsh' ? 'co_gdd' : 'co_dsh') },
   ]);
   $('#me').onclick = e => popMenu(e.currentTarget, [
-    { info: html`<b>${u.name}</b><br><span class="muted">${r.name}</span>` },
+    { info: html`<b>${u.name}</b>${r.name !== u.name ? html`<br><span class="muted">${r.name}</span>` : ''}` },
     { sep: true },
     { label: 'Switch user', onClick: () => logoutTo(c.id) },
     { label: 'Reset demo data', onClick: async () => { if (await confirmBox('Reset demo data', 'All changes and photos will be removed and the sample data restored.', 'Reset')) resetDemo(); } },

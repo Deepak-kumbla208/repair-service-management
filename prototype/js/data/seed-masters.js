@@ -102,8 +102,8 @@ export function singaporeMasters(t) {
       zone('D', 'Jurong Island', '', 30, 25, 4, ['roundTripHours']),
     ],
     employees: [
-      base(t, `emp_${t}_1`, { code: 'EMP-001', name: 'Viji', designation: 'Operations Executive', type: 'Office', mainZoneId: '', extraZoneIds: [], skills: '', mobile: '8000 0001', email: 'viji@demo-shutters.example' }),
-      base(t, `emp_${t}_2`, { code: 'EMP-002', name: 'Priya', designation: 'Approver', type: 'Office', mainZoneId: '', extraZoneIds: [], skills: '', mobile: '8000 0002', email: 'priya@demo-shutters.example' }),
+      base(t, `emp_${t}_1`, { code: 'EMP-001', name: 'Operations Executive', designation: 'Operations Executive', type: 'Office', mainZoneId: '', extraZoneIds: [], skills: '', mobile: '8000 0001', email: 'ops@demo-shutters.example' }),
+      base(t, `emp_${t}_2`, { code: 'EMP-002', name: 'Approver', designation: 'Approver', type: 'Office', mainZoneId: '', extraZoneIds: [], skills: '', mobile: '8000 0002', email: 'approver@demo-shutters.example' }),
       base(t, `emp_${t}_3`, { code: 'EMP-003', name: 'Technician A', designation: 'Technician', type: 'Technician', mainZoneId: `zon_${t}_A`, extraZoneIds: [`zon_${t}_B`], skills: 'Rolling, motor work', mobile: '8000 0003', email: '' }),
       base(t, `emp_${t}_4`, { code: 'EMP-004', name: 'Technician B', designation: 'Technician', type: 'Technician', mainZoneId: `zon_${t}_C`, extraZoneIds: [`zon_${t}_D`], skills: 'Rolling, collapsible, sectional', mobile: '8000 0004', email: '' }),
       base(t, `emp_${t}_5`, { code: 'EMP-005', name: 'Management', designation: 'General Manager', type: 'Office', mainZoneId: '', extraZoneIds: [], skills: '', mobile: '8000 0005', email: '' }),
@@ -138,15 +138,15 @@ export function singaporeMasters(t) {
       ['Late payments will attract interest at [X]% per month on the outstanding amount.', true],
     ]),
     customers: [
-      customer(t, 'CUS-0001', { name: 'Kosmic M&E Services Pte Ltd', uen: '', taxRegistered: true, phone: '9876 5432', email: 'divya@kosmic.example', address: 'IMM Building, Jurong East',
-        contacts: [{ id: `con_${t}_1`, name: 'Divya', designation: 'Facilities', mobile: '9876 5432', email: 'divya@kosmic.example', primary: true }] },
+      customer(t, 'CUS-0001', { name: 'Kosmic M&E Services Pte Ltd', uen: '', taxRegistered: true, phone: '9876 5432', email: 'facilities@kosmic.example', address: 'IMM Building, Jurong East',
+        contacts: [{ id: `con_${t}_1`, name: 'Facilities Manager', designation: 'Facilities', mobile: '9876 5432', email: 'facilities@kosmic.example', primary: true }] },
       [{ name: 'IMM Building L1 Shop @ Jurong East', address: 'IMM Building, Jurong East', blockUnit: 'L1', zone: 'A',
         shutters: [['RS-1', 'Front shop', 'RS', 10, 9, 'ft', '400 kg single phase'], ['RS-2', 'Side godown', 'CS', 8, 7, 'ft', '']] }], sizeRows),
-      customer(t, 'CUS-0002', { name: 'ABC Industries', uen: '', taxRegistered: true, phone: '9012 3456', email: 'lee@abc-industries.example', address: 'Main warehouse',
-        contacts: [{ id: `con_${t}_2`, name: 'Ms Lee', designation: 'Admin', mobile: '9012 3456', email: 'lee@abc-industries.example', primary: true }] },
+      customer(t, 'CUS-0002', { name: 'ABC Industries', uen: '', taxRegistered: true, phone: '9012 3456', email: 'admin@abc-industries.example', address: 'Main warehouse',
+        contacts: [{ id: `con_${t}_2`, name: 'Admin Officer', designation: 'Admin', mobile: '9012 3456', email: 'admin@abc-industries.example', primary: true }] },
       [{ name: 'Main warehouse', address: 'Main warehouse', zone: 'A', shutters: warehouseShutters() }], sizeRows),
-      customer(t, 'CUS-0003', { name: 'Demo Retail Pte Ltd', uen: '', taxRegistered: false, phone: '9123 4567', email: 'tan@demo-retail.example', address: 'Raffles Place',
-        contacts: [{ id: `con_${t}_3`, name: 'Mr Tan', designation: 'Shop manager', mobile: '9123 4567', email: 'tan@demo-retail.example', primary: true }] },
+      customer(t, 'CUS-0003', { name: 'Demo Retail Pte Ltd', uen: '', taxRegistered: false, phone: '9123 4567', email: 'shop@demo-retail.example', address: 'Raffles Place',
+        contacts: [{ id: `con_${t}_3`, name: 'Shop Manager', designation: 'Shop', mobile: '9123 4567', email: 'shop@demo-retail.example', primary: true }] },
       [{ name: 'Raffles Place shop', address: 'Raffles Place', blockUnit: '#01-12', zone: 'C', shutters: [['RS-1', 'Shop front', 'RS', 4.2, 3, 'm', '']] }], sizeRows),
     ],
   };
@@ -182,8 +182,8 @@ export function uaeMasters(t) {
       ['Bank details: [account name, IBAN, bank and branch].', true],
     ]),
     customers: [
-      customer(t, 'CUS-0001', { name: 'Desert Demo Trading LLC', uen: '', taxRegistered: true, phone: '050 123 4567', email: 'khalid@desert-demo.example', address: 'Al Quoz Industrial Area 3',
-        contacts: [{ id: `con_${t}_1`, name: 'Mr Khalid', designation: 'Warehouse manager', mobile: '050 123 4567', email: 'khalid@desert-demo.example', primary: true }] },
+      customer(t, 'CUS-0001', { name: 'Desert Demo Trading LLC', uen: '', taxRegistered: true, phone: '050 123 4567', email: 'warehouse@desert-demo.example', address: 'Al Quoz Industrial Area 3',
+        contacts: [{ id: `con_${t}_1`, name: 'Warehouse Manager', designation: 'Warehouse', mobile: '050 123 4567', email: 'warehouse@desert-demo.example', primary: true }] },
       [{ name: 'Al Quoz warehouse', address: 'Al Quoz Industrial Area 3', zone: 'C', shutters: [['D-1', 'Gate 1', 'RS', 5, 4.5, 'm', ''], ['D-2', 'Gate 2', 'MR', 6, 4.5, 'm', '600 kg three phase']] }], sizeRows),
     ],
   };

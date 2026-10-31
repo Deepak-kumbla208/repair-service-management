@@ -8,7 +8,7 @@ import { pageHead } from './shell.js';
 
 const LATER = {
   estimation: 'Repair estimates with the team lead\'s tabs, job or line costing, revisions.',
-  quotation: 'Quotations from the estimate, Priya\'s counter-check, revisions, acceptance by PO.',
+  quotation: 'Quotations from the estimate, the approver\'s counter-check, revisions, acceptance by PO.',
   job: 'Scheduling board, invoice at scheduling for immediate payment, phone job steps, Work Done form.',
   closure: 'Review of all linked documents; closes itself when the invoice is fully paid.',
   invoice: 'Tax invoice layout, gapless numbers on posting, print preview.',

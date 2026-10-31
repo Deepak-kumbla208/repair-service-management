@@ -2,7 +2,7 @@
 // A person always checks the suggestions before saving.
 import { findDuplicates, primaryContact } from './customers.js';
 
-export const SAMPLE_EMAIL = `From: Divya <divya@kosmic.example>
+export const SAMPLE_EMAIL = `From: Kosmic Facilities <facilities@kosmic.example>
 Subject: Urgent - shutter repair at IMM L1 shop
 
 Hi team,
@@ -12,7 +12,7 @@ Site: IMM Building L1 Shop @ Jurong East
 Please send someone today.
 
 Regards,
-Divya
+Facilities Manager
 Kosmic M&E Services Pte Ltd
 Mobile: 9876 5432`;
 
@@ -64,7 +64,7 @@ export function parseEmail(text) {
   return {
     fields: {
       channel: 'EMAIL', type, priority: urgent ? 'HIGH' : 'MEDIUM', enquiryStatus: urgent ? 'HOT' : 'WARM',
-      contactName: fromName || contact?.name || '', mobile: mobile || contact?.mobile || '', email,
+      contactName: contact?.name || fromName || '', mobile: mobile || contact?.mobile || '', email,
       customerName: customer?.name || companyLine, siteText, description: subject ? `${subject}. ${description}` : description,
     },
     customer, contact, site,

@@ -12,7 +12,7 @@ import { switchView } from '../app.js';
 export function renderHome(el) {
   const u = auth.user(), r = auth.role(), c = auth.company();
   if (!auth.webMenus().length) {
-    el.innerHTML = String(html`<div class="page"><div class="card" style="max-width:560px"><h1>Hello ${u.name}</h1>
+    el.innerHTML = String(html`<div class="page"><div class="card" style="max-width:560px"><h1>Welcome, ${u.name}</h1>
       <p class="muted" style="margin:8px 0 12px">Your role (${r.name}) works on the phone: your jobs, site reports and photos are in the Mobile view.</p>
       <button class="btn primary" id="go">Open the Mobile view</button></div></div>`);
     el.querySelector('#go').onclick = () => switchView('mobile');
@@ -24,7 +24,7 @@ export function renderHome(el) {
     .sort((a, b) => a.e.receivedAt.localeCompare(b.e.receivedAt));
 
   el.innerHTML = String(html`<div class="page">
-    ${pageHead({ crumb: 'Dashboard', title: `Hello ${u.name}`, sub: `${r.name} · ${c.name}. Full dashboards for each role come in Stretch 3.`,
+    ${pageHead({ crumb: 'Dashboard', title: `Welcome, ${u.name}`, sub: `${r.name !== u.name ? `${r.name} · ` : ''}${c.name}. Full dashboards for each role come in Stretch 3.`,
       actions: auth.can('enquiry', 'create') ? html`<div class="row"><button class="btn" id="paste">✉ Paste email</button><a class="btn primary" href="#/enquiries/new">+ New enquiry</a></div>` : '' })}
     ${auth.can('enquiry') ? html`<h2 style="margin:4px 0 8px">Enquiries</h2>${tiles(enquiryTiles(enquiries, c), '')}` : ''}
     ${auth.can('inspection') ? html`<div class="card"><div class="card-head"><h2>Site inspections not finished</h2><a href="#/inspections">Open the list</a></div>

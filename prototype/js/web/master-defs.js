@@ -15,7 +15,7 @@ export const DEFS = {
       { name: 'code', label: 'Code', required: true }, { name: 'name', label: 'Name', required: true },
       { name: 'designation', label: 'Designation' }, { name: 'type', label: 'Type', type: 'select', options: ['Office', 'Technician'], required: true },
       { name: 'mainZoneId', label: 'Main zone', type: 'select', options: zoneOptions }, { name: 'skills', label: 'Skills' },
-      { name: 'extraZoneIds', label: 'Extra zones', type: 'multi', options: zoneOptions, cls: 'span3' },
+      { name: 'extraZoneIds', label: 'Extra zones', type: 'multi', options: zoneOptions, cls: 'spanall' },
       { name: 'mobile', label: 'Mobile', type: 'tel' }, { name: 'email', label: 'Email', type: 'email' },
     ],
     columns: [['code', 'Code'], ['name', 'Name'], ['designation', 'Designation'], ['type', 'Type'], [r => zoneLabel(r.mainZoneId), 'Main zone'],

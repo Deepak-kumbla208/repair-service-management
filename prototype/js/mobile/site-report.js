@@ -85,7 +85,8 @@ function newShutter(site, rep, ctx) {
   });
 }
 
-const STEPS = [step1, ...STEPS_2_TO_7];
+// Shared with the web editor (web/report-view.js), so the phone and the office fill the same report.
+export const STEPS = [step1, ...STEPS_2_TO_7];
 
 function submittedView(page, rep) {
   page.body.innerHTML = String(html`<div class="note" style="margin-bottom:10px">${rep.no} was submitted ${fmtDateTime(rep.submittedAt)}. The office sees it on the web.</div>

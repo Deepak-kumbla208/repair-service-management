@@ -1,16 +1,18 @@
-// Inside an enquiry: register fields grouped, the current transaction, the inspection clock,
-// the register's automatic columns, attachments and activity; plus the Workflow view.
+// Inside an enquiry, in the same "E2" layout as the form: properties on the left (read-only lines),
+// "What the customer needs", the site inspection, the register's automatic columns, attachments and
+// activity on the right; plus the Workflow popup.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, fmtDate, fmtTime, fmtDateTime, pill } from '../core/ui.js';
+import { html, fmtDateTime, pill, openModal } from '../core/ui.js';
 import { vsLabel, zoneLabel, empName, findSite } from '../core/lookups.js';
 import { laterColumns, inspectionClock } from '../core/enquiries.js';
 import { stagesFor, currentStage } from '../core/flow.js';
 import { getUrl, fmtSize } from '../core/media.js';
-import { pageHead } from './shell.js';
 import { clockHtml } from './site-inspection.js';
+import { linesTable } from './enquiry-parts.js';
 
-const kv = (k, v) => html`<div><div class="k">${k}</div><div class="v">${v || html`<span class="muted">—</span>`}</div></div>`;
+const row = (label, value) => html`<div class="field"><div class="field-label">${label}</div><div class="ro">${value || html`<span class="muted">—</span>`}</div></div>`;
+export const channelText = e => (e.channel === 'OTHER' && e.channelOther ? `Other: ${e.channelOther}` : vsLabel('ENQ_CHANNEL', e.channel));
 
 // One box per transaction; the current one highlighted, the rest dimmed.
 export function workflowHtml(enq, { vertical = false } = {}) {
@@ -24,7 +26,7 @@ export function workflowHtml(enq, { vertical = false } = {}) {
   })}</div>`;
 }
 
-function activity(enq) {
+export function activityHtml(enq) {
   const rows = [
     ...(enq.statusHistory || []).map(h => ({ at: h.at, by: h.by, text: html`Status ${pill(h.status)}${h.note ? ` · ${h.note}` : ''}` })),
     ...store.auditFor('enquiries', enq.id).filter(a => a.action === 'update').map(a => ({ at: a.at, by: a.userId, text: a.summary })),
@@ -40,71 +42,75 @@ export function renderEnquiryView(el, id) {
   const report = insp?.reportId ? store.get('siteReports', insp.reportId) : null;
   const { site } = findSite(e.siteId);
   const stage = currentStage(e);
-  const clock = inspectionClock(e, company);
   const l = laterColumns(e);
-  const canAssign = insp && ['To assign', 'Assigned'].includes(insp.status) && auth.can('inspection', 'edit');
+  const openInsp = insp && insp.status !== 'Cancelled';
+  const canAssign = openInsp && ['To assign', 'Assigned'].includes(insp.status) && auth.can('inspection', 'edit');
 
-  el.innerHTML = String(html`<div class="page">
-    ${pageHead({
-      crumb: html`<a href="#/enquiries">Enquiry register</a> › ${e.no}`,
-      title: html`${e.no} · ${e.customerName} ${pill(e.status)}`,
-      sub: html`${vsLabel('ENQ_TYPE', e.type)} · received ${fmtDateTime(e.receivedAt)} by ${vsLabel('ENQ_CHANNEL', e.channel)} · recorded by ${auth.userName(e.recordedBy)}${stage ? html` · <b style="color:var(--blue-600)">now at: ${stage.name}</b>` : ''}`,
-      actions: html`<div class="row">
-        <a class="btn soft" href="#/enquiries/${e.id}/workflow">⇶ Workflow</a>
+  el.innerHTML = String(html`<div class="page" style="max-width:1400px">
+    <div class="page-head"><div class="grow">
+      <div class="crumb"><a href="#/enquiries">Enquiry register</a> › ${e.no}</div>
+      <h1>${e.no} · ${e.customerName} ${pill(e.status)}</h1>
+      <div class="page-meta">${vsLabel('ENQ_TYPE', e.type)} · received ${fmtDateTime(e.receivedAt)} by ${channelText(e)} · recorded by <b>${auth.userName(e.recordedBy)}</b>${stage ? html` · <b style="color:var(--blue-600)">now at: ${stage.name}</b>` : ''}</div></div>
+      <div class="row">
+        <button class="btn soft" id="wfBtn">⇶ Workflow</button>
         ${auth.can('enquiry', 'edit') && e.status !== 'Cancelled' ? html`<a class="btn" href="#/enquiries/${e.id}/edit">✎ Edit</a>` : ''}
-        ${report?.status === 'Submitted' && auth.can('inspection', 'view') ? html`<a class="btn" href="#/reports/${report.id}">View site report</a>` : ''}
+        ${report && auth.can('inspection', 'view') ? html`<a class="btn" href="#/reports/${report.id}">Site viewing report</a>` : ''}
         ${canAssign ? html`<a class="btn primary" href="#/inspections/${insp.id}">${insp.technicianId ? 'Change technician' : 'Assign technician'}</a>` : ''}
-      </div>`,
-    })}
-    <div class="cols2">
-      <div class="card"><div class="card-head"><h2>Enquiry</h2></div>
-        <div class="kv">${kv('Enquiry Date', fmtDate(e.receivedAt))}${kv('Enquiry Time', fmtTime(e.receivedAt))}${kv('Enquiry Channel', vsLabel('ENQ_CHANNEL', e.channel))}
-          ${kv('Type', vsLabel('ENQ_TYPE', e.type))}${kv('Enquiry Status', vsLabel('ENQ_STATUS', e.enquiryStatus))}${kv('Priority', vsLabel('PRIORITY', e.priority))}
-          ${kv('Site Inspection', vsLabel('YES_NO', e.siteInspection))}${kv('Recorded By', auth.userName(e.recordedBy))}</div>
-        <div class="kv" style="grid-template-columns:1fr;margin-top:10px">${kv('Enquiry Description', e.description)}${kv('Remarks', e.remarks)}</div>
-      </div>
-      <div class="card"><div class="card-head"><h2>Customer and site</h2></div>
-        <div class="kv two">
-          ${kv('Customer Name', auth.can('customer', 'view') ? html`<a href="#/master/customer/${e.customerId}">${e.customerName}</a>` : e.customerName)}
-          ${kv('Contact Person', e.contactName)}${kv('Mobile', e.mobile ? html`<a href="tel:${e.mobile.replace(/\s/g, '')}">${e.mobile}</a>` : '')}
-          ${kv('Email', e.email ? html`<a href="mailto:${e.email}">${e.email}</a>` : '')}${kv('Site Location', e.siteName)}${kv('Zone', zoneLabel(e.zoneId))}
-        </div>
-        <div class="kv" style="grid-template-columns:1fr;margin-top:10px">${kv('Shutters at this site', site?.shutters?.length ? html`${site.shutters.map(s => html`<span class="pill" style="margin:0 4px 4px 0">${s.tag} ${s.location} · ${s.sizeCode}</span>`)}` : '')}</div>
       </div>
     </div>
-    ${insp && insp.status !== 'Cancelled' ? html`<div class="card" style="margin-top:10px"><div class="card-head"><h2>Site inspection</h2>${pill(insp.status)}</div>
-      <div class="kv six">${kv('Technician', empName(insp.technicianId))}${kv('Visit (confirmed)', fmtDateTime(insp.visitAt))}${kv('Confirmed by', insp.confirmedBy)}
-        ${kv('Site report', report ? html`${report.no} · ${report.status}` : '')}<div class="span2">${kv('Target: within ' + (company.inspectionTargetHours || 2) + ' h of the call', clockHtml(clock))}</div></div>
-    </div>` : ''}
-    <div class="card"><div class="card-head"><h2>Register columns filled automatically</h2><span class="muted small">from the quotation, job, invoice and payment (Stretch 2)</span></div>
-      <div class="kv six">${kv('Quotation Date', l.quotationDate)}${kv('Quotation Status', l.quotationStatus)}${kv('Quotation Value', l.quotationValue)}${kv('Job Status', l.jobStatus)}
-        ${kv('Work Completion Status', l.workCompletion)}${kv('Work Completion Date', l.workCompletionDate)}${kv('Invoice Date', l.invoiceDate)}${kv('Invoice No', l.invoiceNo)}
-        ${kv('Invoice Value', l.invoiceValue)}${kv('Payment Received', l.paymentReceived)}</div>
-    </div>
-    <div class="cols2" style="margin-top:10px">
-      <div class="card"><div class="card-head"><h2>Attachments</h2></div>${(e.attachments || []).length
-        ? html`<div class="files">${e.attachments.map(a => html`<div class="file-row">📎 <a href="#" data-open="${a.id}">${a.name}</a><span class="muted small">${fmtSize(a.size)}</span></div>`)}</div>`
-        : html`<div class="muted">No files attached.</div>`}</div>
-      <div class="card"><div class="card-head"><h2>Activity</h2></div>${activity(e)}</div>
+    <div class="e2">
+      <div class="props form-lines">
+        <div class="form-sec">Customer</div>
+        ${row('Customer', auth.can('customer', 'view') ? html`<a href="#/master/customer/${e.customerId}">${e.customerName}</a>` : e.customerName)}
+        ${row('Contact Person', e.contactName)}
+        ${row('Mobile', e.mobile ? html`<a href="tel:${e.mobile.replace(/\s/g, '')}">${e.mobile}</a>` : '')}
+        ${row('Email', e.email ? html`<a href="mailto:${e.email}">${e.email}</a>` : '')}
+        <div class="form-sec">Site</div>
+        ${row('Site Location', e.siteName)}
+        ${row('Zone', e.zoneId ? zoneLabel(e.zoneId) : html`<span class="muted">Not set</span>`)}
+        ${site?.shutters?.length ? row('Shutters', html`${site.shutters.map(s => html`<span class="pill" style="margin:0 4px 4px 0">${s.tag} ${s.location} · ${s.sizeCode}</span>`)}`) : ''}
+        <div class="form-sec">Enquiry</div>
+        ${row('Enquiry Date / Time', fmtDateTime(e.receivedAt))}
+        ${row('Type', vsLabel('ENQ_TYPE', e.type))}
+        ${row('Enquiry Channel', channelText(e))}
+        ${row('Enquiry Status', vsLabel('ENQ_STATUS', e.enquiryStatus))}
+        ${row('Priority', vsLabel('PRIORITY', e.priority))}
+        <div class="form-sec">Next step</div>
+        ${row('Site Inspection', vsLabel('YES_NO', e.siteInspection))}
+        ${openInsp ? html`${row('Technician', empName(insp.technicianId))}${row('Visit', fmtDateTime(insp.visitAt))}${row('Confirmed by', insp.confirmedBy)}
+          ${row(`Target (${company.inspectionTargetHours || 2} h)`, clockHtml(inspectionClock(e, company)))}` : ''}
+      </div>
+      <div class="e2-main">
+        <div class="card"><div class="card-head"><h2>What the customer needs</h2></div>${linesTable(e.lines)}
+          ${e.remarks ? html`<div class="form-lines" style="margin-top:8px">${row('Remarks', e.remarks)}</div>` : ''}</div>
+        ${openInsp ? html`<div class="card"><div class="card-head"><h2>Site inspection</h2>${pill(insp.status)}</div>
+          <div class="row wrap"><span>${insp.technicianId ? `Technician: ${empName(insp.technicianId)}` : 'No technician yet'}${insp.visitAt ? ` · visit ${fmtDateTime(insp.visitAt)}` : ''}</span><span class="grow"></span>
+            ${report ? html`<span>${report.no} ${pill(report.status)}</span>` : ''}<a class="btn small" href="#/inspections/${insp.id}">Open the site inspection</a></div></div>` : ''}
+        <div class="card"><div class="card-head"><h2>Register columns filled automatically</h2><span class="muted small">from the quotation, job, invoice and payment (Stretch 2)</span></div>
+          <div class="kv six">${[['Quotation Date', l.quotationDate], ['Quotation Status', l.quotationStatus], ['Quotation Value', l.quotationValue], ['Job Status', l.jobStatus],
+            ['Work Completion Status', l.workCompletion], ['Work Completion Date', l.workCompletionDate], ['Invoice Date', l.invoiceDate], ['Invoice No', l.invoiceNo],
+            ['Invoice Value', l.invoiceValue], ['Payment Received', l.paymentReceived]].map(([k, v]) => html`<div><div class="k">${k}</div><div class="v">${v || html`<span class="muted">—</span>`}</div></div>`)}</div></div>
+        <div class="card"><div class="card-head"><h2>Attachments</h2></div>${(e.attachments || []).length
+          ? html`<div class="files">${e.attachments.map(a => html`<div class="file-row">📎 <a href="#" data-open="${a.id}">${a.name}</a><span class="muted small">${fmtSize(a.size)}</span></div>`)}</div>`
+          : html`<div class="muted">No files attached.</div>`}</div>
+        <div class="card"><div class="card-head"><h2>Activity</h2></div>${activityHtml(e)}</div>
+      </div>
     </div>
   </div>`);
 
+  el.querySelector('#wfBtn').onclick = () => openWorkflow(e);
   el.querySelectorAll('[data-open]').forEach(a => a.addEventListener('click', async ev => { ev.preventDefault(); const u = await getUrl(a.dataset.open); if (u) window.open(u, '_blank'); }));
 }
 
-export function renderWorkflow(el, id) {
-  const e = store.get('enquiries', id);
-  if (!e) { el.innerHTML = '<div class="page"><div class="empty">Enquiry not found.</div></div>'; return; }
-  el.innerHTML = String(html`<div class="page">
-    ${pageHead({
-      crumb: html`<a href="#/enquiries">Enquiry register</a> › <a href="#/enquiries/${e.id}">${e.no}</a> › Workflow`,
-      title: `Workflow · ${e.no} · ${vsLabel('ENQ_TYPE', e.type)}`,
-      sub: 'One box per transaction. The current one is highlighted; click a finished box to open its document.',
-      actions: html`<a class="btn" href="#/enquiries/${e.id}">← Back to enquiry</a>`,
-    })}
-    <div class="card">${workflowHtml(e)}</div>
-    <div class="card"><b>Other enquiry types</b>
-      <div class="muted" style="margin-top:4px;line-height:1.8">AMC: Enquiry → Site inspection (optional) → Estimation → Quotation → AMC contract → AMC visits → Invoice → Payment<br>
-      General Servicing: Enquiry → Site inspection (optional) → Estimation → Quotation → Job → Invoice → Payment → Job closure</div></div>
-  </div>`);
+// The Workflow button opens this popup over the enquiry page.
+export function openWorkflow(e) {
+  openModal({
+    title: `Workflow · ${e.no} · ${vsLabel('ENQ_TYPE', e.type)}`, cls: 'wf-modal',
+    body: html`<p class="muted" style="margin:0 0 10px">One box per transaction. The current one is highlighted; click a finished box to open its document.</p>
+      ${workflowHtml(e)}
+      <div class="muted small" style="margin-top:14px;line-height:1.8"><b>Other enquiry types</b><br>
+        AMC: Enquiry → Site inspection (optional) → Estimation → Quotation → AMC contract → AMC visits → Invoice → Payment<br>
+        General Servicing: Enquiry → Site inspection (optional) → Estimation → Quotation → Job → Invoice → Payment → Job closure</div>`,
+    actions: [{ label: 'Close' }],
+  });
 }

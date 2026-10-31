@@ -106,7 +106,7 @@ export function renderMasterForm(el, key, id) {
         ${editable ? html`<button class="btn primary" id="save">Save</button>` : ''}</div>`,
     })}
     ${editable ? '' : html`<div class="note" style="margin-bottom:10px">Read-only: your role can view this master but not change it.</div>`}
-    <form class="card" id="f" onsubmit="return false"><div class="grid g3">${def.fields.map(fieldHtml)}</div>
+    <form class="card form-lines" id="f" onsubmit="return false"><div class="grid g2">${def.fields.map(fieldHtml)}</div>
       ${def.computed && rec ? html`<div class="kv" style="margin-top:12px">${def.computed.map(([label, fn, o]) => html`<div><div class="k">${label} (calculated)</div><div class="v strong">${o?.money ? fmtMoney(fn(rec), company) : fn(rec)}</div></div>`)}</div>` : ''}
     </form>
   </div>`);

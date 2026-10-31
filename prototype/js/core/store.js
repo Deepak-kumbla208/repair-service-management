@@ -1,7 +1,7 @@
 // Records in localStorage (one key per collection). Every company-owned record carries tenantId,
 // and every read here is limited to the logged-in company, so screens cannot leak another company's data.
-// Bump the version when the sample data changes, so browsers re-seed (v2: no personal names).
-const PREFIX = 'rsm.v2.';
+// Bump the version when the sample data changes, so browsers re-seed (v2: no personal names; v3: enquiry item lines).
+const PREFIX = 'rsm.v3.';
 const cache = new Map();
 let tenant = null;
 let actor = null;

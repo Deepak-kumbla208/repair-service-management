@@ -5,7 +5,7 @@ import * as auth from '../core/auth.js';
 import { html, $, $$, on, go, debounce, field, readForm, markInvalid, toast, fmtDateTime, fmtDuration, pill, tiles, emptyRow, dateInput, joinDateTime } from '../core/ui.js';
 import { zones, zoneLabel, zoneCode, empName, technicians, findSite } from '../core/lookups.js';
 import { inspectionClock, isToday } from '../core/enquiries.js';
-import { techniciansFor, assignTechnician } from '../core/inspections.js';
+import { techniciansFor, assignTechnician, startReport } from '../core/inspections.js';
 import { pageHead } from './shell.js';
 
 // Countdown text + bar for the "within 2 hours of the call" target.
@@ -93,6 +93,7 @@ export function renderInspection(el, id) {
   const { site } = findSite(e.siteId);
   const company = auth.company();
   const canAssign = auth.can('inspection', 'edit') && ['To assign', 'Assigned'].includes(i.status);
+  const canEditReport = auth.can('inspection', 'edit', 'web');
   const visit = i.visitAt ? new Date(i.visitAt) : nextHour();
   let chosen = i.technicianId;
 
@@ -117,12 +118,17 @@ export function renderInspection(el, id) {
     <div class="card"><div class="card-head"><h2>Site viewing report</h2>${r ? pill(r.status) : ''}</div>
       ${r ? html`<div class="kv six"><div><div class="k">Report No</div>${r.no}</div><div><div class="k">Technician</div>${empName(r.technicianId)}</div>
         <div><div class="k">Time in / out</div>${r.s1.timeIn || '—'} / ${r.s1.timeOut || '—'}</div><div><div class="k">Shutters picked</div>${r.shutters.length}</div>
-        <div><div class="k">Photos</div>${r.photos.length}</div><div><div class="k">Submitted</div>${fmtDateTime(r.submittedAt) || '—'}</div></div>
-        ${r.status === 'Submitted' ? html`<div class="row" style="margin-top:10px"><a class="btn primary" href="#/reports/${r.id}">View report</a>${auth.can('inspection', 'print') ? html`<a class="btn" href="#/reports/${r.id}/print">⎙ Print preview</a>` : ''}</div>`
-          : html`<p class="muted" style="margin-top:8px">The technician is filling in the report on the phone.</p>`}`
-      : html`<p class="muted">The technician starts the report on the phone (My jobs). It appears here when submitted.</p>`}
+        <div><div class="k">Photos</div>${r.photos.length}</div><div><div class="k">${r.paper ? 'Received (paper)' : 'Submitted'}</div>${fmtDateTime(r.submittedAt) || '—'}</div></div>
+        <div class="row" style="margin-top:10px"><a class="btn primary" href="#/reports/${r.id}">${canEditReport ? 'Open the report' : 'View report'}</a>
+          ${auth.can('inspection', 'print') ? html`<a class="btn" href="#/reports/${r.id}/print">⎙ Print preview</a>` : ''}</div>`
+      : i.technicianId && canEditReport
+        ? html`<p class="muted">Opens pre-filled from ${e.no} and its items. The office can edit and print it now (for example for a paper visit); the technician continues the same report on the phone.</p>
+          <button class="btn primary" id="startReport">Open the site viewing report</button>`
+        : html`<p class="muted">${i.technicianId ? 'The technician fills in the report on the phone (My jobs).' : 'Assign a technician first; the report then opens pre-filled.'}</p>`}
     </div>
   </div>`);
+
+  $('#startReport', el)?.addEventListener('click', () => go(`reports/${startReport(i.id, { fromOffice: true }).id}`));
 
   function paintAssign() {
     const box = $('#assignCard', el);
@@ -139,7 +145,7 @@ export function renderInspection(el, id) {
       <span class="small ${x.visits ? '' : 'muted'}">${x.visits} visit(s) that day</span></label>`;
     const inZone = list.filter(x => x.match), others = list.filter(x => !x.match);
     box.innerHTML = String(html`<div class="card-head"><h2>${i.technicianId ? 'Change technician' : 'Assign technician'}</h2><span class="pill blue">Zone ${zoneLabel(i.zoneId)}</span></div>
-      <div class="grid g3">
+      <div class="form-lines">
         ${field({ name: 'visitDate', label: 'Visit date', type: 'date', value: date, required: true })}
         ${field({ name: 'visitTime', label: 'Visit time', type: 'time', value: time, required: true })}
         ${field({ name: 'confirmedBy', label: 'Confirmed with customer by', type: 'select', options: ['Call', 'WhatsApp', 'Email', 'SMS'], value: i.confirmedBy || 'Call', required: true })}

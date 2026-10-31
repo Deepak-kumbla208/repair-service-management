@@ -135,6 +135,7 @@ textarea { min-height: 64px; resize: vertical; }
 .phone .modal-back { position: absolute; padding: 40px 10px; }
 .modal { background: var(--white); border-radius: 10px; width: 560px; max-width: 100%; box-shadow: var(--shadow-pop); }
 .modal.wide { width: 860px; }
+.modal.wf-modal { width: 1100px; }
 .modal-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
 .modal-head h2 { flex: 1; }
 .modal-body { padding: 14px 16px; max-height: 70vh; overflow-y: auto; }
@@ -238,3 +239,63 @@ a.wf-box:hover { text-decoration: none; filter: brightness(.98); }
 .m-foot .btn { flex: 1; padding: 9px; }
 .m-foot .btn.primary { flex: 2; }
 .mat-row { border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin-bottom: 6px; }
+
+/* ---------- Line-style forms (chosen 1 Nov 2026): label left, underline, no boxes ---------- */
+.form-lines .field { display: grid; grid-template-columns: 128px minmax(0, 1fr); column-gap: 10px; align-items: start; }
+.form-lines .field > label, .form-lines .field > .field-label { padding-top: 6px; font-size: 11px; color: var(--muted); }
+.form-lines .field > .hint, .form-lines .field > .err, .form-lines .field > .sub { grid-column: 2; }
+.form-lines input:not([type]), .form-lines input[type=text], .form-lines input[type=search], .form-lines input[type=number], .form-lines input[type=date],
+.form-lines input[type=time], .form-lines input[type=email], .form-lines input[type=tel], .form-lines select {
+  border: 0; border-bottom: 1px solid #C9C7BE; border-radius: 0; padding: 5px 2px; background: transparent;
+}
+.form-lines input:focus, .form-lines select:focus { box-shadow: none; border-bottom: 2px solid var(--blue-500); background: var(--blue-50); }
+.form-lines input[readonly] { background: transparent; border-bottom-style: dashed; }
+.form-lines .field.invalid input, .form-lines .field.invalid select { border-bottom-color: var(--red); }
+.form-lines .with-mic .mic { top: 1px; }
+.form-lines .grid { gap: 6px 22px; }
+.form-sec { font-weight: 600; color: var(--navy-900); border-bottom: 1px solid var(--line-soft); padding-bottom: 3px; margin: 12px 0 6px; }
+.form-sec:first-child { margin-top: 4px; }
+.sub { font-size: 11px; color: var(--faint); margin-top: 2px; }
+.ro { padding: 5px 2px; min-height: 28px; }
+
+/* One-click option buttons (radio inputs styled as chips) */
+.chips { display: flex; flex-wrap: wrap; gap: 4px; padding-top: 2px; }
+label.chip { position: relative; cursor: pointer; }
+label.chip input { position: absolute; opacity: 0; pointer-events: none; }
+label.chip span { display: inline-block; border: 1px solid #C9C7BE; border-radius: 14px; padding: 3px 11px; background: var(--white); white-space: nowrap; }
+label.chip:hover span { border-color: var(--blue-500); }
+label.chip input:checked + span { background: var(--blue-100); border-color: var(--blue-500); color: var(--navy-800); font-weight: 600; }
+label.chip input:focus-visible + span { box-shadow: 0 0 0 3px rgba(55, 138, 221, .25); }
+
+/* E2 layout: properties panel left, main content right */
+.e2 { display: grid; grid-template-columns: 410px minmax(0, 1fr); gap: 12px; align-items: start; }
+.props { background: var(--white); border: 1px solid var(--line); border-radius: 6px; padding: 4px 16px 14px; }
+.e2-main > .card + .card { margin-top: 10px; }
+@media (max-width: 1100px) { .e2 { grid-template-columns: 1fr; } }
+.page-meta { color: var(--muted); font-size: 12px; margin-top: 3px; }
+.rb { font-weight: 600; color: var(--ink); cursor: pointer; background: none; border: 0; padding: 0; font: inherit; }
+.rb .arr { color: var(--blue-600); font-size: 10px; margin-left: 3px; }
+.rb:hover .arr { color: var(--navy-800); }
+
+/* Item lines ("What the customer needs") */
+.lines { width: 100%; }
+.lines th { background: var(--blue-100); color: var(--navy-800); font-weight: 400; text-align: left; padding: 6px 7px; }
+.lines td { padding: 3px 6px; border-top: 1px solid var(--line-soft); vertical-align: middle; }
+.lines input, .lines select { border: 0; border-bottom: 1px solid #C9C7BE; border-radius: 0; padding: 5px 2px; background: transparent; width: 100%; }
+.lines input:focus, .lines select:focus { box-shadow: none; border-bottom: 2px solid var(--blue-500); background: var(--blue-50); }
+.lines .pmc { white-space: nowrap; width: 64px; }
+.pm { display: inline-flex; width: 24px; height: 24px; border-radius: 50%; align-items: center; justify-content: center; border: 0; cursor: pointer; font-weight: 700; margin-right: 4px; }
+.pm.add { background: var(--green-bg); color: var(--green-ink); }
+.pm.rm { background: var(--red-bg); color: var(--red-ink); }
+
+/* Site Viewing Report editor (S3): edit left, live A4 preview right */
+.s3 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.acc-head { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: 0; border-top: 1px solid var(--line-soft); padding: 9px 2px; font-weight: 600; color: var(--navy-900); cursor: pointer; text-align: left; }
+.acc-head:first-child { border-top: 0; }
+.acc-head .done { color: var(--green); font-weight: 400; font-size: 11px; }
+.acc-body { padding: 2px 2px 12px; }
+.preview { background: #CFCDC5; border-radius: 6px; padding: 10px; position: sticky; top: 10px; max-height: calc(100vh - 140px); overflow: auto; }
+.preview-bar { font-size: 11px; color: var(--ink-2); margin-bottom: 6px; display: flex; justify-content: space-between; }
+.preview .sheet { margin: 0; zoom: .62; }
+.sheet .hi { background: #FFF3C4 !important; }
+.s3 .acc-body .grid.g2, .s3 .acc-body .grid.g3 { grid-template-columns: minmax(0, 1fr); }

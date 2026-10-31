@@ -7,6 +7,10 @@ import { openPalette } from './palette.js';
 
 const OPEN_KEY = 'rsmOpenGroups';
 const openGroups = () => { try { return JSON.parse(sessionStorage.getItem(OPEN_KEY)) || ['Transactions', 'Admin Setup']; } catch { return ['Transactions']; } };
+// The menu can be collapsed to icons; remembered per browser (a convenience only).
+const COLLAPSE_KEY = 'rsmSideCollapsed';
+const isCollapsed = () => { try { return localStorage.getItem(COLLAPSE_KEY) === '1'; } catch { return false; } };
+const setCollapsed = on => { try { localStorage.setItem(COLLAPSE_KEY, on ? '1' : '0'); } catch { /* storage blocked */ } };
 const initials = name => name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
 function sidebar(activeKey) {
@@ -14,13 +18,15 @@ function sidebar(activeKey) {
   if (!menus.length) return html`<nav class="sidebar"><div class="side-group"><div class="side-head">No web menus</div>
     <p class="small" style="padding:4px 9px;color:#B5D4F4">This role works on the phone. Use the Mobile switch at the top.</p></div></nav>`;
   const open = openGroups();
-  return html`<nav class="sidebar" aria-label="Main menu">${GROUPS.map(g => {
+  const collapsed = isCollapsed();
+  const toggle = html`<button class="side-toggle" id="sideToggle" title="${collapsed ? 'Expand the menu' : 'Collapse the menu'}">${collapsed ? '»' : '« Collapse'}</button>`;
+  return html`<nav class="sidebar ${collapsed ? 'collapsed' : ''}" aria-label="Main menu">${toggle}${GROUPS.map(g => {
     const items = menus.filter(m => m.group === g);
     if (!items.length) return '';
     const hasActive = items.some(m => m.key === activeKey);
-    const isOpen = g === 'Dashboard' || hasActive || open.includes(g);
-    const links = items.map(m => html`<a class="side-item ${m.key === activeKey ? 'on' : ''}" href="#/${routeOf(m)}">
-      <span class="ic">${m.icon}</span>${m.label}${m.stretch > 1 ? html`<span class="soon" title="${m.preview ? 'Read-only view now; editing screen in Stretch ' + m.stretch : 'Built in Stretch ' + m.stretch}">${m.preview ? 'view' : 'S' + m.stretch}</span>` : ''}</a>`);
+    const isOpen = g === 'Dashboard' || hasActive || open.includes(g) || collapsed;
+    const links = items.map(m => html`<a class="side-item ${m.key === activeKey ? 'on' : ''}" href="#/${routeOf(m)}" title="${m.label}">
+      <span class="ic">${m.icon}</span><span class="lbl">${m.label}</span>${m.stretch > 1 ? html`<span class="soon" title="${m.preview ? 'Read-only view now; editing screen in Stretch ' + m.stretch : 'Built in Stretch ' + m.stretch}">${m.preview ? 'view' : 'S' + m.stretch}</span>` : ''}</a>`);
     if (g === 'Dashboard') return html`<div>${links}</div>`;
     return html`<div class="side-group"><button class="side-head" data-group="${g}">${g}<span>${isOpen ? '▾' : '▸'}</span></button>${isOpen ? links : ''}</div>`;
   })}</nav>`;
@@ -55,6 +61,7 @@ export function renderWebShell(app, route, activeKey, page) {
     { label: 'Reset demo data', onClick: async () => { if (await confirmBox('Reset demo data', 'All changes and photos will be removed and the sample data restored.', 'Reset')) resetDemo(); } },
     { label: 'Log out', onClick: () => logoutTo(c.id) },
   ]);
+  $('#sideToggle')?.addEventListener('click', () => { setCollapsed(!isCollapsed()); renderWebShell(app, route, activeKey, page); });
   app.querySelectorAll('[data-group]').forEach(b => b.addEventListener('click', () => {
     const g = b.dataset.group, open = openGroups();
     sessionStorage.setItem(OPEN_KEY, JSON.stringify(open.includes(g) ? open.filter(x => x !== g) : [...open, g]));

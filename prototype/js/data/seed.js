@@ -111,10 +111,10 @@ function sampleTransactions(cust) {
 
   const e1At = at(2, 9, 5), e2At = at(1, 15, 40), e2Assigned = at(1, 16, 10);
   const e1 = enquiry(DSH, 1, { receivedAt: e1At, channel: 'CALL', type: 'AMC', enquiryStatus: 'WARM', priority: 'LOW', siteInspection: 'NO', recordedBy: ops,
-    description: 'Annual maintenance contract for the 13 roller shutters at the main warehouse. BOQ to follow by email.', ...fromCustomer(abc),
+    lines: [{ itemRef: '', itemName: '', qty: null, description: 'Annual maintenance contract for the 13 roller shutters at the main warehouse. BOQ to follow by email.' }], description: 'Annual maintenance contract for the 13 roller shutters at the main warehouse. BOQ to follow by email.', channelOther: '', ...fromCustomer(abc),
     status: 'BOQ study', stage: 'New', statusHistory: hist(['BOQ study', e1At, ops, 'AMC enquiry: BOQ study']) });
   const e2 = enquiry(DSH, 2, { receivedAt: e2At, channel: 'WHATSAPP', type: 'REPAIR', enquiryStatus: 'HOT', priority: 'MEDIUM', siteInspection: 'YES', recordedBy: ops,
-    description: 'Shop-front shutter stuck halfway; cannot close it at night.', ...fromCustomer(retail), inspectionId: `ins_${DSH}_2`,
+    lines: [{ itemRef: '', itemName: '', qty: null, description: 'Shop-front shutter stuck halfway; cannot close it at night.' }], description: 'Shop-front shutter stuck halfway; cannot close it at night.', channelOther: '', ...fromCustomer(retail), inspectionId: `ins_${DSH}_2`,
     status: 'Inspection assigned', stage: 'Inspection', statusHistory: hist(['Waiting for inspection', e2At, ops], ['Inspection assigned', e2Assigned, ops, 'Technician B']) });
   const visit = new Date(); visit.setDate(visit.getDate() + 1); visit.setHours(10, 0, 0, 0);
   const i2 = { id: `ins_${DSH}_2`, tenantId: DSH, enquiryId: e2.id, zoneId: e2.zoneId, technicianId: `emp_${DSH}_4`, visitAt: visit.toISOString(), confirmedBy: 'WhatsApp', notes: 'Customer confirmed by WhatsApp', assignedAt: e2Assigned, assignedBy: ops,
@@ -127,7 +127,7 @@ function gulfTransactions(cust) {
   const c = cust[0];
   const recv = at(0, Math.max(0, new Date().getHours() - 3), 0);
   const e = enquiry(GDD, 1, { receivedAt: recv, channel: 'CALL', type: 'REPAIR', enquiryStatus: 'HOT', priority: 'HIGH', siteInspection: 'YES', recordedBy: by,
-    description: 'Gate 2 motorised shutter makes a loud noise and stops halfway.', customerId: c.id, customerName: c.name, contactId: c.contacts[0].id, contactName: c.contacts[0].name,
+    lines: [{ itemRef: '', itemName: '', qty: null, description: 'Gate 2 motorised shutter makes a loud noise and stops halfway.' }], description: 'Gate 2 motorised shutter makes a loud noise and stops halfway.', channelOther: '', customerId: c.id, customerName: c.name, contactId: c.contacts[0].id, contactName: c.contacts[0].name,
     mobile: c.contacts[0].mobile, email: c.contacts[0].email, siteId: c.sites[0].id, siteName: c.sites[0].name, zoneId: c.sites[0].zoneId, inspectionId: `ins_${GDD}_1`,
     status: 'Waiting for inspection', stage: 'Inspection', statusHistory: hist(['Waiting for inspection', recv, by]) });
   const i = { id: `ins_${GDD}_1`, tenantId: GDD, enquiryId: e.id, zoneId: e.zoneId, technicianId: '', visitAt: null, confirmedBy: '', notes: '', status: 'To assign', statusHistory: hist(['To assign', recv, by]), createdAt: recv, updatedAt: recv };

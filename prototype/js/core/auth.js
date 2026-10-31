@@ -65,6 +65,13 @@ export function mobileTabs() {
     can(k, t.action || 'view', 'mobile') && (!t.ownOnly || scope(k) === 'own')));
 }
 
+// Users of this company whose role may do an action on a menu (web or phone), e.g. who may record an enquiry.
+export function usersWhoCan(menuKey, action) {
+  const t = sess?.tenantId;
+  const roleIds = store.list('menuAccess', a => a.menu === menuKey && a.actions.includes(action)).map(a => a.roleId);
+  return store.all('users').filter(u => u.tenantId === t && u.status !== 'Inactive' && roleIds.includes(u.roleId));
+}
+
 // Row-level check for site inspections and their reports.
 export function seesInspection(insp) {
   return scope('inspection') !== 'own' || insp.technicianId === user()?.employeeId;

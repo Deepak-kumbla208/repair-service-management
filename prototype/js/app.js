@@ -11,7 +11,7 @@ import { openPalette } from './web/palette.js';
 import { renderHome } from './web/home.js';
 import { renderEnquiryList } from './web/enquiry-list.js';
 import { renderEnquiryForm } from './web/enquiry-form.js';
-import { renderEnquiryView, renderWorkflow } from './web/enquiry-view.js';
+import { renderEnquiryView } from './web/enquiry-view.js';
 import { renderInspectionList, renderInspection } from './web/site-inspection.js';
 import { renderReport } from './web/report-view.js';
 import { renderPrintSvr } from './web/print-svr.js';
@@ -30,7 +30,6 @@ const WEB = [
   [/^enquiries$/, 'enquiry', renderEnquiryList],
   [/^enquiries\/new$/, 'enquiry', el => renderEnquiryForm(el, null)],
   [/^enquiries\/([^/]+)\/edit$/, 'enquiry', renderEnquiryForm],
-  [/^enquiries\/([^/]+)\/workflow$/, 'enquiry', renderWorkflow],
   [/^enquiries\/([^/]+)$/, 'enquiry', renderEnquiryView],
   [/^inspections$/, 'inspection', renderInspectionList],
   [/^inspections\/([^/]+)$/, 'inspection', renderInspection],

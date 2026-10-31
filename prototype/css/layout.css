@@ -100,3 +100,16 @@ kbd {
 .user-card .avatar { flex: none; cursor: inherit; }
 .m-login { padding: 4px 0; }
 .m-login .user-grid { grid-template-columns: 1fr; }
+
+/* Collapsible menu */
+.side-toggle {
+  display: block; width: 100%; text-align: left; background: none; border: 0; color: #85B7EB; font-size: 12px;
+  padding: 2px 9px 8px; margin-bottom: 4px; cursor: pointer; border-bottom: 1px solid rgba(181, 212, 244, .2);
+}
+.side-toggle:hover { color: var(--white); }
+.sidebar.collapsed { width: 56px; padding: 10px 6px 20px; }
+.sidebar.collapsed .side-toggle { text-align: center; padding: 2px 0 8px; font-size: 14px; }
+.sidebar.collapsed .side-item { justify-content: center; padding: 8px 0; }
+.sidebar.collapsed .side-item .ic { width: auto; font-size: 15px; }
+.sidebar.collapsed .lbl, .sidebar.collapsed .soon, .sidebar.collapsed .side-head { display: none; }
+.sidebar.collapsed .side-group { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(181, 212, 244, .2); }

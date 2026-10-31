@@ -56,14 +56,14 @@ export function renderCustomerForm(el, id) {
         ${editable ? html`<button class="btn primary" id="save">Save</button>` : ''}</div>`,
     })}
     <div id="dup"></div>
-    <form class="card" id="head" onsubmit="return false"><div class="card-head"><h2>Customer</h2></div><div class="grid g4">
+    <form class="card form-lines" id="head" onsubmit="return false"><div class="card-head"><h2>Customer</h2></div><div class="grid g2">
       ${field({ name: 'code', label: 'Code', value: draft.code, required: true, readonly: !editable })}
-      ${field({ name: 'name', label: 'Name', value: draft.name, required: true, readonly: !editable, cls: 'span2' })}
+      ${field({ name: 'name', label: 'Name', value: draft.name, required: true, readonly: !editable })}
       ${field({ name: 'uen', label: 'UEN / registration no.', value: draft.uen, readonly: !editable })}
       ${field({ name: 'phone', label: 'Phone', type: 'tel', value: draft.phone, readonly: !editable })}
       ${field({ name: 'email', label: 'Email', type: 'email', value: draft.email, readonly: !editable })}
       ${field({ name: 'address', label: 'Billing address', value: draft.address, readonly: !editable })}
-      <div class="field"><div class="field-label">&nbsp;</div>${field({ name: 'taxRegistered', label: `${company.taxLabel}-registered customer`, type: 'checkbox', value: draft.taxRegistered, readonly: !editable })}</div>
+      <div class="field"><div class="field-label">Tax</div>${field({ name: 'taxRegistered', label: `${company.taxLabel}-registered customer`, type: 'checkbox', value: draft.taxRegistered, readonly: !editable })}</div>
     </div></form>
     <div class="card"><div class="card-head"><h2>Contacts</h2>${editable ? html`<button class="btn small" id="addContact">+ Add contact</button>` : ''}</div><div id="contacts"></div></div>
     <div class="card"><div class="card-head"><h2>Sites and shutters</h2>
@@ -101,9 +101,9 @@ export function renderCustomerForm(el, id) {
       const inp = (f, label, extra = '') => html`<div class="field ${extra}"><label>${label}</label><input data-site="${i}" data-f="${f}" value="${s[f] || ''}" ${ro}></div>`;
       return html`<div class="card" style="background:var(--zebra)"><div class="card-head"><h3>${s.code} · ${s.name || 'New site'}</h3><span class="pill blue">Zone ${zoneLabel(s.zoneId) || '—'}</span>
           ${editable ? html`<button type="button" class="btn small" data-addsh="${i}">+ Add shutter</button>` : ''}</div>
-        <div class="grid g6">${inp('name', 'Site name', 'span2')}${inp('address', 'Address', 'span2')}${inp('blockUnit', 'Block / Level / Unit')}
-          <div class="field"><label>Zone</label><select data-site="${i}" data-f="zoneId" ${editable ? '' : 'disabled'}><option value=""></option>${zones().map(z => html`<option value="${z.id}" ${z.id === s.zoneId ? 'selected' : ''}>${z.code} · ${z.name}</option>`)}</select></div>
-          ${inp('postal', 'Postal code')}${inp('access', 'Access notes', 'span3')}</div>
+        <div class="grid g2 form-lines">${inp('name', 'Site name')}${inp('address', 'Address')}${inp('blockUnit', 'Block / Level / Unit')}
+          <div class="field"><label>Zone</label><select data-site="${i}" data-f="zoneId" ${editable ? '' : 'disabled'}><option value="">Not set</option>${zones().map(z => html`<option value="${z.id}" ${z.id === s.zoneId ? 'selected' : ''}>${z.code} · ${z.name}</option>`)}</select></div>
+          ${inp('postal', 'Postal code')}${inp('access', 'Access notes')}</div>
         <div class="tbl-wrap" style="max-height:none;margin-top:8px"><table class="tbl"><thead><tr><th>Tag</th><th>Location</th><th>Type</th><th>Width × height</th><th>Size</th><th>Motor</th><th>Serial</th><th>Install date</th><th>Added from</th><th>Status</th>${editable ? html`<th></th>` : ''}</tr></thead><tbody>
           ${list.length ? html`${list.map(sh => html`<tr><td class="lnk">${sh.tag}</td><td>${sh.location}</td><td>${productName(sh.productId)}</td>
             <td>${fmtNum(sh.width)} × ${fmtNum(sh.height)} ${sh.unit}${sh.unit === 'ft' ? html` <span class="muted small">(${fmtNum(sh.widthM)} × ${fmtNum(sh.heightM)} m)</span>` : ''}</td>
@@ -123,7 +123,7 @@ export function renderCustomerForm(el, id) {
     const sizeOf = d => classifySize(toMetres(d.width, d.unit), toMetres(d.height, d.unit), sizes());
     openModal({
       title: shutterId ? `Edit shutter ${sh.tag}` : `Add shutter at ${site.name || 'site'}`,
-      body: html`<div class="grid g3" id="shf">
+      body: html`<div class="grid g2 form-lines" id="shf">
         ${field({ name: 'tag', label: 'Tag', value: sh.tag, required: true })}${field({ name: 'location', label: 'Location', value: sh.location, required: true, cls: 'span2' })}
         ${field({ name: 'productId', label: 'Type', type: 'select', options: products().map(p => ({ value: p.id, label: p.name })), value: sh.productId, required: true })}
         ${field({ name: 'width', label: 'Width', type: 'number', step: '0.01', value: sh.width, required: true })}${field({ name: 'height', label: 'Height', type: 'number', step: '0.01', value: sh.height, required: true })}

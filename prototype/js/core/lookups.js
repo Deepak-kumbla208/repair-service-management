@@ -29,6 +29,20 @@ export const productName = id => store.get('products', id)?.name || '';
 export const items = () => store.list('items', active);
 export const sizes = () => store.list('sizes');
 
+// Choices for an enquiry item line: shutter types (Product master) and materials (Material/Item master).
+// The value keeps the source: "prd:<id>" or "itm:<id>".
+export function itemChoices() {
+  return [
+    { group: 'Shutter types', options: products().map(p => ({ value: `prd:${p.id}`, label: p.name })) },
+    { group: 'Materials / spare parts', options: items().map(i => ({ value: `itm:${i.id}`, label: i.name })) },
+  ];
+}
+export function itemName(ref) {
+  if (!ref) return '';
+  const [kind, id] = [ref.slice(0, 3), ref.slice(4)];
+  return (kind === 'prd' ? store.get('products', id) : store.get('items', id))?.name || '';
+}
+
 export function findSite(siteId) {
   for (const c of store.list('customers')) {
     const site = (c.sites || []).find(s => s.id === siteId);

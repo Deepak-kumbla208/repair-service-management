@@ -1,7 +1,9 @@
-// Enquiry rules: numbering, first status by type, the site-inspection hand-off,
-// the register's automatic columns and the 1–2 hour inspection target.
+// Enquiry rules: numbering, first status by type, item lines (the Enquiry Description), the site-inspection
+// hand-off (optionally with the technician chosen on the enquiry), the register's automatic columns and
+// the 1–2 hour inspection target.
 import * as store from './store.js';
 import { quickCreate, addSite } from './customers.js';
+import { assignTechnician } from './inspections.js';
 
 export const ENQ_STATUSES = ['Waiting for inspection', 'Inspection assigned', 'Report in progress', 'Inspected', 'BOQ study', 'Waiting for estimate', 'Cancelled'];
 
@@ -12,6 +14,18 @@ function firstStatus(type, needsInspection) {
   return type === 'REPAIR' ? 'Waiting for estimate' : 'BOQ study';
 }
 
+// Item lines are the Enquiry Description: "2 × Tension spring: RS-2 jammed; Check the back door".
+// lines: [{ itemRef, itemName, qty, description }]; a line may have no item.
+export const cleanLines = lines => (lines || []).filter(l => l.itemRef || (l.description || '').trim())
+  .map(l => ({ itemRef: l.itemRef || '', itemName: l.itemName || '', qty: l.itemRef ? (Number(l.qty) || 1) : null, description: (l.description || '').trim() }));
+
+export function composeDescription(lines) {
+  return cleanLines(lines).map(l => {
+    const item = l.itemName ? `${l.qty || 1} × ${l.itemName}` : '';
+    return [item, l.description].filter(Boolean).join(': ');
+  }).join('; ');
+}
+
 function openInspection(enq) {
   const insp = store.insert('inspections', { enquiryId: enq.id, zoneId: enq.zoneId, technicianId: '', visitAt: null, confirmedBy: '', notes: '' },
     { status: 'To assign', note: `Site inspection opened for ${enq.no}` });
@@ -19,13 +33,22 @@ function openInspection(enq) {
   return insp;
 }
 
+// A technician chosen on the enquiry assigns the inspection straight away (visit time optional).
+function applyAssignment(enq, assign) {
+  if (!assign?.technicianId || !enq.inspectionId) return;
+  const insp = store.get('inspections', enq.inspectionId);
+  if (!['To assign', 'Assigned'].includes(insp.status)) return;
+  if (insp.technicianId === assign.technicianId && insp.visitAt === assign.visitAt && insp.confirmedBy === assign.confirmedBy) return;
+  assignTechnician(insp.id, { technicianId: assign.technicianId, visitAt: assign.visitAt || null, confirmedBy: assign.confirmedBy || '', notes: insp.notes || '' });
+}
+
 function resolveSite(customer, data, newSite) {
   if (newSite) return addSite(customer.id, newSite);
   return (store.get('customers', customer.id).sites || []).find(s => s.id === data.siteId);
 }
 
-// data: register fields; newCustomer / newSite: quick-created from the form.
-export function saveNewEnquiry(data, { newCustomer, newSite } = {}) {
+// data: register fields + lines; newCustomer / newSite: quick-created from the form; assign: technician chosen on the form.
+export function saveNewEnquiry(data, { newCustomer, newSite, assign } = {}) {
   let customer, site, contactId = data.contactId;
   if (newCustomer) {
     const r = quickCreate({ ...newCustomer, site: newSite });
@@ -36,19 +59,25 @@ export function saveNewEnquiry(data, { newCustomer, newSite } = {}) {
   }
   const needsInspection = data.siteInspection === 'YES';
   const no = store.nextNumber('ENQ', data.receivedAt);
+  const lines = cleanLines(data.lines);
   const enq = store.insert('enquiries', {
-    ...data, no, contactId, customerId: customer.id, customerName: customer.name, siteId: site.id, siteName: site.name, zoneId: site.zoneId,
-    recordedBy: store.currentActor(), stage: needsInspection ? 'Inspection' : 'New', inspectionId: null,
+    ...data, lines, description: composeDescription(lines), no, contactId, customerId: customer.id, customerName: customer.name,
+    siteId: site.id, siteName: site.name, zoneId: site.zoneId || '', recordedBy: data.recordedBy || store.currentActor(),
+    stage: needsInspection ? 'Inspection' : 'New', inspectionId: null,
   }, { status: firstStatus(data.type, needsInspection), note: `${no} registered` });
-  if (needsInspection) openInspection(enq);
+  if (needsInspection) {
+    openInspection(enq);
+    applyAssignment(store.get('enquiries', enq.id), assign);
+  }
   return store.get('enquiries', enq.id);
 }
 
-export function saveEnquiryChanges(id, data, { newSite } = {}) {
+export function saveEnquiryChanges(id, data, { newSite, assign } = {}) {
   const enq = store.get('enquiries', id);
   const customer = store.get('customers', enq.customerId);
   const site = resolveSite(customer, data, newSite) || customer.sites.find(s => s.id === enq.siteId);
-  store.update('enquiries', id, { ...data, customerId: enq.customerId, siteId: site.id, siteName: site.name, zoneId: site.zoneId }, `Edited ${enq.no}`);
+  const lines = cleanLines(data.lines);
+  store.update('enquiries', id, { ...data, lines, description: composeDescription(lines), customerId: enq.customerId, siteId: site.id, siteName: site.name, zoneId: site.zoneId || '' }, `Edited ${enq.no}`);
 
   const insp = enq.inspectionId ? store.get('inspections', enq.inspectionId) : null;
   const open = insp && insp.status !== 'Cancelled';
@@ -58,9 +87,10 @@ export function saveEnquiryChanges(id, data, { newSite } = {}) {
   } else if (data.siteInspection !== 'YES' && open && insp.status === 'To assign') {
     store.setStatus('inspections', insp.id, 'Cancelled', 'Site inspection not needed');
     store.setStatus('enquiries', id, firstStatus(data.type, false), 'Site inspection not needed');
-  } else if (open && insp.zoneId !== site.zoneId) {
-    store.update('inspections', insp.id, { zoneId: site.zoneId }, false);
+  } else if (open && insp.zoneId !== (site.zoneId || '')) {
+    store.update('inspections', insp.id, { zoneId: site.zoneId || '' }, false);
   }
+  if (data.siteInspection === 'YES') applyAssignment(store.get('enquiries', id), assign);
   return store.get('enquiries', id);
 }
 

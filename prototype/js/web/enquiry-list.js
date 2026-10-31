@@ -6,6 +6,7 @@ import { html, $, $$, on, go, debounce, fmtDate, fmtTime, fmtDuration, pill, til
 import { vsLabel, vsOptions, zones, zoneCode } from '../core/lookups.js';
 import { laterColumns, inspectionClock, isToday, ENQ_STATUSES } from '../core/enquiries.js';
 import { pageHead } from './shell.js';
+import { channelText } from './enquiry-view.js';
 
 export const REGISTER_COLUMNS = ['Enquiry No', 'Enquiry Date', 'Enquiry Time', 'Customer Name', 'Contact Person', 'Mobile', 'Email', 'Site Location',
   'Enquiry Status', 'Enquiry Channel', 'Type', 'Enquiry Description', 'Priority', 'Recorded By', 'Remarks', 'Site Inspection',
@@ -15,7 +16,7 @@ export const REGISTER_COLUMNS = ['Enquiry No', 'Enquiry Date', 'Enquiry Time', '
 export function registerRow(e) {
   const l = laterColumns(e);
   return [e.no, fmtDate(e.receivedAt), fmtTime(e.receivedAt), e.customerName, e.contactName, e.mobile, e.email, e.siteName,
-    vsLabel('ENQ_STATUS', e.enquiryStatus), vsLabel('ENQ_CHANNEL', e.channel), vsLabel('ENQ_TYPE', e.type), e.description,
+    vsLabel('ENQ_STATUS', e.enquiryStatus), channelText(e), vsLabel('ENQ_TYPE', e.type), e.description,
     vsLabel('PRIORITY', e.priority), auth.userName(e.recordedBy), e.remarks, vsLabel('YES_NO', e.siteInspection),
     l.quotationDate, l.quotationStatus, l.quotationValue, l.jobStatus, l.workCompletion, l.workCompletionDate,
     l.invoiceDate, l.invoiceNo, l.invoiceValue, l.paymentReceived];

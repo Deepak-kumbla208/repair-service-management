@@ -125,6 +125,9 @@ export function field(f) {
     }
     case 'checkbox':
       return html`<label class="check ${f.cls || ''}"><input type="checkbox" name="${f.name}" ${v ? raw('checked') : ''} ${f.readonly ? raw('disabled') : ''}> ${f.label}</label>`;
+    case 'chips':
+      input = chipGroup(f.name, f.options || [], v, f.readonly);
+      break;
     default:
       input = html`<input type="${f.type || 'text'}" ${common} value="${v}" ${f.step ? raw(`step="${f.step}"`) : ''} ${f.list ? raw(`list="${esc(f.list)}"`) : ''}>`;
   }
@@ -134,6 +137,13 @@ export function field(f) {
     ${input}
     ${f.hint ? html`<div class="hint">${f.hint}</div>` : ''}
   </div>`;
+}
+
+// One-click option buttons for short lists (radio inputs styled as chips); readForm reads the checked one.
+export function chipGroup(name, options, value, readonly = false) {
+  const opts = options.map(o => (typeof o === 'object' ? o : { value: o, label: o }));
+  return html`<span class="chips" role="radiogroup">${opts.map(o => html`<label class="chip"><input type="radio" name="${name}" value="${o.value}"
+    ${String(o.value) === String(value) ? raw('checked') : ''} ${readonly ? raw('disabled') : ''}><span>${o.label}</span></label>`)}</span>`;
 }
 
 // Read every [name] control inside root into a plain object.
@@ -164,10 +174,10 @@ export function markInvalid(root, names, msg = 'Required') {
 // Dialogs open inside the phone frame in the mobile view, so web and mobile never show together.
 export const overlayRoot = () => $('.phone') || document.body;
 
-export function openModal({ title, body, actions = [], wide = false, onOpen }) {
+export function openModal({ title, body, actions = [], wide = false, cls = '', onOpen }) {
   const back = document.createElement('div');
   back.className = 'modal-back';
-  back.innerHTML = String(html`<div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-label="${title}">
+  back.innerHTML = String(html`<div class="modal ${wide ? 'wide' : ''} ${cls}" role="dialog" aria-label="${title}">
     <div class="modal-head"><h2>${title}</h2><button class="x-btn" data-close aria-label="Close">×</button></div>
     <div class="modal-body">${body}</div>
     ${actions.length ? html`<div class="modal-foot">${actions.map((a, i) => html`<button class="btn ${a.kind || ''}" data-a="${i}">${a.label}</button>`)}</div>` : ''}

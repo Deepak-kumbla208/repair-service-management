@@ -1,0 +1,23 @@
+# This repo is PUBLIC. Only the prototype and the README are uploaded.
+# Everything else in this folder (client requirement files, meeting notes,
+# research, the build plan) stays on this computer.
+/*
+!/.gitignore
+!/README.md
+!/prototype/
+
+# The build plan names the client and its figures; keep it local
+/prototype/PLAN.md
+
+# Office temporary / lock files
+~$*
+*.tmp
+
+# Windows and macOS clutter
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Editor folders
+.vscode/
+.idea/

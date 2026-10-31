@@ -1,10 +1,11 @@
-# This repo is PUBLIC. Only the prototype and the README are uploaded.
-# Everything else in this folder (client requirement files, meeting notes,
-# research, the build plan) stays on this computer.
+# This repo is PUBLIC. Only the prototype, the README and the GitHub Pages
+# deploy workflow are uploaded. Everything else in this folder (client
+# requirement files, meeting notes, research, the build plan) stays on this computer.
 /*
 !/.gitignore
 !/README.md
 !/prototype/
+!/.github/
 
 # The build plan names the client and its figures; keep it local
 /prototype/PLAN.md

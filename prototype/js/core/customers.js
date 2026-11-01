@@ -48,10 +48,11 @@ export function addSite(customerId, { name, address, blockUnit, postal, zoneId, 
   return site;
 }
 
-// Build a shutter register entry; sizes are kept in metres and classified by the one size rule.
-export function makeShutter({ tag, location, productId, width, height, unit = 'm', motor = '', serial = '', installDate = '' }, source = 'Manual') {
+// Build a shutter register entry; sizes are kept in metres and classified by the one size rule. Without a measured
+// width and height the size tapped on site (sizeCode) is kept.
+export function makeShutter({ tag, location, productId, width, height, unit = 'm', motor = '', serial = '', installDate = '', sizeCode = '' }, source = 'Manual') {
   const widthM = toMetres(width, unit), heightM = toMetres(height, unit);
-  return { id: store.uid('sht_'), tag, location, productId, width, height, unit, widthM, heightM, sizeCode: classifySize(widthM, heightM, sizes()), motor, serial, installDate, status: 'Active', source };
+  return { id: store.uid('sht_'), tag, location, productId, width, height, unit, widthM, heightM, sizeCode: classifySize(widthM, heightM, sizes()) || sizeCode, motor, serial, installDate, status: 'Active', source };
 }
 
 export function nextShutterTag(site, prefix = 'RS-') {

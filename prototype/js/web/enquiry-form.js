@@ -183,7 +183,7 @@ export function renderEnquiryForm(el, id) {
       const site = c.sites.find(s => s.id === st.siteId);
       body = html`${field({ name: 'siteId', label: 'Site Location', type: 'select', options: c.sites.map(s => ({ value: s.id, label: s.name })), value: st.siteId, required: true, blankLabel: 'Choose a site…', hint: html`<a href="#" id="newSite">+ New site</a>` })}
         ${row('Zone', site ? (site.zoneId ? zoneLabel(site.zoneId) : html`<span class="muted">Not set</span>`) : '')}
-        ${site?.shutters?.length ? row('Shutters', html`${site.shutters.map(s => html`<span class="pill" style="margin:0 4px 4px 0">${s.tag} ${s.location} · ${s.sizeCode}</span>`)}`) : ''}`;
+        ${site?.shutters?.length ? row('Customer products', html`${site.shutters.map(s => html`<span class="pill" style="margin:0 4px 4px 0">${s.tag} ${s.location} · ${s.sizeCode}</span>`)}`) : ''}`;
     } else {
       body = html`<div class="muted" style="padding:4px 0 6px">Choose the customer first.</div>`;
     }

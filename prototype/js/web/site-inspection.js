@@ -112,14 +112,14 @@ export function renderInspection(el, id) {
       body: html`<div class="fold-cols form-lines">
         <div><div class="form-sec">Enquiry</div>${ro('Enquiry No', html`<a href="#/enquiries/${e.id}">${e.no}</a>`)}${ro('Received', fmtDateTime(e.receivedAt))}</div>
         <div><div class="form-sec">Customer</div>${ro('Customer', e.customerName)}${ro('Contact Person', e.contactName)}${ro('Mobile', e.mobile)}</div>
-        <div><div class="form-sec">Site</div>${ro('Site', `${site?.address || e.siteName} ${site?.blockUnit || ''}`)}${ro('Zone', zoneLabel(i.zoneId))}${ro('Shutters', tags)}</div>
+        <div><div class="form-sec">Site</div>${ro('Site', `${site?.address || e.siteName} ${site?.blockUnit || ''}`)}${ro('Zone', zoneLabel(i.zoneId))}${ro('Customer products', tags)}</div>
       </div>` })}
     <div class="card"><div class="card-head"><h2>What the customer reported</h2></div>${linesTable(e.lines)}</div>
     <div class="card"><div class="field-label">Target: inspection within ${company.inspectionTargetHours || 2} hours of the call</div>${clockHtml(inspectionClock(e, company))}
       <div id="assignCard" style="margin-top:10px"></div></div>
     <div class="card"><div class="card-head"><h2>Site viewing report</h2>${r ? pill(r.status) : ''}</div>
       ${r ? html`<div class="kv six"><div><div class="k">Report No</div>${r.no}</div><div><div class="k">Technician</div>${empName(r.technicianId)}</div>
-        <div><div class="k">Time in / out</div>${r.s1.timeIn || '—'} / ${r.s1.timeOut || '—'}</div><div><div class="k">Shutters picked</div>${r.shutters.length}</div>
+        <div><div class="k">Time in / out</div>${r.s1.timeIn || '—'} / ${r.s1.timeOut || '—'}</div><div><div class="k">Products</div>${r.shutters.length}</div>
         <div><div class="k">Photos</div>${r.photos.length}</div><div><div class="k">${r.paper ? 'Received (paper)' : 'Submitted'}</div>${fmtDateTime(r.submittedAt) || '—'}</div></div>
         <div class="row" style="margin-top:10px"><a class="btn primary" href="#/reports/${r.id}">${canEditReport ? 'Open the report' : 'View report'}</a>
           ${auth.can('inspection', 'print') ? html`<a class="btn" href="#/reports/${r.id}/print">⎙ Print preview</a>` : ''}</div>`

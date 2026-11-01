@@ -7,7 +7,7 @@ import * as auth from '../core/auth.js';
 import { saveBlob } from '../core/media.js';
 import { findSite } from '../core/lookups.js';
 import { saveNewEnquiry } from '../core/enquiries.js';
-import { startReport, saveReport, submitReport } from '../core/inspections.js';
+import { startReport, saveReport, submitReport, jobScope } from '../core/inspections.js';
 import { createEstimate, saveEstimate } from '../core/estimates.js';
 import { createFromEstimate, saveWording, submitForCheck, decideQuotation, markSent, accept, reject } from '../core/quotations.js';
 import { openTaskFor } from '../core/workflow.js';
@@ -101,19 +101,21 @@ export function newEnquiry(code, tech, text, priority = 'MEDIUM') {
     recordedBy: userOf('ops'), remarks: '', attachments: [], customerId: c.id, contactId: con.id, contactName: con.name, mobile: con.mobile, email: con.email, siteId: c.sites[0].id,
     lines: [{ itemRef: '', itemName: '', qty: null, description: text }] }, { assign: { technicianId: tech, visitAt: new Date(Date.now() + 3600000).toISOString(), confirmedBy: 'Phone' } });
 }
-// The technician's site report: picks [[tag, fault]], mats [[item code, qty, tag]], s3 / s4 overrides.
+// The technician's site report: picks [[tag, fault]] (customer products tapped in Job scope; one the enquiry does not
+// name is added on site), mats [[item code, qty, tag]], s3 / s4 overrides.
 export function fileReport(enq, tech, { picks, mats = [], desc, s3 = {}, s4 = {} }, sigId, custSigId) {
   as(techLogin[tech] || 'gadmin');
   const e = store.get('enquiries', enq.id);
   const { site } = findSite(e.siteId);
   const rep = startReport(e.inspectionId);
   const sh = tag => site.shutters.find(s => s.tag === tag);
-  const shutters = picks.map(([tag, finding]) => { const s = sh(tag); return { key: s.id, shutterId: s.id, tag: s.tag, location: s.location, productId: s.productId, width: s.width, height: s.height, unit: s.unit, sizeCode: s.sizeCode, motor: s.motor, finding }; });
+  const picked = picks.map(([tag, finding]) => { const s = sh(tag); return { key: s.id, shutterId: s.id, tag: s.tag, location: s.location, productId: s.productId, width: s.width, height: s.height, unit: s.unit, sizeCode: s.sizeCode, motor: s.motor, finding }; });
+  const scope = jobScope({ ...rep, shutters: picked });
   const rows = mats.map(([code, qty, tag]) => { const it = item(code); return { name: it.name, spec: it.spec || '', qty, unit: it.unit, remarks: '', itemId: it.id, shutterKey: sh(tag)?.id || '' }; });
   saveReport(rep.id, {
-    s1: { ...rep.s1, timeIn: '10:10', timeOut: '10:55' }, shutters, s5: { rows, consumables: '' }, s3: { ...rep.s3, hoursPerDay: 6, ...s3 }, s4: { ...rep.s4, ...s4 },
+    s1: { ...rep.s1, timeIn: '10:10', timeOut: '10:55' }, shutters: scope.shutters, s5: { rows, consumables: '' }, s3: { ...rep.s3, hoursPerDay: 6, ...s3 }, s4: { ...rep.s4, ...s4 },
     s2: { ...rep.s2, replace: rows.length > 0, description: desc, findings: picks.map(([t, f]) => `${t} ${f}`).join('; ') }, s7: { ...rep.s7, signatureId: sigId, custName: e.contactName, custSignatureId: custSigId },
-    asked: (rep.asked || []).map(a => ({ ...a, done: true })), // the technician checked everything the customer asked for
+    asked: scope.asked.map(a => ({ ...a, done: true })), // the technician checked everything the customer asked for
   });
   submitReport(rep.id);
 }

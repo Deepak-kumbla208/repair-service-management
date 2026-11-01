@@ -48,12 +48,16 @@ export function kosmicRepair(t, cust, at) {
     status: 'Report submitted', statusHistory: hist(['To assign', recv, ops], ['Assigned', assigned, ops, 'Technician A'], ['Report in progress', timeIn, ops], ['Report submitted', done, ops]),
     createdAt: recv, updatedAt: done,
   };
-  const picked = (s, finding) => ({ key: s.id, shutterId: s.id, tag: s.tag, location: s.location, productId: s.productId, width: s.width, height: s.height, unit: s.unit, sizeCode: s.sizeCode, motor: s.motor, finding });
+  // Job scope: the enquiry line names RS-1 and RS-2, so its row links both customer products.
+  const rowKey = `ask_${t}_k1`;
+  const picked = (s, finding) => ({ key: s.id, shutterId: s.id, tag: s.tag, location: s.location, productId: s.productId, width: s.width, height: s.height, unit: s.unit, sizeCode: s.sizeCode, motor: s.motor, finding, rowKey });
   const report = {
     id: repId, tenantId: t, no: `SVR-${year}-0001`, inspectionId: inspId, enquiryId: enqId, technicianId: tech, customerId: k.id, siteId: site.id,
     s1: { customer: k.name, site: site.name, address: site.address, blockUnit: site.blockUnit, viewedBy: 'Technician A', viewDate: localDate(visit), contactPerson: con.name,
       contactNo: `${con.mobile} / ${con.email}`, timeIn: hhmm(timeIn), timeOut: hhmm(done) },
     shutters: [picked(rs1, 'Motor not working, needs replacing'), picked(rs2, 'Jammed; springs worn')],
+    asked: [{ key: rowKey, n: 1, text: enquiry.description, desc: enquiry.description, done: true, note: '', productId: rs1.productId, qty: 2, location: '', sizeCode: '',
+      width: null, height: null, unit: 'm', linkIds: [rs1.id, rs2.id] }],
     s2: { supplyInstall: false, repair: true, replace: true, motor: true, dismantle: false, servicing: false, other: '',
       description: 'Supply and install a 400 kg single phase motor on RS-1; release the RS-2 jam and replace the springs.', findings },
     s3: { zoneId: site.zoneId, persons: 2, days: 1, hoursPerDay: 6, remarks: '', normal: true, afterHours: false, weekend: false, phased: false },

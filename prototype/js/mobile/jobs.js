@@ -127,8 +127,8 @@ export function mJob(page, id) {
     ${cleanLines(e.lines).map(l => html`<div class="m-line">${l.itemName ? html`<b>${l.qty} ${l.unit && l.unit !== 'Nos' ? l.unit : '×'} ${l.itemName}</b><br>` : ''}<span class="${l.itemName ? 'small muted' : ''}">${l.description}</span></div>`)}
     <div class="m-section">Visit</div>
     <div class="m-card small">${when(i.visitAt)} · confirmed by ${i.confirmedBy || '—'} · ${empName(i.technicianId)}${i.notes ? html`<br>${i.notes}` : ''}</div>
-    <div class="m-section">Shutters at this site</div>
-    ${site?.shutters?.length ? html`${site.shutters.map(s => html`<div class="m-card small"><b>${s.tag}</b> ${s.location} · size ${s.sizeCode}${s.motor ? ` · motor ${s.motor}` : ''}</div>`)}` : html`<div class="muted small">None recorded yet. Add them in the report.</div>`}
+    <div class="m-section">Customer products at this site</div>
+    ${site?.shutters?.length ? html`${site.shutters.map(s => html`<div class="m-card small"><b>${s.tag}</b> ${s.location} · size ${s.sizeCode}${s.motor ? ` · motor ${s.motor}` : ''}</div>`)}` : html`<div class="muted small">None recorded yet; the report adds them from Job scope.</div>`}
     ${(e.attachments || []).length ? html`<div class="m-section">Attachments</div>${e.attachments.map(a => html`<div class="m-card small"><a href="#" data-open="${a.id}">${a.name}</a></div>`)}` : ''}
   `);
   // Preview: the saved report, or before the start the pre-filled form built in memory (nothing saved, no Time In).

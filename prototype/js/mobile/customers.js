@@ -1,5 +1,5 @@
-// Phone: customers, for roles that may see customers on the phone (Menu Access): search, call, sites and their
-// shutters; New / Edit when the role may create / edit on the phone (the same checks as the web master), and
+// Phone: customers, for roles that may see customers on the phone (Menu Access): search, call, sites and the
+// customer products there; New / Edit when the role may create / edit on the phone (the same checks as the web master), and
 // "New enquiry" for the customer.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
@@ -34,7 +34,7 @@ export function mCustomer(page, id) {
   if (!c) { page.body.innerHTML = '<div class="empty">Customer not found.</div>'; return; }
   page.body.innerHTML = String(html`
     <div class="m-card"><div class="row"><b class="grow" style="font-size:16px">${c.name}</b>${pill(c.status || 'Active')}</div>
-      <div class="small muted">${c.code}${c.uen ? ` · UEN ${c.uen}` : ''} · ${shutterCount(c)} shutter(s) in the register</div></div>
+      <div class="small muted">${c.code}${c.uen ? ` · UEN ${c.uen}` : ''} · ${shutterCount(c)} customer product(s)</div></div>
     <div class="m-section">Contacts</div>
     ${(c.contacts || []).map(p => html`<div class="m-card"><div class="row"><b class="grow">${p.name}</b>${p.primary ? html`<span class="pill blue">Primary</span>` : ''}</div>
       <div class="small muted">${p.designation || ''}${p.email ? ` · ${p.email}` : ''}</div>
@@ -77,7 +77,7 @@ export function mCustomerForm(page, id) {
       <div class="m-section">Sites</div>
       ${d.sites.map((s, i) => html`<div class="m-card">${inp('Site name', { name: `s${i}_name`, value: s.name }, true)}${inp('Address', { name: `s${i}_address`, value: s.address || '' })}
         <div class="field"><label>Zone <span class="req">*</span></label><select name="s${i}_zone"><option value="">Choose</option>${zones().map(z => html`<option value="${z.id}" ${z.id === s.zoneId ? 'selected' : ''}>Zone ${z.code} · ${z.name}</option>`)}</select></div>
-        ${(s.shutters || []).length ? html`<div class="small muted">${s.shutters.length} shutter(s) in the register</div>` : ''}</div>`)}
+        ${(s.shutters || []).length ? html`<div class="small muted">${s.shutters.length} customer product(s)</div>` : ''}</div>`)}
       <button type="button" class="add-dashed" id="addS">${icon('plus', 14)} Add a site</button></form>`);
   };
   page.body.addEventListener('click', e => {

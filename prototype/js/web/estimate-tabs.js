@@ -29,12 +29,13 @@ const total = (cols, value, before = 0) => html`<tr class="sum"><td colspan="${b
 
 function shuttersTab(est, ctx) {
   const labourFor = key => est.labour.filter(r => r.lineKey === key).reduce((t, r) => t + labourRow(r).total, 0);
-  if (!est.shutters.length) return html`<div class="muted">No shutters picked in a site report. Add labour rows in the Labour tab.</div>`;
+  if (!est.shutters.length) return html`<div class="muted">No products in a site report's Job scope. Add labour rows in the Labour tab.</div>`;
+  const dim = (v, u) => (v == null || v === '' ? '—' : `${fmtNum(v)} ${u}`); // a size tapped on site has no width or height
   return html`<table class="tbl"><thead><tr><th>Location / Label</th><th>Type</th><th>Width</th><th>Height</th><th class="num">Qty</th><th>Fault Reported</th><th>Size Class</th><th class="num">Team hrs</th><th class="num">Extra workers × hrs</th><th class="num">Labour Amount</th></tr></thead><tbody>
-    ${est.shutters.map((s, i) => html`<tr><td><b>${s.tag}</b> ${s.location}</td><td>${s.typeName}</td><td>${fmtNum(s.width)} ${s.unit}</td><td>${fmtNum(s.height)} ${s.unit}</td>
+    ${est.shutters.map((s, i) => html`<tr><td><b>${s.tag}</b> ${s.location}</td><td>${s.typeName}</td><td>${dim(s.width, s.unit)}</td><td>${dim(s.height, s.unit)}</td>
       <td class="num">${inp(ctx, 'shutters', i, 'qty', s.qty, { w: 50, step: 1 })}</td><td class="wrap">${inp(ctx, 'shutters', i, 'fault', s.fault, { type: 'text', w: 210 })}</td><td>${s.sizeCode}</td>
       <td class="num">${fmtNum(s.teamHrs)} <span class="muted small">(× ${s.factor})</span></td><td class="num">${s.extraWorkers ? `${s.extraWorkers} × ${fmtNum(s.extraHrs)}` : '—'}</td><td class="num">${m2(labourFor(s.key))}</td></tr>`)}
-  </tbody></table><p class="mini-note">From the shutters picked in the site report. Hours = Shutter Size master × the type factor (Product master) × qty; they fill the Labour tab, so labour is counted once.</p>`;
+  </tbody></table><p class="mini-note">From the products in the site report's Job scope. Hours = Shutter Size master × the type factor (Product master) × qty; they fill the Labour tab, so labour is counted once.</p>`;
 }
 
 function labourTab(est, ctx) {

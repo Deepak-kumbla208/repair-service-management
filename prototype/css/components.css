@@ -486,3 +486,6 @@ fieldset.ro-sec .mic, fieldset.ro-sec .add-dashed, fieldset.ro-sec .pm { display
 .ask.on { border-color: #97C459; background: var(--green-bg); }
 .ask .check { align-items: flex-start; }
 .ask .with-mic { margin-top: 5px; }
+.ask-prod { margin: 6px 0 2px; }
+.ask .measure { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.ask .measure input { width: 64px; }

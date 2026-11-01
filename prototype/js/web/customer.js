@@ -1,4 +1,4 @@
-// Customer master: header, contacts, sites, and the shutter register at each site
+// Customer master: header, contacts, sites, and the customer products (shutter register) at each site
 // (location, type, width × height, size class, motor, serial, install date). Duplicate check by mobile and email.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
@@ -11,11 +11,11 @@ import { pageHead } from './shell.js';
 export function renderCustomerList(el) {
   const state = { q: '', status: '' };
   el.innerHTML = String(html`<div class="page">
-    ${pageHead({ crumb: 'Master', title: 'Customer', sub: 'Customers with their contacts, sites and the shutters at each site.',
+    ${pageHead({ crumb: 'Master', title: 'Customer', sub: 'Customers with their contacts, sites and the customer products at each site.',
       actions: auth.can('customer', 'create') ? html`<a class="btn primary" href="#/master/customer/new">+ New customer</a>` : '' })}
-    <div class="filters"><input type="search" class="search" id="q" placeholder="Search customers: code, name, contact, mobile, email, UEN, site, shutter tag">
+    <div class="filters"><input type="search" class="search" id="q" placeholder="Search customers: code, name, contact, mobile, email, UEN, site, product tag">
       <select id="st"><option value="">Active and inactive</option><option>Active</option><option>Inactive</option></select></div>
-    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Code</th><th>Name</th><th>Primary contact</th><th>Mobile</th><th>Email</th><th>Sites</th><th>Shutters</th><th>Tax registered</th><th>Status</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Code</th><th>Name</th><th>Primary contact</th><th>Mobile</th><th>Email</th><th>Sites</th><th>Products</th><th>Tax registered</th><th>Status</th></tr></thead><tbody id="rows"></tbody></table></div>
     <div class="list-foot"><span id="count"></span></div>
   </div>`);
   function paint() {
@@ -50,7 +50,7 @@ export function renderCustomerForm(el, id) {
     ${pageHead({
       crumb: html`Master › <a href="#/master/customer">Customer</a>${rec ? ` › ${rec.code}` : ''}`,
       title: rec ? html`${rec.code} · ${rec.name} ${pill(rec.status || 'Active')}` : 'New customer',
-      sub: rec ? `${(rec.sites || []).length} site(s) · ${shutterCount(rec)} shutter(s) in the register` : 'Duplicates are checked by mobile and email when you save.',
+      sub: rec ? `${(rec.sites || []).length} site(s) · ${shutterCount(rec)} customer product(s)` : 'Duplicates are checked by mobile and email when you save.',
       actions: html`<div class="row"><a class="btn" href="#/master/customer">Back to list</a>
         ${rec && editable ? html`<button class="btn" id="toggle">${rec.status === 'Inactive' ? 'Make active' : 'Make inactive'}</button>` : ''}
         ${editable ? html`<button class="btn primary" id="save">Save</button>` : ''}</div>`,
@@ -67,8 +67,8 @@ export function renderCustomerForm(el, id) {
       ${field({ name: 'paymentTerm', label: 'Payment term', type: 'select', options: vsOptions('PAYMENT_TERMS'), value: draft.paymentTerm || vsDefault('PAYMENT_TERMS'), blank: false, readonly: !editable })}
     </div></form>
     <div class="card"><div class="card-head"><h2>Contacts</h2>${editable ? html`<button class="btn small" id="addContact">+ Add contact</button>` : ''}</div><div id="contacts"></div></div>
-    <div class="card"><div class="card-head"><h2>Sites and shutters</h2>
-      <input type="search" id="sq" placeholder="Search sites and shutters: tag, location, type, serial" style="max-width:340px">
+    <div class="card"><div class="card-head"><h2>Sites and customer products</h2>
+      <input type="search" id="sq" placeholder="Search sites and products: tag, location, type, serial" style="max-width:340px">
       ${editable ? html`<button class="btn small" id="addSite">+ Add site</button>` : ''}</div><div id="sites"></div></div>
   </div>`);
 
@@ -88,7 +88,7 @@ export function renderCustomerForm(el, id) {
     $$('[data-rmc]', el).forEach(b => b.onclick = () => { syncContacts(); draft.contacts.splice(+b.dataset.rmc, 1); if (!draft.contacts.some(c => c.primary)) draft.contacts[0].primary = true; paintContacts(); });
   }
 
-  // ---------- Sites and the shutter register ----------
+  // ---------- Sites and the customer products (shutter register) ----------
   function syncSites() {
     $$('#sites [data-site]', el).forEach(inp => { draft.sites[+inp.dataset.site][inp.dataset.f] = inp.value.trim(); });
   }
@@ -101,15 +101,15 @@ export function renderCustomerForm(el, id) {
       if (terms.length && !siteMatch(s) && !list.length) return '';
       const inp = (f, label, extra = '') => html`<div class="field ${extra}"><label>${label}</label><input data-site="${i}" data-f="${f}" value="${s[f] || ''}" ${ro}></div>`;
       return html`<div class="card" style="background:var(--zebra)"><div class="card-head"><h3>${s.code} · ${s.name || 'New site'}</h3><span class="pill blue">Zone ${zoneLabel(s.zoneId) || '—'}</span>
-          ${editable ? html`<button type="button" class="btn small" data-addsh="${i}">+ Add shutter</button>` : ''}</div>
+          ${editable ? html`<button type="button" class="btn small" data-addsh="${i}">+ Add product</button>` : ''}</div>
         <div class="grid g2 form-lines">${inp('name', 'Site name')}${inp('address', 'Address')}${inp('blockUnit', 'Block / Level / Unit')}
           <div class="field"><label>Zone</label><select data-site="${i}" data-f="zoneId" ${editable ? '' : 'disabled'}><option value="">Not set</option>${zones().map(z => html`<option value="${z.id}" ${z.id === s.zoneId ? 'selected' : ''}>${z.code} · ${z.name}</option>`)}</select></div>
           ${inp('postal', 'Postal code')}${inp('access', 'Access notes')}</div>
         <div class="tbl-wrap" style="max-height:none;margin-top:8px"><table class="tbl"><thead><tr><th>Tag</th><th>Location</th><th>Type</th><th>Width × height</th><th>Size</th><th>Motor</th><th>Serial</th><th>Install date</th><th>Added from</th><th>Status</th>${editable ? html`<th></th>` : ''}</tr></thead><tbody>
           ${list.length ? html`${list.map(sh => html`<tr><td class="lnk">${sh.tag}</td><td>${sh.location}</td><td>${productName(sh.productId)}</td>
-            <td>${fmtNum(sh.width)} × ${fmtNum(sh.height)} ${sh.unit}${sh.unit === 'ft' ? html` <span class="muted small">(${fmtNum(sh.widthM)} × ${fmtNum(sh.heightM)} m)</span>` : ''}</td>
+            <td>${sh.width && sh.height ? html`${fmtNum(sh.width)} × ${fmtNum(sh.height)} ${sh.unit}${sh.unit === 'ft' ? html` <span class="muted small">(${fmtNum(sh.widthM)} × ${fmtNum(sh.heightM)} m)</span>` : ''}` : '—'}</td>
             <td><b>${sh.sizeCode}</b>${sh.fireRated ? html` <span class="tag">fire</span>` : ''}</td><td>${sh.motor}</td><td>${sh.serial}</td><td>${sh.installDate}</td><td class="small">${sh.source}</td><td>${sh.outOfService ? pill('Out of service', 'red') : pill(sh.status)}</td>
-            ${editable ? html`<td><button type="button" class="btn link small" data-edsh="${i}:${sh.id}">Edit</button></td>` : ''}</tr>`)}` : emptyRow(11, terms.length ? 'No shutter matches.' : 'No shutters recorded at this site yet.')}
+            ${editable ? html`<td><button type="button" class="btn link small" data-edsh="${i}:${sh.id}">Edit</button></td>` : ''}</tr>`)}` : emptyRow(11, terms.length ? 'No product matches.' : 'No customer products recorded at this site yet.')}
         </tbody></table></div></div>`;
     });
     $('#sites', el).innerHTML = String(draft.sites.length ? html`${parts}` : html`<div class="muted">No sites yet.${editable ? ' Use “+ Add site”.' : ''}</div>`);
@@ -122,25 +122,27 @@ export function renderCustomerForm(el, id) {
     const site = draft.sites[siteIdx];
     const sh = shutterId ? site.shutters.find(x => x.id === shutterId) : { tag: nextShutterTag(site), location: '', productId: products()[0]?.id, width: '', height: '', unit: 'm', motor: '', serial: '', installDate: '', status: 'Active' };
     const sizeOf = d => classifySize(toMetres(d.width, d.unit), toMetres(d.height, d.unit), sizes());
+    const sizeCodes = sizes().filter(z => z.status !== 'Inactive').sort((a, b) => a.order - b.order).map(z => z.code);
     openModal({
-      title: shutterId ? `Edit shutter ${sh.tag}` : `Add shutter at ${site.name || 'site'}`,
+      title: shutterId ? `Edit product ${sh.tag}` : `Add a product at ${site.name || 'site'}`,
       body: html`<div class="grid g2 form-lines" id="shf">
         ${field({ name: 'tag', label: 'Tag', value: sh.tag, required: true })}${field({ name: 'location', label: 'Location', value: sh.location, required: true, cls: 'span2' })}
         ${field({ name: 'productId', label: 'Type', type: 'select', options: products().map(p => ({ value: p.id, label: p.name })), value: sh.productId, required: true })}
-        ${field({ name: 'width', label: 'Width', type: 'number', step: '0.01', value: sh.width, required: true })}${field({ name: 'height', label: 'Height', type: 'number', step: '0.01', value: sh.height, required: true })}
+        ${field({ name: 'width', label: 'Width', type: 'number', step: '0.01', value: sh.width })}${field({ name: 'height', label: 'Height', type: 'number', step: '0.01', value: sh.height })}
         ${field({ name: 'unit', label: 'Unit', type: 'select', options: [{ value: 'm', label: 'metres' }, { value: 'ft', label: 'feet' }], value: sh.unit, blank: false })}
-        <div class="field"><div class="field-label">Size class (one rule, in metres)</div><div class="strong" id="sizeOut" style="padding:6px 0">${sizeOf(sh) || '—'}</div></div>
+        ${field({ name: 'sizeCode', label: 'Size (from width × height when measured)', type: 'select', options: sizeCodes, value: sizeOf(sh) || sh.sizeCode, required: true })}
         ${field({ name: 'status', label: 'Status', type: 'select', options: ['Active', 'Inactive'], value: sh.status, blank: false })}
         ${field({ name: 'motor', label: 'Motor (make / model)', value: sh.motor })}${field({ name: 'serial', label: 'Serial no.', value: sh.serial })}
         ${field({ name: 'installDate', label: 'Install date', type: 'date', value: sh.installDate })}
         ${field({ name: 'fireRated', label: 'Fire-rated shutter (the AMC check list adds the fire drop test)', type: 'checkbox', value: sh.fireRated, cls: 'span2' })}</div>`,
-      onOpen: body => body.addEventListener('input', () => { $('#sizeOut', body).textContent = sizeOf(readForm(body)) || '—'; }),
-      actions: [{ label: 'Cancel' }, { label: shutterId ? 'Update shutter' : 'Add shutter', kind: 'primary', onClick: body => {
+      // Measuring sets the size by the one rule; a product recorded from a site report may only have the size tapped on site.
+      onOpen: body => body.addEventListener('input', () => { const code = sizeOf(readForm(body)); if (code) $('[name="sizeCode"]', body).value = code; }),
+      actions: [{ label: 'Cancel' }, { label: shutterId ? 'Update product' : 'Add product', kind: 'primary', onClick: body => {
         const d = readForm(body);
-        if (!markInvalid(body, ['tag', 'location', 'productId', 'width', 'height'].filter(n => d[n] === '' || d[n] == null))) return false;
+        if (!markInvalid(body, ['tag', 'location', 'productId', 'sizeCode'].filter(n => n === 'sizeCode' ? !sizeOf(d) && !d.sizeCode : d[n] === '' || d[n] == null))) return false;
         if (site.shutters.some(x => x.id !== shutterId && x.tag.toLowerCase() === d.tag.toLowerCase())) { markInvalid(body, ['tag'], 'Tag already used at this site'); return false; }
         const widthM = toMetres(d.width, d.unit), heightM = toMetres(d.height, d.unit);
-        const next = { ...sh, ...d, widthM, heightM, sizeCode: classifySize(widthM, heightM, sizes()) };
+        const next = { ...sh, ...d, widthM, heightM, sizeCode: classifySize(widthM, heightM, sizes()) || d.sizeCode };
         if (shutterId) Object.assign(sh, next); else site.shutters.push({ ...next, id: store.uid('sht_'), source: 'Manual' });
         paintSites();
       } }],

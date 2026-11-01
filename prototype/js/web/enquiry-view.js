@@ -85,7 +85,7 @@ export function renderEnquiryView(el, id) {
         </div><div><div class="form-sec">Site</div>
         ${row('Site Location', e.siteName)}
         ${row('Zone', e.zoneId ? zoneLabel(e.zoneId) : html`<span class="muted">Not set</span>`)}
-        ${site?.shutters?.length ? row('Shutters', html`${site.shutters.map(s => html`<span class="pill" style="margin:0 4px 4px 0">${s.tag} ${s.location} · ${s.sizeCode}</span>`)}`) : ''}</div>
+        ${site?.shutters?.length ? row('Customer products', html`${site.shutters.map(s => html`<span class="pill" style="margin:0 4px 4px 0">${s.tag} ${s.location} · ${s.sizeCode}</span>`)}`) : ''}</div>
         <div><div class="form-sec">Enquiry</div>
         ${row('Enquiry Date / Time', fmtDateTime(e.receivedAt))}
         ${row('Type', vsLabel('ENQ_TYPE', e.type))}

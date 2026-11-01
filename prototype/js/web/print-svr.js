@@ -20,8 +20,9 @@ function sheetHead(company) {
       <div>Tel: ${company.tel} &nbsp;|&nbsp; Mobile: ${company.mobile} &nbsp;|&nbsp; Email: ${company.email}</div></div></div>`;
 }
 
-// Text for "Full Address & Shutter Location": the site address plus the shutters picked on the phone.
-export const shutterLocations = rep => rep.shutters.map(s => `${s.tag} ${s.location}`.trim()).join('; ');
+// Text for "Full Address & Shutter Location": the site address plus the products in Job scope (a new one once it
+// has a location).
+export const shutterLocations = rep => rep.shutters.filter(s => s.location).map(s => `${s.tag} ${s.location}`.trim()).join('; ');
 
 export function svrSheetHtml(rep, company) {
   const { s1, s2, s3, s4, s5, s6, s7 } = rep;
@@ -92,7 +93,7 @@ export function photoSheetHtml(rep, company) {
   if (!rep.photos.length) return '';
   return html`<div class="sheet"><div class="demo-water"><span>DEMO</span></div>${sheetHead(company)}
     <p><b>Attachment to ${rep.no}: site photos</b> (taken on the phone; not part of the printed form)</p>
-    <p class="small">Shutters picked: ${rep.shutters.map(s => `${s.tag} ${s.location} (${productName(s.productId)}, ${s.sizeCode || '?'}${s.finding ? `: ${s.finding}` : ''})`).join('; ') || '—'}</p>
+    <p class="small">Products: ${rep.shutters.map(s => `${s.tag} ${s.location} (${productName(s.productId)}, ${s.sizeCode || '?'}${s.finding ? `: ${s.finding}` : ''})`).join('; ') || '—'}</p>
     <div class="photo-grid">${rep.photos.map(p => html`<img data-media="${p}" alt="Site photo">`)}</div>
     <div class="foot"><span>${company.name} &nbsp;|&nbsp; ${rep.no} attachment</span><span>Photos</span></div></div>`;
 }

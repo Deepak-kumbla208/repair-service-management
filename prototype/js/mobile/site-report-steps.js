@@ -1,10 +1,11 @@
 // Phone: Site Viewing Report steps 2–7, one per section of the team lead's form.
 // Photos (step 2) are attached to the report but are not part of the printed form.
 import { html, $, $$, field, readForm, toast, MIC, icon } from '../core/ui.js';
-import { zones, items } from '../core/lookups.js';
-import { manHours } from '../core/costing.js';
+import { zones, items, products, productName, sizes, findSite } from '../core/lookups.js';
+import { manHours, classifySize } from '../core/costing.js';
 import { removeBlob } from '../core/media.js';
 import { savePhotos, signaturePad } from '../core/capture.js';
+import { isProductRow, reportShutters, jobScope, newProductRow } from '../core/inspections.js';
 
 const check = (name, label, on) => html`<label class="check"><input type="checkbox" name="${name}" ${on ? 'checked' : ''}> ${label}</label>`;
 // Read "prefix_key" controls back into a section object.
@@ -15,30 +16,91 @@ function readSection(body, prefix, current) {
   return out;
 }
 
+// "What the customer asked for" (screen only): one row per enquiry line, ticked once checked on site. A product row
+// also takes the type, qty, location and size (tap S / M / L / XL, or measure); a product the customer already has at
+// the site is tapped instead. Rows are named by their key, so adding or removing one never mixes up the others.
+const sizeList = () => sizes().filter(z => z.status !== 'Inactive').sort((a, b) => a.order - b.order);
+function askRow(r, site, used) {
+  const k = r.key, linked = r.linkIds || [];
+  const fresh = (Number(r.qty) || 1) - linked.length; // new products this row records for the customer
+  const mine = (site?.shutters || []).filter(s => linked.includes(s.id) || (s.status !== 'Inactive' && !used.has(s.id) && s.productId === r.productId));
+  return html`<div class="ask ${r.done ? 'on' : ''}">
+    ${r.added ? html`<div class="row"><b class="grow">${r.n}. ${r.text}</b><span class="tag">added on site</span><button type="button" class="btn link small" data-droprow="${k}">Remove</button></div>`
+      : html`<label class="check"><input type="checkbox" name="ask_${k}" ${r.done ? 'checked' : ''}> <b>${r.n}.</b> ${r.text}</label>`}
+    ${isProductRow(r) ? html`<div class="grid g2 ask-prod">
+      <div class="field spanall"><label>Product</label><select name="pt_${k}">${products().map(p => html`<option value="${p.id}" ${p.id === r.productId ? 'selected' : ''}>${p.name}</option>`)}</select></div>
+      <div class="field"><label>Qty</label><input type="number" min="1" step="1" name="pq_${k}" value="${r.qty || 1}"></div>
+      ${fresh > 0 ? html`<div class="field"><label>Location${linked.length ? ' of the new one' : ''}</label><input name="pl_${k}" value="${r.location || ''}" placeholder="e.g. Back door"></div>
+        <div class="field spanall"><label>Size</label><div class="row wrap" style="gap:8px"><span class="chips">${sizeList().map(z => html`<label class="chip"><input type="radio" name="ps_${k}" value="${z.code}" ${z.code === r.sizeCode ? 'checked' : ''}><span>${z.code}</span></label>`)}</span>
+          <span class="small muted measure">or W <input type="number" step="0.01" min="0" name="pw_${k}" value="${r.width ?? ''}"> × H <input type="number" step="0.01" min="0" name="ph_${k}" value="${r.height ?? ''}"> m</span></div></div>` : ''}
+      ${mine.length ? html`<div class="field spanall"><label>Already a customer product? Tap it</label><div class="chips">${mine.map(s => html`<label class="chip"><input type="checkbox" data-link="${k}" value="${s.id}" ${linked.includes(s.id) ? 'checked' : ''}><span>${s.tag} ${s.location} · ${s.sizeCode}</span></label>`)}</div></div>` : ''}
+    </div>` : ''}
+    <div class="with-mic"><input type="text" name="asknote_${k}" placeholder="${isProductRow(r) ? 'Fault found (optional)' : 'Note (optional)'}" value="${r.note || ''}"><button type="button" class="mic" data-mic="asknote_${k}" title="Voice input">${MIC}</button></div>
+  </div>`;
+}
+
 const step2 = {
   title: 'Job scope',
-  render: rep => html`
+  render: rep => {
+    const rows = jobScope(rep).asked;
+    const { site } = findSite(rep.siteId);
+    const usedBy = r => new Set(rows.filter(x => x !== r).flatMap(x => x.linkIds || []));
+    return html`
     <div class="checks" style="grid-template-columns:1fr 1fr">${check('s2_supplyInstall', 'Supply & install', rep.s2.supplyInstall)}${check('s2_repair', 'Repair', rep.s2.repair)}
       ${check('s2_replace', 'Replace component', rep.s2.replace)}${check('s2_motor', 'Motor / control works', rep.s2.motor)}
       ${check('s2_dismantle', 'Dismantle / removal', rep.s2.dismantle)}${check('s2_servicing', 'Servicing / maintenance', rep.s2.servicing)}</div>
-    ${(rep.asked || []).length ? html`<div class="m-section">What the customer asked for <span class="tag info">screen only</span></div>
-      <p class="small muted" style="margin:0 0 6px">From the enquiry. Tick each one once you have checked it on site; add a note if needed.</p>
-      <div class="asked">${rep.asked.map((a, i) => html`<div class="ask ${a.done ? 'on' : ''}"><label class="check"><input type="checkbox" name="ask_${i}" ${a.done ? 'checked' : ''}> <b>${a.n}.</b> ${a.text}</label>
-        <div class="with-mic"><input type="text" name="asknote_${i}" placeholder="Note (optional)" value="${a.note || ''}"><button type="button" class="mic" data-mic="asknote_${i}" title="Voice input">${MIC}</button></div></div>`)}</div>` : ''}
+    <div class="m-section">What the customer asked for <span class="tag info">screen only</span></div>
+    <p class="small muted" style="margin:0 0 6px">From the enquiry. Tick each one once you have checked it on site. Products are recorded as the customer's products when you submit.</p>
+    <div class="asked">${rows.map(r => askRow(r, site, usedBy(r)))}</div>
+    <button type="button" class="add-dashed" id="addProd" style="margin-top:6px">+ Add product</button>
     <div class="stack" style="margin-top:10px">
       ${field({ name: 's2_other', label: 'Other', value: rep.s2.other })}
       ${field({ name: 's2_description', label: 'Job Scope / Description of Work', type: 'textarea', value: rep.s2.description, mic: true })}
-      ${field({ name: 's2_findings', label: 'Customer Complaint / Findings', type: 'textarea', value: rep.s2.findings, mic: true, hint: 'Pre-filled from the enquiry, one line per item' })}
+      ${field({ name: 's2_findings', label: 'Customer Complaint / Findings', type: 'textarea', value: rep.s2.findings, mic: true, hint: 'Pre-filled from the enquiry, one line per enquiry line' })}
     </div>
     <div class="m-section">Photos <span class="tag info">attached, not printed on the form</span></div>
     <div class="photos">${rep.photos.map(p => html`<div class="photo"><img data-media="${p}" alt="Site photo"><button type="button" class="del" data-delphoto="${p}" aria-label="Remove photo">×</button></div>`)}</div>
-    <label class="add-dashed" style="display:block;margin-top:8px">📷 Take or add photos<input type="file" accept="image/*" capture="environment" multiple hidden id="photoIn"></label>`,
+    <label class="add-dashed" style="display:block;margin-top:8px">📷 Take or add photos<input type="file" accept="image/*" capture="environment" multiple hidden id="photoIn"></label>`;
+  },
   read: (body, rep) => {
     const d = readForm(body);
-    const asked = (rep.asked || []).map((a, i) => ({ ...a, done: d[`ask_${i}`] ?? a.done, note: d[`asknote_${i}`] ?? a.note }));
-    return { s2: readSection(body, 's2', rep.s2), asked };
+    const has = k => Object.prototype.hasOwnProperty.call(d, k);
+    const asked = (rep.asked || []).map(a => {
+      const k = a.key;
+      const r = { ...a, done: a.added || (d[`ask_${k}`] ?? a.done), note: d[`asknote_${k}`] ?? a.note };
+      if (!isProductRow(a)) return r;
+      r.productId = d[`pt_${k}`] || a.productId;
+      r.qty = Math.max(1, Math.round(d[`pq_${k}`] ?? a.qty ?? 1), (a.linkIds || []).length);
+      r.location = d[`pl_${k}`] ?? a.location;
+      r.width = has(`pw_${k}`) ? d[`pw_${k}`] : a.width;
+      r.height = has(`ph_${k}`) ? d[`ph_${k}`] : a.height;
+      r.sizeCode = classifySize(r.width, r.height, sizes()) || d[`ps_${k}`] || a.sizeCode || ''; // measured wins over tapped
+      if (a.added && /^\d+ × /.test(a.text)) r.text = `${r.qty} × ${productName(r.productId)}`;
+      return r;
+    });
+    return { s2: readSection(body, 's2', rep.s2), asked, shutters: reportShutters(rep, asked) };
   },
   bind(body, rep, ctx) {
+    // Adding, removing or linking a product, or a new qty or type, draws the rows again.
+    const change = fn => { const cur = step2.read(body, rep); const asked = fn(cur.asked); ctx.save({ s2: cur.s2, asked, shutters: reportShutters(rep, asked) }); ctx.repaint(); };
+    $('#addProd', body).addEventListener('click', () => change(rows => [...rows, newProductRow(rows, products()[0]?.id)]));
+    $$('[data-droprow]', body).forEach(b => b.addEventListener('click', () => change(rows => rows.filter(r => r.key !== b.dataset.droprow).map((r, i) => ({ ...r, n: i + 1 })))));
+    $$('[data-link]', body).forEach(cb => cb.addEventListener('change', () => change(rows => rows.map(r => {
+      if (r.key !== cb.dataset.link) return r;
+      const linkIds = cb.checked ? [...(r.linkIds || []), cb.value] : (r.linkIds || []).filter(x => x !== cb.value);
+      return { ...r, linkIds, qty: Math.max(r.qty || 1, linkIds.length) };
+    }))));
+    $$('[name^="pq_"], [name^="pt_"]', body).forEach(i => i.addEventListener('change', () => change(rows => rows)));
+    $$('[name^="ask_"]', body).forEach(cb => cb.addEventListener('change', () => cb.closest('.ask').classList.toggle('on', cb.checked)));
+    // Measuring picks the size; tapping a size clears the measurement.
+    body.addEventListener('input', e => {
+      const k = e.target.name?.match(/^p[wh]_(.+)$/)?.[1];
+      if (!k) return;
+      const code = classifySize(Number($(`[name="pw_${k}"]`, body).value), Number($(`[name="ph_${k}"]`, body).value), sizes());
+      const radio = code && $(`[name="ps_${k}"][value="${code}"]`, body);
+      if (radio) radio.checked = true;
+    });
+    $$('[name^="ps_"]', body).forEach(r => r.addEventListener('change', () => { const k = r.name.slice(3); $(`[name="pw_${k}"]`, body).value = ''; $(`[name="ph_${k}"]`, body).value = ''; }));
     $('#photoIn', body).addEventListener('change', async e => {
       ctx.save(step2.read(body, rep));
       const ids = await savePhotos(e.target.files);
@@ -107,7 +169,7 @@ const step5 = {
     ${rep.s5.rows.map((r, i) => html`<div class="mat-row" data-row="${i}"><div class="row"><b>${i + 1}.</b><span class="grow"></span><button type="button" class="btn link small" data-delrow="${i}">Remove</button></div>
       <div class="grid g2">
         <div class="field spanall"><label>Material / Spare Part</label><input list="itemList" data-c="name" value="${r.name}"><input type="hidden" data-c="itemId" value="${r.itemId || ''}"></div>
-        ${rep.shutters.length > 1 ? html`<div class="field spanall"><label>For shutter <span class="muted">(screen only, for the estimate lines)</span></label><select data-c="shutterKey"><option value="">Whole job</option>
+        ${rep.shutters.length > 1 ? html`<div class="field spanall"><label>For product <span class="muted">(screen only, for the estimate lines)</span></label><select data-c="shutterKey"><option value="">Whole job</option>
           ${rep.shutters.map(s => html`<option value="${s.key}" ${s.key === r.shutterKey ? 'selected' : ''}>${s.tag} ${s.location}</option>`)}</select></div>` : ''}
         <div class="field spanall"><label>Size / Spec / Model</label><input data-c="spec" value="${r.spec}"></div>
         <div class="field"><label>Qty</label><input type="number" data-c="qty" value="${r.qty ?? ''}"></div>
@@ -176,7 +238,7 @@ const step7 = {
     const s = rep.s7;
     return html`
     <div class="m-card small">
-      <div>${rep.shutters.length ? '✓' : '•'} Shutters picked: <b>${rep.shutters.length}</b></div>
+      <div>${rep.shutters.length ? '✓' : '•'} Products: <b>${rep.shutters.length}</b></div>
       <div>${rep.photos.length ? '✓' : '•'} Photos: <b>${rep.photos.length}</b></div>
       <div>${rep.s5.rows.length ? '✓' : '•'} Materials listed: <b>${rep.s5.rows.length}</b></div>
     </div>

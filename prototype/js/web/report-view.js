@@ -8,7 +8,7 @@ import { html, $, go, fmtDateTime, pill, openModal, toast, debounce, foldHeader 
 import { empName } from '../core/lookups.js';
 import { hydrateImages } from '../core/media.js';
 import { bindMics } from '../core/capture.js';
-import { saveReport, submitReport } from '../core/inspections.js';
+import { saveReport, submitReport, tidyReport } from '../core/inspections.js';
 import { STEPS } from '../mobile/site-report.js';
 import { pageHead } from './shell.js';
 import { canCreateFor, createEstimate, currentEstimate } from '../core/estimates.js';
@@ -24,7 +24,7 @@ export function renderReport(el, id) {
   const rep = store.get('siteReports', id);
   const insp = rep && store.get('inspections', rep.inspectionId);
   if (!rep || !auth.seesInspection(insp)) { el.innerHTML = '<div class="page"><div class="empty">Report not found.</div></div>'; return; }
-  if (auth.can('inspection', 'edit', 'web')) return renderEditor(el, rep, insp);
+  if (auth.can('inspection', 'edit', 'web')) return renderEditor(el, tidyReport(id), insp);
   return renderReadOnly(el, rep, insp);
 }
 

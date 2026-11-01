@@ -3,6 +3,7 @@
 import * as store from './store.js';
 import { technicians, empName, findSite } from './lookups.js';
 import { makeShutter, addShutters } from './customers.js';
+import { cleanLines } from './enquiries.js';
 
 const sameDay = (a, b) => !!a && !!b && new Date(a).toDateString() === new Date(b).toDateString();
 const pad = n => String(n).padStart(2, '0');
@@ -36,6 +37,30 @@ function materialRows(enq) {
     return { name: l.itemName, spec: it?.spec || '', qty: l.qty || 1, unit: it?.unit || '', remarks: l.description || '', itemId: it?.id || null, shutterKey: '' };
   });
 }
+// Each enquiry line as text, e.g. "2 × Rolling shutter: RS-1 and RS-2 very noisy".
+const lineText = l => [l.itemName ? `${l.qty || 1} × ${l.itemName}` : '', l.description].filter(Boolean).join(': ');
+// Customer Complaint / Findings: one line per enquiry line, numbered when there are several.
+function findingsFrom(enq) {
+  const lines = cleanLines(enq.lines).map(lineText);
+  if (!lines.length) return enq.description || '';
+  return lines.length === 1 ? lines[0] : lines.map((t, i) => `${i + 1}. ${t}`).join('\n');
+}
+// "What the customer asked for" (screen only): each enquiry line, ticked by the technician once checked on site.
+const askedFrom = enq => cleanLines(enq.lines).map((l, i) => ({ n: i + 1, text: lineText(l), done: false, note: '' }));
+// Shutters a line names by their tag (e.g. "RS-1 and RS-2 very noisy") are ticked already, with that line as the fault.
+function namedShutters(enq, site) {
+  const out = [];
+  cleanLines(enq.lines).forEach(l => {
+    const text = `${l.itemName} ${l.description}`;
+    (site?.shutters || []).filter(s => s.status !== 'Inactive' && !out.some(x => x.shutterId === s.id)).forEach(s => {
+      const tag = s.tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (new RegExp(`(?<![A-Za-z0-9-])${tag}(?![A-Za-z0-9])`, 'i').test(text)) {
+        out.push({ key: s.id, shutterId: s.id, tag: s.tag, location: s.location, productId: s.productId, width: s.width, height: s.height, unit: s.unit, sizeCode: s.sizeCode, motor: s.motor, finding: l.description || '' });
+      }
+    });
+  });
+  return out;
+}
 const pad2 = n => String(n).padStart(2, '0');
 const localDate = iso => { const d = new Date(iso); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
 
@@ -65,8 +90,8 @@ export function startReport(inspId, { fromOffice = false } = {}) {
     s1: { customer: enq.customerName, site: site?.name || enq.siteName, address: site?.address || '', blockUnit: site?.blockUnit || '', viewedBy: tech?.name || '',
       viewDate: insp.visitAt ? localDate(insp.visitAt) : today(), contactPerson: enq.contactName, contactNo: [enq.mobile, enq.email].filter(Boolean).join(' / '),
       timeIn: fromOffice ? '' : nowTime(), timeOut: '' },
-    shutters: [],
-    s2: { supplyInstall: false, repair: enq.type === 'REPAIR', replace: false, motor: false, dismantle: false, servicing: enq.type !== 'REPAIR', other: '', description: '', findings: enq.description },
+    shutters: namedShutters(enq, site), asked: askedFrom(enq),
+    s2: { supplyInstall: false, repair: enq.type === 'REPAIR', replace: false, motor: false, dismantle: false, servicing: enq.type !== 'REPAIR', other: '', description: '', findings: findingsFrom(enq) },
     s3: { zoneId: enq.zoneId, persons: 2, days: 1, hoursPerDay: null, remarks: '', normal: true, afterHours: false, weekend: false, phased: false },
     s4: { ladder: false, scaffolding: false, scaffoldSets: '', scissor: false, scissorNos: '', boom: false, hoist: false, welding: false, grinding: false, powerTools: false, other: '', maxHeight: null, providedBy: '', rentalDuration: '', others: '' },
     s5: { rows: materialRows(enq), consumables: '' },
@@ -91,6 +116,8 @@ export function reportProblems(rep, { paper = false } = {}) {
   if (!rep.shutters.length && !rep.s2.description) p.push('Pick at least one shutter (step 1) or describe the job scope (step 2).');
   if (!rep.s7.name) p.push('Enter the name in the sign-off (step 7).');
   if (!paper && !rep.s7.signatureId) p.push('Sign the report (step 7).');
+  const left = (rep.asked || []).filter(a => !a.done).length;
+  if (!paper && left) p.push(`Tick each thing the customer asked for once you have checked it (step 2): ${left} of ${rep.asked.length} not ticked yet.`);
   return p;
 }
 

@@ -46,8 +46,8 @@ export function svrSheetHtml(rep, company) {
       <tr><td data-f="s2.motor">${box(s2.motor)}Motor / control works</td><td data-f="s2.dismantle">${box(s2.dismantle)}Dismantle / removal</td><td data-f="s2.servicing">${box(s2.servicing)}Servicing / maintenance</td></tr>
       <tr><td colspan="3" data-f="s2.other">Other: ${s2.other}</td></tr>
     </table>
-    <table><tr><td class="lbl">Job Scope / Description of Work</td><td data-f="s2.description">${s2.description}</td></tr>
-      <tr><td class="lbl">Customer Complaint / Findings</td><td data-f="s2.findings">${s2.findings}</td></tr></table>
+    <table><tr><td class="lbl">Job Scope / Description of Work</td><td data-f="s2.description" style="white-space:pre-line">${s2.description}</td></tr>
+      <tr><td class="lbl">Customer Complaint / Findings</td><td data-f="s2.findings" style="white-space:pre-line">${s2.findings}</td></tr></table>
     <table style="margin-top:6px">
       ${sec(3, 'LABOUR / MAN-HOURS / TRANSPORT', 6)}
       <tr><td class="lbl">Transport Zone</td><td class="lbl">No. of Persons</td><td class="lbl">No. of Days</td><td class="lbl">Hours / Day</td><td class="lbl">Total Man-hours</td><td class="lbl">Remarks</td></tr>

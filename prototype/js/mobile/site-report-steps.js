@@ -21,15 +21,23 @@ const step2 = {
     <div class="checks" style="grid-template-columns:1fr 1fr">${check('s2_supplyInstall', 'Supply & install', rep.s2.supplyInstall)}${check('s2_repair', 'Repair', rep.s2.repair)}
       ${check('s2_replace', 'Replace component', rep.s2.replace)}${check('s2_motor', 'Motor / control works', rep.s2.motor)}
       ${check('s2_dismantle', 'Dismantle / removal', rep.s2.dismantle)}${check('s2_servicing', 'Servicing / maintenance', rep.s2.servicing)}</div>
+    ${(rep.asked || []).length ? html`<div class="m-section">What the customer asked for <span class="tag info">screen only</span></div>
+      <p class="small muted" style="margin:0 0 6px">From the enquiry. Tick each one once you have checked it on site; add a note if needed.</p>
+      <div class="asked">${rep.asked.map((a, i) => html`<div class="ask ${a.done ? 'on' : ''}"><label class="check"><input type="checkbox" name="ask_${i}" ${a.done ? 'checked' : ''}> <b>${a.n}.</b> ${a.text}</label>
+        <div class="with-mic"><input type="text" name="asknote_${i}" placeholder="Note (optional)" value="${a.note || ''}"><button type="button" class="mic" data-mic="asknote_${i}" title="Voice input">🎤</button></div></div>`)}</div>` : ''}
     <div class="stack" style="margin-top:10px">
       ${field({ name: 's2_other', label: 'Other', value: rep.s2.other })}
       ${field({ name: 's2_description', label: 'Job Scope / Description of Work', type: 'textarea', value: rep.s2.description, mic: true })}
-      ${field({ name: 's2_findings', label: 'Customer Complaint / Findings', type: 'textarea', value: rep.s2.findings, mic: true, hint: 'Pre-filled from the enquiry' })}
+      ${field({ name: 's2_findings', label: 'Customer Complaint / Findings', type: 'textarea', value: rep.s2.findings, mic: true, hint: 'Pre-filled from the enquiry, one line per item' })}
     </div>
     <div class="m-section">Photos <span class="tag info">attached, not printed on the form</span></div>
     <div class="photos">${rep.photos.map(p => html`<div class="photo"><img data-media="${p}" alt="Site photo"><button type="button" class="del" data-delphoto="${p}" aria-label="Remove photo">×</button></div>`)}</div>
     <label class="add-dashed" style="display:block;margin-top:8px">📷 Take or add photos<input type="file" accept="image/*" capture="environment" multiple hidden id="photoIn"></label>`,
-  read: (body, rep) => ({ s2: readSection(body, 's2', rep.s2) }),
+  read: (body, rep) => {
+    const d = readForm(body);
+    const asked = (rep.asked || []).map((a, i) => ({ ...a, done: d[`ask_${i}`] ?? a.done, note: d[`asknote_${i}`] ?? a.note }));
+    return { s2: readSection(body, 's2', rep.s2), asked };
+  },
   bind(body, rep, ctx) {
     $('#photoIn', body).addEventListener('change', async e => {
       ctx.save(step2.read(body, rep));

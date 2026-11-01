@@ -11,6 +11,8 @@ import { amcPrefill, amcProblems, describe } from './amc-estimates.js';
 const rid = () => store.uid('r_');
 const pad = n => String(n).padStart(2, '0');
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+// The site report keeps one line per item; the estimate and quotation hold them on one line ("1. …; 2. …").
+const oneLine = s => String(s || '').split(/\n+/).map(x => x.trim()).filter(Boolean).join('; ');
 export const DEFAULTS = { costingLevel: 'JOB', sharedCosts: 'SPREAD', overheadPct: 20, marginBasis: 'MARKUP', marginPct: 20, quoteValidityDays: 7, defaultPaymentTerm: 'IMMEDIATE' };
 export const txDefaults = () => ({ ...DEFAULTS, ...(auth.company()?.txDefaults || {}) });
 
@@ -99,7 +101,7 @@ export function prefill(enq, rep) {
   return {
     enquiryId: enq.id, reportId: rep?.id || '', customerId: enq.customerId, siteId: enq.siteId,
     header: { customer: enq.customerName, contact: enq.contactName, phone: enq.mobile || contactNo, site: enq.siteName, address: [site?.address, site?.blockUnit].filter(Boolean).join(', '),
-      date: today(), preparedBy: store.currentActor(), findings: rep?.s2?.findings || enq.description, description: rep?.s2?.description || enq.description },
+      date: today(), preparedBy: store.currentActor(), findings: oneLine(rep?.s2?.findings) || enq.description, description: oneLine(rep?.s2?.description) || enq.description },
     costingLevel: d.costingLevel, sharedCosts: d.sharedCosts, sharedLabel: zone ? `Transport & mobilisation (Zone ${zone.code})` : 'Transport & mobilisation',
     overheads: [{ key: rid(), name: 'Overheads', basis: 'PCT', value: d.overheadPct }], marginBasis: d.marginBasis, marginPct: d.marginPct,
     ...companyTax(), shutters, lines, labour, transport, materials, equipment, afterHours: ot,

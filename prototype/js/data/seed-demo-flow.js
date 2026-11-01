@@ -113,6 +113,7 @@ export function fileReport(enq, tech, { picks, mats = [], desc, s3 = {}, s4 = {}
   saveReport(rep.id, {
     s1: { ...rep.s1, timeIn: '10:10', timeOut: '10:55' }, shutters, s5: { rows, consumables: '' }, s3: { ...rep.s3, hoursPerDay: 6, ...s3 }, s4: { ...rep.s4, ...s4 },
     s2: { ...rep.s2, replace: rows.length > 0, description: desc, findings: picks.map(([t, f]) => `${t} ${f}`).join('; ') }, s7: { ...rep.s7, signatureId: sigId },
+    asked: (rep.asked || []).map(a => ({ ...a, done: true })), // the technician checked everything the customer asked for
   });
   submitReport(rep.id);
 }

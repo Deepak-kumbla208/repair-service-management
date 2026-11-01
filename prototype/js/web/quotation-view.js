@@ -29,6 +29,7 @@ export function renderQuotation(el, id) {
   const mayEdit = auth.can('quotation', 'edit');
   const est = store.get('estimates', q.estimateId);
   const estOpen = est && est.status === 'Quoted' && !store.list('estimates', e => e.no === est.no && e.rev > est.rev).length;
+  const newestEst = est ? store.list('estimates', e => e.no === est.no).sort((a, b) => b.rev - a.rev)[0] : null;
 
   el.innerHTML = String(html`<div class="page" style="max-width:1500px">
     <div class="page-head"><div class="grow">
@@ -43,7 +44,8 @@ export function renderQuotation(el, id) {
         ${mayEdit && q.status === 'Expired' ? html`<button class="btn primary" id="rev">Renew (new revision)</button>` : ''}
         ${q.jobId ? html`<a class="btn primary" href="#/jobs/${q.jobId}">Open the job</a>` : ''}</div>
     </div>
-    ${q.status === 'Superseded' ? html`<div class="note warn" style="margin-bottom:10px">Replaced by <a href="#/quotations/${latest.id}">Rev ${latest.rev}</a>.</div>` : ''}
+    ${q.status === 'Superseded' ? (latest.id !== q.id ? html`<div class="note warn" style="margin-bottom:10px">Replaced by <a href="#/quotations/${latest.id}">Rev ${latest.rev}</a>.</div>`
+      : html`<div class="note warn" style="margin-bottom:10px">Replaced: the estimate is being revised. ${newestEst ? html`<a href="#/estimates/${newestEst.id}">Open ${newestEst.no} Rev ${newestEst.rev}</a> and create the quotation revision there.` : ''}</div>`) : ''}
     ${q.status === 'Returned' && q.returnNote ? html`<div class="note bad" style="margin-bottom:10px;display:flex;gap:10px;align-items:center"><span class="grow"><b>Returned by ${auth.userName(q.returnNote.by)}:</b> ${q.returnNote.comment}
       <br><span class="small">A price change: revise the estimate (this makes Rev ${q.rev + 1}). Wording only: change it here and submit again.</span></span>
       ${estOpen && auth.can('estimation', 'edit') ? html`<button class="btn small" id="revEst">Revise estimate</button>` : ''}</div>` : ''}
@@ -98,7 +100,7 @@ export function renderQuotation(el, id) {
     toast(r.status === 'Approved' ? `${q.no} Rev ${q.rev} approved (no approval rule applies)` : `${q.no} Rev ${q.rev} sent to the Approver for the counter-check`);
     renderQuotation(el, q.id);
   });
-  $('#revEst', el)?.addEventListener('click', () => { const next = reviseEstimate(q.estimateId, { note: 'returned by the Approver' }); toast(`${next.no} Rev ${next.rev} created`); go(`estimates/${next.id}`); });
+  $('#revEst', el)?.addEventListener('click', () => { const next = reviseEstimate(q.estimateId, { note: 'returned by the Approver' }); if (!next) return toast('The quotation is already closed', 'bad'); toast(`${next.no} Rev ${next.rev} created`); go(`estimates/${next.id}`); });
   $('#rev', el)?.addEventListener('click', async () => {
     if (!await confirmBox('Revise the wording', `Rev ${q.rev + 1} is created with the same prices. It goes to the counter-check again before it can be sent.`, `Create Rev ${q.rev + 1}`)) return;
     const n = reviseWording(q.id); go(`quotations/${n.id}`);

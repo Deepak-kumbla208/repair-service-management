@@ -42,10 +42,11 @@ export function openLevel(docType, doc, lvl, info) {
   });
 }
 
-// decision: 'approve' | 'return'. Returns the closed task.
+// decision: 'approve' | 'return'. Returns the closed task, or null when it was already closed
+// (a second tap or a stale page), so the decision is never applied twice.
 export function closeTask(taskId, decision, comment = '') {
   const t = store.get('tasks', taskId);
-  if (!t || t.status !== 'Open') return t;
+  if (!t || t.status !== 'Open') return null;
   store.update('tasks', taskId, { comment, doneAt: new Date().toISOString(), doneBy: store.currentActor(), decision }, false);
   store.setStatus('tasks', taskId, decision === 'return' ? 'Returned' : 'Done', comment);
   return store.get('tasks', taskId);

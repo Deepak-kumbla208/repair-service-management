@@ -4,8 +4,8 @@
 import * as store from './store.js';
 import * as auth from './auth.js';
 import { findSite, technicians, empName } from './lookups.js';
-import { openTask, closeTask } from './workflow.js';
-import { createInvoice, invoiceForJob } from './billing.js';
+import { openTask, closeTask, cancelTasksFor } from './workflow.js';
+import { createInvoice, invoiceForJob, paymentsFor, syncDueDate } from './billing.js';
 import { round2 } from './costing.js';
 
 const DAY_START = 8.5, DAY_END = 17.5;          // working day 08:30–17:30
@@ -52,12 +52,13 @@ export function setPartReady(jobId, key, ready) {
   store.update('jobs', jobId, { parts: j.parts.map(p => (p.key === key ? { ...p, ready } : p)) }, `${j.parts.find(p => p.key === key)?.name}: ${ready ? 'in stock' : 'to order'}`);
 }
 export function nextWorkday(d) { const x = new Date(d); do { x.setDate(x.getDate() + 1); } while (x.getDay() === 0); return x; }
-// Earliest date: the next working day, or later when a part still has to be ordered (today + its lead days).
+// Earliest date: today (same-day repairs) when every part is in stock, else today + the longest lead time.
+// Sundays are skipped.
 export function earliestDate(job, from = new Date()) {
   const lead = Math.max(0, ...job.parts.filter(p => !p.ready).map(p => Number(p.leadDays) || 0));
-  let d = nextWorkday(from);
-  if (lead) { const r = new Date(from); r.setDate(r.getDate() + lead); if (r > d) d = r.getDay() === 0 ? nextWorkday(r) : r; }
-  return dstr(d);
+  const base = new Date(from); base.setHours(0, 0, 0, 0);
+  if (lead) base.setDate(base.getDate() + lead);
+  return dstr(base.getDay() === 0 ? nextWorkday(base) : base);
 }
 export const partsReadyBy = (job, ds) => earliestDate(job) <= ds;
 
@@ -69,9 +70,10 @@ export function bookings(techId, ds, exceptJobId = '') {
     .map(i => { const e = store.get('enquiries', i.enquiryId); return { kind: 'inspection', id: i.id, no: e?.no || '', title: e?.customerName || '', zoneId: i.zoneId, from: hoursOf(i.visitAt), to: hoursOf(i.visitAt) + INSPECTION_HOURS, status: i.status }; });
   return [...jobs, ...insp].sort((a, b) => a.from - b.from);
 }
-// First free start time on a day for a block of `hours`, or null.
+// First free start time on a day for a block of `hours`, or null. Today starts no earlier than now.
+const earliestStart = ds => Math.max(DAY_START + 0.5, ds === dstr(new Date()) ? ceilHalf(hoursOf(new Date().toISOString())) : 0);
 export function freeStart(techId, ds, hours, exceptJobId = '') {
-  let t = DAY_START + 0.5; // 09:00
+  let t = earliestStart(ds); // 09:00, or now
   for (const b of bookings(techId, ds, exceptJobId)) {
     if (b.from >= t + hours) break;
     t = Math.max(t, b.to);
@@ -96,16 +98,22 @@ export const defaultHelper = techId => { const t = store.get('employees', techId
 
 export function scheduleProblems(job, slot) {
   const p = [];
-  if (!job.termApproved) p.push('The payment term is not immediate: the Approver must approve it first.');
+  if (!job.termApproved) p.push(job.termNote ? 'The Approver returned the payment term: change it or ask again.' : 'The payment term is not immediate: the Approver must approve it first.');
   if (!slot.technicianId) p.push('Pick a technician.');
+  if (slot.date < dstr(new Date())) p.push('Pick today or a later date.');
+  else if (slot.start != null && slot.start < earliestStart(slot.date) - 0.01) p.push('That start time has already passed.');
   if (!partsReadyBy(job, slot.date)) p.push(`Parts are not ready before ${earliestDate(job)}. Tick "In stock" or pick a later date.`);
+  if (slot.technicianId && slot.start != null && slot.hours) {
+    const clash = bookings(slot.technicianId, slot.date, job.id).find(b => b.from < slot.start + slot.hours - 0.01 && b.to > slot.start + 0.01);
+    if (clash) p.push(`${empName(slot.technicianId)} already has ${clash.kind === 'job' ? clash.no : 'a site inspection'} ${fmtHour(clash.from)}–${fmtHour(clash.to)} that day.`);
+  }
   return p;
 }
 
 // Schedule (or move) the job. With immediate payment the invoice is raised now, so the technician can collect.
 export function scheduleJob(jobId, { technicianId, helperIds = [], date, start, hours }) {
   const job = store.get('jobs', jobId);
-  const problems = scheduleProblems(job, { technicianId, date });
+  const problems = scheduleProblems(job, { technicianId, date, start, hours });
   if (problems.length) return { problems };
   const first = job.status === 'To schedule';
   store.update('jobs', jobId, { technicianId, helperIds, start: toIso(date, start), end: toIso(date, start + hours) },
@@ -113,19 +121,42 @@ export function scheduleJob(jobId, { technicianId, helperIds = [], date, start, 
   if (first) store.setStatus('jobs', jobId, 'Scheduled', empName(technicianId));
   let invoice = invoiceForJob(jobId);
   if (job.paymentTerm === 'IMMEDIATE' && !invoice) invoice = createInvoice(jobId, { post: true, note: 'raised at scheduling (payment immediate)' });
+  else syncDueDate(jobId); // a moved job moves an immediate invoice's due date with it
   return { problems: [], invoice };
 }
 
+const termTask = (j, title) => openTask({ kind: 'approval', docType: 'job', docId: j.id, docNo: j.no, title, customer: j.customer, amount: j.total,
+  level: 1, roleCode: 'APR', roleName: store.findOne('roles', r => r.code === 'APR')?.name || 'Approver', rules: [{ code: 'PAY_TERM', name: 'Payment term not immediate' }] });
+export const openTermTask = j => termTask(j, `Payment term for ${j.no}`);
+
 export function approveJobTerm(taskId, decision, comment) {
   const t = closeTask(taskId, decision, comment);
-  if (decision === 'approve') store.update('jobs', t.docId, { termApproved: true }, `Payment term approved${comment ? `: ${comment}` : ''}`);
+  if (!t) return;
+  if (decision === 'approve') store.update('jobs', t.docId, { termApproved: true, termNote: '' }, `Payment term approved${comment ? `: ${comment}` : ''}`);
   else store.update('jobs', t.docId, { termNote: comment }, `Payment term returned: ${comment}`);
 }
 
+// After the Approver returns a term: change it (Immediate needs no approval) or ask again with the same term.
+export function changeJobTerm(jobId, term) {
+  const j = store.get('jobs', jobId);
+  const immediate = term === 'IMMEDIATE';
+  store.update('jobs', jobId, { paymentTerm: term, termApproved: immediate, termNote: '' }, immediate ? 'Payment term changed to Immediate' : `Payment term ${term} sent to the Approver again`);
+  if (!immediate) termTask(store.get('jobs', jobId), `Payment term for ${j.no} (asked again)`);
+}
+
+// Cancelling a job cancels its invoice (the number is kept), closes its open tasks and marks the enquiry Lost.
+// Refused once a payment is recorded (no refunds in the prototype). Returns an error text or ''.
 export function cancelJob(jobId, reason) {
+  const j = store.get('jobs', jobId);
+  const paid = invoiceForJob(jobId);
+  if (paid && paymentsFor(paid.id).length) return `${paid.no} already has a payment, so the job cannot be cancelled.`;
   store.setStatus('jobs', jobId, 'Cancelled', reason);
   const inv = invoiceForJob(jobId);
   if (inv && inv.status !== 'Cancelled') store.setStatus('invoices', inv.id, 'Cancelled', `Job cancelled: ${reason}`);
+  cancelTasksFor('job', jobId, 'Job cancelled');
+  store.update('enquiries', j.enquiryId, { stage: 'Lost' }, false);
+  store.setStatus('enquiries', j.enquiryId, 'Lost', `${j.no} cancelled: ${reason}`);
+  return '';
 }
 
 // ---------- On the phone ----------
@@ -186,19 +217,25 @@ export function completeWorkDone(jobId) {
 }
 
 // Leave site (flow step 8): the technician asks; the Operations Executive confirms (web or phone).
+// Who may confirm: the Operations Executive (job edit on all data) or Admin, not the Approver or Management.
+export const canConfirmLeave = () => auth.role()?.code === 'ADMIN' || (auth.can('job', 'edit') && auth.scope('job') !== 'own');
+
 export function requestLeave(jobId) {
   const j = store.get('jobs', jobId);
+  if (!j.workDone?.signedAt) return;
   if (j.leaveSite?.requestedAt && !j.leaveSite.confirmedAt) return;
   const task = openTask({ kind: 'leaveSite', docType: 'job', docId: j.id, docNo: j.no, title: `${empName(j.technicianId)} asks to leave ${j.site}`, customer: j.customer, amount: null, level: 1, roleCode: 'OPS', roleName: 'Operations Executive', rules: [] });
   store.update('jobs', jobId, { leaveSite: { requestedAt: nowIso(), taskId: task.id, confirmedAt: null, confirmedBy: null } }, 'Leave-site request sent to the office');
 }
 export function confirmLeave(taskId, comment = '') {
   const t = closeTask(taskId, 'approve', comment);
+  if (!t) return;
   const j = store.get('jobs', t.docId);
   store.update('jobs', j.id, { leaveSite: { ...j.leaveSite, confirmedAt: t.doneAt, confirmedBy: store.currentActor() } }, `Leave site confirmed${comment ? `: ${comment}` : ''}`);
 }
 export function checkOut(jobId) {
   const j = store.get('jobs', jobId);
+  if (!j.leaveSite?.confirmedAt || j.steps?.checkOutAt) return;
   const at = nowIso();
   store.update('jobs', jobId, { steps: { ...j.steps, checkOutAt: at }, workDone: { ...j.workDone, s1: { ...j.workDone.s1, timeOut: hhmm(at) } } }, 'Checked out');
 }

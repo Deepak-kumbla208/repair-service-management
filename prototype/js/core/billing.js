@@ -15,6 +15,20 @@ export const daysBetween = (a, b) => Math.round((new Date(`${b}T00:00`) - new Da
 
 export const invoiceForJob = jobId => store.list('invoices', i => i.jobId === jobId && i.status !== 'Cancelled')[0] || null;
 
+// Due date: immediate payment is due on the visit day (an invoice raised at scheduling is not overdue before the
+// visit); other terms count their days from the invoice date.
+function dueFor(job, term, date) {
+  if (term === 'IMMEDIATE' && job?.start) { const ds = dstr(new Date(job.start)); return ds > date ? ds : date; }
+  return addDays(date, termDays(term));
+}
+export function syncDueDate(jobId) {
+  const inv = invoiceForJob(jobId);
+  if (inv?.status === 'Posted' && inv.paymentTerm === 'IMMEDIATE') store.update('invoices', inv.id, { dueDate: dueFor(store.get('jobs', jobId), inv.paymentTerm, inv.date) }, false);
+}
+// "Create invoice" is offered when the job has no live invoice (e.g. after a cancelled one) and is done or scheduled.
+export const canRaiseInvoice = job => !!job && job.status !== 'Cancelled' && !invoiceForJob(job.id)
+  && (!!job.workDone?.signedAt || (job.paymentTerm === 'IMMEDIATE' && !!job.start)) && auth.can('invoice', 'create');
+
 function invoiceTerms() {
   const company = auth.company();
   return store.list('terms', t => t.docType === 'Invoice' && t.isDefault && t.status !== 'Inactive').sort((a, b) => a.order - b.order).map(t => withCompany(t.text, company));
@@ -33,7 +47,7 @@ export function createInvoice(jobId, { post = false, note = '' } = {}) {
   const inv = store.insert('invoices', {
     no: '', jobId, jobNo: job.no, quotationId: q.id, quotationNo: `${q.no} Rev ${q.rev}`, enquiryId: job.enquiryId, customerId: job.customerId,
     customer: job.customer, billingAddress: customer?.address || job.address, contact: job.contact, phone: job.phone, site: job.site, siteAddress: job.address,
-    poNo: q.acceptance?.poNo || '', date, paymentTerm: job.paymentTerm, dueDate: addDays(date, termDays(job.paymentTerm)),
+    poNo: q.acceptance?.poNo || '', date, paymentTerm: job.paymentTerm, dueDate: dueFor(job, job.paymentTerm, date),
     costingLevel: q.costingLevel, description: q.description, findings: q.findings, rows, flagNote,
     subtotal: q.subtotal, taxLabel: q.taxLabel, taxRate: q.taxRate, tax: q.tax, total: q.total, terms: invoiceTerms(), preparedBy: store.currentActor(),
   }, { status: 'Draft', note: `Invoice for ${job.no} ${note}`.trim() });
@@ -55,12 +69,29 @@ export function postInvoice(id) {
   if (inv.status !== 'Draft') return inv;
   const date = today();
   const no = store.nextNumber('INV');
-  store.update('invoices', id, { no, date, dueDate: addDays(date, termDays(inv.paymentTerm)), postedAt: new Date().toISOString(), postedBy: store.currentActor() }, `Posted as ${no}`);
+  store.update('invoices', id, { no, date, dueDate: dueFor(store.get('jobs', inv.jobId), inv.paymentTerm, date), postedAt: new Date().toISOString(), postedBy: store.currentActor() }, `Posted as ${no}`);
   store.setStatus('invoices', id, 'Posted', no);
   return store.get('invoices', id);
 }
 
-export function cancelInvoice(id, reason) { store.setStatus('invoices', id, 'Cancelled', reason); }
+// A cancelled invoice keeps its number; the job is unlinked so a corrected invoice can be raised. Refused once paid.
+export function cancelInvoice(id, reason) {
+  const inv = store.get('invoices', id);
+  if (paymentsFor(id).length) return `${inv.no} has a payment and cannot be cancelled.`;
+  store.setStatus('invoices', id, 'Cancelled', reason);
+  const job = store.get('jobs', inv.jobId);
+  if (job?.invoiceId === id) store.update('jobs', job.id, { invoiceId: '' }, false);
+  return '';
+}
+
+// A draft line marked not fully done may be lowered to match the actual work (with the reason kept).
+export function setRowAmount(invId, index, amount, reason) {
+  const inv = store.get('invoices', invId);
+  if (inv.status !== 'Draft') return;
+  const old = inv.rows[index];
+  const rows = inv.rows.map((r, i) => (i === index ? { ...r, rate: round2(amount), amount: round2(amount), note: reason } : r));
+  store.update('invoices', invId, { rows, ...taxTotals(rows.reduce((t, r) => t + r.amount, 0), inv.taxRate) }, `Line "${old.description.slice(0, 40)}" changed from ${old.amount.toFixed(2)} to ${round2(amount).toFixed(2)}: ${reason}`);
+}
 
 // ---------- Payments ----------
 export const paymentsFor = invId => store.list('payments', p => p.invoiceId === invId).sort((a, b) => a.date.localeCompare(b.date));

@@ -36,6 +36,7 @@ Then open http://localhost:8000.
 - Use the Web / Mobile switch at the top. Technicians work in the Mobile view.
 - Press Ctrl+K to search everything your role can open.
 - Suggested walk-through, part 1: as the operations executive, use "Paste email" to enter an enquiry and assign a technician; then switch to Mobile, log in as that technician, fill in the site report and sign it; the report then appears on the web.
+- Stage samples: besides that enquiry, the sample data has one repair enquiry waiting at every later step, so each step can be tried on its own: an estimate being prepared, quotations waiting for the approver or for Management (over 10,000), approved, sent or rejected, a job to schedule with a part on order, a scheduled job, a technician on site waiting for the office's OK to leave, a draft invoice, an invoice due soon, an overdue part-paid invoice, and a closed job.
 - Part 2: open the inspected enquiry ENQ-…-0003 and click "Create estimate", then "Create quotation" and "Submit for check". Log in as the approver to approve or return it (task bell at the top). Send it, record the customer's acceptance, and schedule the job on the board. Log in as Technician A in the Mobile view to do the job, collect the payment and ask to leave the site; the operations executive confirms in Tasks. Finally mark the job "Completed & documented" in Job Closure.
 
 ## Demo data

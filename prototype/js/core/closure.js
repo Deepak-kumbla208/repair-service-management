@@ -2,9 +2,9 @@
 // "Closed" once the invoice is fully paid (step 12) — whichever of the two comes last closes the job.
 import * as store from './store.js';
 import { labourRow, materialRow } from './costing.js';
-import { balanceOf, paymentsFor } from './billing.js';
+import { balanceOf, paymentsFor, invoiceForJob } from './billing.js';
 
-export const docInvoice = job => (job.invoiceId ? store.get('invoices', job.invoiceId) : null);
+export const docInvoice = job => invoiceForJob(job.id) || (job.invoiceId ? store.get('invoices', job.invoiceId) : null);
 
 // Each linked document with a tick; route opens it on the web.
 export function checklist(job) {

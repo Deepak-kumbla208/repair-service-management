@@ -169,6 +169,19 @@ export function singaporeMasters(t) {
       customer(t, 'CUS-0003', { name: 'Demo Retail Pte Ltd', uen: '', taxRegistered: false, paymentTerm: 'D15', phone: '9123 4567', email: 'shop@demo-retail.example', address: 'Raffles Place',
         contacts: [{ id: `con_${t}_3`, name: 'Shop Manager', designation: 'Shop', mobile: '9123 4567', email: 'shop@demo-retail.example', primary: true }] },
       [{ name: 'Raffles Place shop', address: 'Raffles Place', blockUnit: '#01-12', zone: 'C', shutters: [['RS-1', 'Shop front', 'RS', 4.2, 3, 'm', '']] }], sizeRows),
+      // Made-up customers in the other zones, used by the stage samples (data/seed-demo-flow.js).
+      customer(t, 'CUS-0004', { name: 'Changi Demo Logistics Pte Ltd', uen: '', taxRegistered: true, paymentTerm: 'D30', phone: '9234 5678', email: 'warehouse@changi-demo.example', address: 'Cargo Complex Road, Changi',
+        contacts: [{ id: `con_${t}_4`, name: 'Warehouse Supervisor', designation: 'Warehouse', mobile: '9234 5678', email: 'warehouse@changi-demo.example', primary: true }] },
+      [{ name: 'Changi cargo warehouse', address: 'Cargo Complex Road, Changi', blockUnit: 'Bay 3', zone: 'B',
+        shutters: [['CG-1', 'Loading bay 1', 'SD', 4, 4.5, 'm', ''], ['CG-2', 'Loading bay 2', 'MR', 6, 5, 'm', '600 kg three phase'], ['CG-3', 'Office back door', 'RS', 2.5, 2.5, 'm', '']] }], sizeRows),
+      customer(t, 'CUS-0005', { name: 'Island Demo Chemicals Pte Ltd', uen: '', taxRegistered: true, paymentTerm: 'D15', phone: '9345 6789', email: 'plant@island-demo.example', address: 'Demo Avenue, Jurong Island',
+        contacts: [{ id: `con_${t}_5`, name: 'Plant Engineer', designation: 'Engineering', mobile: '9345 6789', email: 'plant@island-demo.example', primary: true }] },
+      [{ name: 'Jurong Island plant', address: 'Demo Avenue, Jurong Island', zone: 'D', access: 'Security pass needed at the gate',
+        shutters: [['JI-1', 'Store room', 'RS', 3, 3, 'm', ''], ['JI-2', 'Fire exit', 'RS', 8, 6, 'm', ''], ['JI-3', 'Workshop', 'MR', 5, 4, 'm', '500 kg single phase']] }], sizeRows),
+      customer(t, 'CUS-0006', { name: 'Demo Cafe Pte Ltd', uen: '', taxRegistered: false, paymentTerm: 'IMMEDIATE', phone: '9456 7890', email: 'hello@demo-cafe.example', address: 'Demo Street, Tanjong Pagar',
+        contacts: [{ id: `con_${t}_6`, name: 'Cafe Manager', designation: 'Operations', mobile: '9456 7890', email: 'hello@demo-cafe.example', primary: true }] },
+      [{ name: 'Tanjong Pagar cafe', address: 'Demo Street, Tanjong Pagar', blockUnit: '#01-05', zone: 'C',
+        shutters: [['TP-1', 'Shop front', 'RS', 3.5, 2.8, 'm', ''], ['TP-2', 'Side entrance', 'CS', 2, 2.4, 'm', '']] }], sizeRows),
     ],
   };
 }

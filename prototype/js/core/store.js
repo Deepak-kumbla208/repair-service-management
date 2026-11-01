@@ -1,8 +1,8 @@
 // Records in localStorage (one key per collection). Every company-owned record carries tenantId,
 // and every read here is limited to the logged-in company, so screens cannot leak another company's data.
 // Bump the version when the sample data changes, so browsers re-seed (v2: no personal names; v3: enquiry item lines;
-// v4: Stretch 2 sample data, approval rules, helpers, invoice terms).
-const PREFIX = 'rsm.v4.';
+// v4: Stretch 2 sample data, approval rules, helpers, invoice terms; v5: stage samples and three more customers).
+const PREFIX = 'rsm.v5.';
 const cache = new Map();
 let tenant = null;
 let actor = null;
@@ -20,7 +20,16 @@ function load(coll) {
   return cache.get(coll);
 }
 
+// While building the sample data, writes are held in memory and saved once at the end (much faster).
+let holding = false;
+const dirty = new Set();
+export function holdWrites(on) {
+  holding = on;
+  if (!on) { dirty.forEach(c => persist(c)); dirty.clear(); }
+}
+
 function persist(coll) {
+  if (holding) { dirty.add(coll); return; }
   try {
     localStorage.setItem(PREFIX + coll, JSON.stringify(load(coll)));
   } catch (e) {

@@ -4,6 +4,7 @@ import * as store from './core/store.js';
 import * as auth from './core/auth.js';
 import { clearAllMedia } from './core/media.js';
 import { buildSeed } from './data/seed.js';
+import { buildDemoFlow } from './data/seed-demo-flow.js';
 import { renderLogin } from './web/login.js';
 import { renderWebShell, renderNoAccess } from './web/shell.js';
 import { renderPhone } from './mobile/shell.js';
@@ -143,10 +144,17 @@ export function render() {
   });
 }
 
-export async function resetDemo() {
-  store.clearAll();
+// Base sample data, then the stage samples (one enquiry at every step of the money side).
+async function seedAll() {
+  app.innerHTML = '<div class="empty" style="padding-top:30vh">Preparing the sample data…</div>';
   await clearAllMedia().catch(() => {});
   store.writeSeed(buildSeed());
+  await buildDemoFlow().catch(e => console.error('Stage samples could not be built', e));
+}
+
+export async function resetDemo() {
+  store.clearAll();
+  await seedAll();
   auth.restore();
   replaceRoute('login');
   render();
@@ -161,10 +169,7 @@ export function switchView(view) {
 
 // ---------- Start ----------
 store.dropOldVersions();
-if (!store.isSeeded()) {
-  clearAllMedia().catch(() => {});
-  store.writeSeed(buildSeed());
-}
+if (!store.isSeeded()) await seedAll();
 auth.restore();
 window.addEventListener('hashchange', render);
 document.addEventListener('keydown', e => {

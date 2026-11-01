@@ -5,8 +5,8 @@ import * as store from './store.js';
 import * as auth from './auth.js';
 import { findSite, withCompany } from './lookups.js';
 import { estimateSummary, reviseEstimate, txDefaults, companyTax } from './estimates.js';
-import { startApproval, levelsFor, openLevel, closeTask, cancelTasksFor, openTask } from './workflow.js';
-import { createJobFromQuotation } from './jobs.js';
+import { startApproval, levelsFor, openLevel, closeTask, cancelTasksFor } from './workflow.js';
+import { createJobFromQuotation, openTermTask } from './jobs.js';
 
 const isoDate = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 export const todayIso = () => isoDate(new Date());
@@ -31,13 +31,18 @@ export function rowsFromEstimate(est) {
 
 export const quotationsOf = no => store.list('quotations', q => q.no === no).sort((a, b) => a.rev - b.rev);
 export const currentQuotation = enqId => store.list('quotations', q => q.enquiryId === enqId && q.status !== 'Superseded').sort((a, b) => b.rev - a.rev)[0] || null;
+// The newest revision whatever its status (gives the number and the next revision).
+export const lastQuotation = enqId => store.list('quotations', q => q.enquiryId === enqId).sort((a, b) => b.rev - a.rev)[0] || null;
+const CLOSED = ['Accepted', 'Rejected'];
 
-// Create the quotation (or its next revision) from an estimate revision.
+// Create the quotation (or its next revision) from an estimate revision. Returns null when the enquiry's
+// quotation is already accepted or rejected (an accepted quotation is never replaced).
 export function createFromEstimate(estId) {
   const est = store.get('estimates', estId);
   if (est.quotationId) return store.get('quotations', est.quotationId);
   const enq = store.get('enquiries', est.enquiryId);
-  const prev = currentQuotation(est.enquiryId);
+  const prev = lastQuotation(est.enquiryId);
+  if (prev && CLOSED.includes(prev.status)) return null;
   const customer = store.get('customers', est.customerId);
   const { site } = findSite(est.siteId);
   const { texts, validity } = quoteTerms();
@@ -69,18 +74,21 @@ function supersede(q, note) {
 // Wording-only revision (prices unchanged): a new revision with the same rows, back to the counter-check.
 export function reviseWording(id) {
   const cur = store.get('quotations', id);
+  if (CLOSED.includes(cur.status) || cur.status === 'Superseded') return cur;
   const copy = structuredClone(cur);
   ['id', 'tenantId', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'status', 'statusHistory', 'sentAt', 'sentVia', 'acceptance'].forEach(k => delete copy[k]);
   const date = todayIso();
   const q = store.insert('quotations', { ...copy, rev: cur.rev + 1, prevId: cur.id, date, validUntil: addDays(date, cur.validDays), termApproved: false, approvals: [], returnNote: null },
     { status: 'Draft', note: `${cur.no} Rev ${cur.rev + 1} (wording)` });
   supersede(cur, `Revised as Rev ${cur.rev + 1}`);
+  store.update('estimates', cur.estimateId, { quotationId: q.id }, false);
   return q;
 }
 
 export const canEdit = q => EDITABLE.includes(q.status) && auth.can('quotation', 'edit');
 export function saveWording(id, patch) {
   const q = store.get('quotations', id);
+  if (!EDITABLE.includes(q.status)) return q;
   const next = { ...patch };
   if (patch.date) next.validUntil = addDays(patch.date, q.validDays);
   return store.update('quotations', id, next, false);
@@ -104,6 +112,7 @@ function approveFinal(id) {
   const q = store.get('quotations', id);
   store.update('quotations', id, { termApproved: q.paymentTerm !== 'IMMEDIATE', approvedAt: new Date().toISOString() }, false);
   store.setStatus('quotations', id, 'Approved', 'Counter-checked; ready to send');
+  store.setStatus('enquiries', q.enquiryId, 'Quotation approved', `${q.no} Rev ${q.rev} ready to send`);
   return store.get('quotations', id);
 }
 
@@ -111,7 +120,9 @@ function approveFinal(id) {
 // the Operations Executive with the comment (shown on the quotation and the estimate).
 export function decideQuotation(taskId, decision, comment = '') {
   const t = closeTask(taskId, decision, comment);
+  if (!t) return null;
   const q = store.get('quotations', t.docId);
+  if (q.status !== 'Submitted') return q;
   const entry = { level: t.level, role: t.roleName, by: store.currentActor(), at: t.doneAt, decision, comment };
   store.update('quotations', q.id, { approvals: [...(q.approvals || []), entry] }, `${decision === 'return' ? 'Returned' : 'Approved'} at level ${t.level}${comment ? `: ${comment}` : ''}`);
   if (decision === 'return') {
@@ -132,7 +143,9 @@ export const canSend = q => ['Approved', 'Sent'].includes(q.status) && auth.can(
 export function markSent(id, via) {
   const q = store.get('quotations', id);
   if (!['Approved', 'Sent'].includes(q.status)) return q;
-  store.update('quotations', id, { sentAt: new Date().toISOString(), sentVia: via, sentBy: store.currentActor() }, `${q.no} Rev ${q.rev} sent by ${via}`);
+  // The first send is the date of issue: the validity days count from it, not from the draft date.
+  const issue = q.sentAt ? {} : { date: todayIso(), validUntil: addDays(todayIso(), q.validDays) };
+  store.update('quotations', id, { ...issue, sentAt: new Date().toISOString(), sentVia: via, sentBy: store.currentActor() }, `${q.no} Rev ${q.rev} sent by ${via}`);
   store.setStatus('quotations', id, 'Sent', via);
   store.update('enquiries', q.enquiryId, { stage: 'Quoted' }, false);
   store.setStatus('enquiries', q.enquiryId, 'Quoted', `${q.no} Rev ${q.rev}`);
@@ -163,10 +176,7 @@ export function accept(id, { method, poNo, poDate, contact, attachments = [], pa
   const job = createJobFromQuotation(store.get('quotations', id));
   store.update('quotations', id, { jobId: job.id }, false);
   // A term changed at acceptance needs its own approval before scheduling (flow step 6).
-  if (job.paymentTerm !== 'IMMEDIATE' && !job.termApproved) {
-    openTask({ kind: 'approval', docType: 'job', docId: job.id, docNo: job.no, title: `Payment term for ${job.no}`, customer: job.customer, amount: q.total,
-      level: 1, roleCode: 'APR', roleName: store.findOne('roles', r => r.code === 'APR')?.name || 'Approver', rules: [{ code: 'PAY_TERM', name: 'Payment term not immediate' }] });
-  }
+  if (job.paymentTerm !== 'IMMEDIATE' && !job.termApproved) openTermTask(job);
   return { partial: false, quotation: store.get('quotations', id), job };
 }
 
@@ -177,10 +187,10 @@ export function reject(id, reason) {
   store.setStatus('enquiries', q.enquiryId, 'Lost', reason || 'Quotation rejected');
 }
 
-// Quotations past their valid-until date turn "Expired"; Revise renews them with a new date.
+// Sent quotations past their valid-until date turn "Expired"; Revise renews them with a new date.
 export function refreshExpiry() {
   const t = todayIso();
-  store.list('quotations', q => ['Approved', 'Sent'].includes(q.status) && q.validUntil < t)
+  store.list('quotations', q => q.status === 'Sent' && q.validUntil < t)
     .forEach(q => store.setStatus('quotations', q.id, 'Expired', `Valid until ${q.validUntil}`));
 }
 

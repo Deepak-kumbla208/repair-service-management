@@ -6,7 +6,7 @@ import { quickCreate, addSite } from './customers.js';
 import { assignTechnician } from './inspections.js';
 
 export const ENQ_STATUSES = ['Waiting for inspection', 'Inspection assigned', 'Report in progress', 'Inspected', 'BOQ study', 'Waiting for estimate',
-  'Estimating', 'Quotation in check', 'Quoted', 'Won', 'Completed', 'Closed', 'Lost', 'Cancelled'];
+  'Estimating', 'Quotation in check', 'Quotation approved', 'Quoted', 'Won', 'Completed', 'Closed', 'Lost', 'Cancelled'];
 
 // Enquiry Type decides the next step: Repair goes to site inspection; AMC and General Servicing go to BOQ study
 // (site inspection optional, decided by the "Site Inspection" Yes / No column).
@@ -116,7 +116,7 @@ export function laterColumns(e) {
   else if (sent) jobStatus = 'PENDING';
   const wc = !job || job.status === 'Cancelled' ? '' : job.workDone?.signedAt ? 'COMPLETED' : ['On the way', 'On site'].includes(job.status) ? 'IN_PROGRESS' : 'NOT_STARTED';
   return {
-    quotationDate: sent ? day(sent.sentAt) : '', quotationStatus: label('QUOT_STATUS', sent ? 'QUOTED' : 'NOT_QUOTED'), quotationValue: sent ? money(q.total) : '',
+    quotationDate: sent ? day(sent.sentAt) : '', quotationStatus: label('QUOT_STATUS', sent ? 'QUOTED' : 'NOT_QUOTED'), quotationValue: sent ? money(sent.total) : '',
     jobStatus: label('JOB_STATUS', jobStatus), workCompletion: label('WORK_COMPLETION', wc), workCompletionDate: day(job?.workDone?.signedAt),
     invoiceDate: inv ? day(inv.date) : '', invoiceNo: inv?.no || '', invoiceValue: inv ? money(inv.total) : '',
     paymentReceived: inv ? label('PAYMENT_RECEIVED', paid <= 0 ? 'NOT_PAID' : paid + 0.004 >= inv.total ? 'PAID' : 'PARTLY') : '',

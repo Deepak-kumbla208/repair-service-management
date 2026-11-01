@@ -6,7 +6,7 @@ import * as auth from '../core/auth.js';
 import { html, $, fmtDate, pill, toast, openModal, readForm, chipGroup, confirmBox, dateInput } from '../core/ui.js';
 import { vsLabel, vsOptions } from '../core/lookups.js';
 import { saveBlob } from '../core/media.js';
-import { canEditInvoice, postInvoice, removeRow, cancelInvoice, balanceOf, paidAmount, paymentStatus, paymentsFor, recordPayment, followUpsFor, addFollowUp } from '../core/billing.js';
+import { canEditInvoice, postInvoice, removeRow, cancelInvoice, setRowAmount, balanceOf, paidAmount, paymentStatus, paymentsFor, recordPayment, followUpsFor, addFollowUp } from '../core/billing.js';
 import { invoiceSheet } from './print-docs.js';
 import { renderDocList } from './doc-list.js';
 import { render } from '../app.js';
@@ -98,7 +98,8 @@ export function renderInvoice(el, id) {
           ${inv.status === 'Posted' ? html`${row('Paid', m2(paidAmount(inv)))}${row('Balance', html`<b>${m2(balanceOf(inv))}</b>`)}` : ''}
           <div class="form-sec">Lines</div>
           ${inv.rows.map((r, i) => html`<div class="field"><div class="field-label">Line ${i + 1}</div><div class="ro">${r.description} · <b>${m2(r.amount)}</b>
-            ${r.flag ? html`<br><span class="tag">${r.flag}</span>${edit && inv.rows.length > 1 ? html` <button class="btn link small" data-rm="${i}">Remove this line</button>` : ''}` : ''}</div></div>`)}
+            ${r.flag ? html`<br><span class="tag">${r.flag}</span>${edit && inv.rows.length > 1 ? html` <button class="btn link small" data-rm="${i}">Remove this line</button>` : ''}` : ''}
+            ${edit && (r.flag || inv.flagNote) ? html` <button class="btn link small" data-amt="${i}">Change amount</button>` : ''}${r.note ? html`<br><span class="small muted">Changed: ${r.note}</span>` : ''}</div></div>`)}
           ${pays.length ? html`<div class="form-sec">Payments</div>${pays.map(p => row(p.no, `${fmtDate(p.date)} · ${vsLabel('PAYMENT_METHOD', p.method)} · ${m2(p.amount)}${p.reference ? ` · ${p.reference}` : ''}${p.via === 'phone' ? ' · collected on site' : ''}`))}` : ''}
           ${fus.length ? html`<div class="form-sec">Follow-ups</div>${fus.map(f => row(fmtDate(f.at), `${f.method} · ${f.note}${f.nextDate ? ` · next ${fmtDate(f.nextDate)}` : ''} · ${auth.userName(f.by)}`))}` : ''}
         </div>
@@ -111,10 +112,25 @@ export function renderInvoice(el, id) {
     const p = postInvoice(inv.id); toast(`Posted as ${p.no}`); render();
   });
   el.querySelectorAll('[data-rm]').forEach(b => b.addEventListener('click', () => { removeRow(inv.id, +b.dataset.rm); render(); }));
+  el.querySelectorAll('[data-amt]').forEach(b => b.addEventListener('click', () => {
+    const r = inv.rows[+b.dataset.amt];
+    openModal({
+      title: 'Change the amount to match the work done',
+      body: html`<div class="form-lines"><div class="field"><label>Line</label><div class="ro">${r.description}</div></div>
+        <div class="field"><label>Quoted</label><div class="ro">${m2(r.amount)}</div></div>
+        <div class="field"><label>New amount</label><input type="number" step="0.01" name="amount" value="${r.amount.toFixed(2)}"></div>
+        <div class="field"><label>Reason</label><input type="text" name="reason" placeholder="e.g. RS-2 springs not replaced"></div></div>`,
+      actions: [{ label: 'Cancel' }, { label: 'Change', kind: 'primary', onClick: m => {
+        const d = readForm(m);
+        if (!(Number(d.amount) >= 0) || !d.reason) { toast('Enter the new amount and the reason', 'bad'); return false; }
+        setRowAmount(inv.id, +b.dataset.amt, Number(d.amount), d.reason); render();
+      } }],
+    });
+  }));
   $('#pay', el)?.addEventListener('click', () => paymentDialog(inv, () => render()));
   $('#fu', el)?.addEventListener('click', () => followUpDialog(inv, () => render()));
   $('#cancel', el)?.addEventListener('click', () => openModal({
     title: `Cancel ${inv.no}`, body: html`<div class="form-lines"><div class="field"><label>Reason</label><input type="text" name="reason"></div><p class="small" style="margin-top:8px">The number ${inv.no} is kept and shown as cancelled.</p></div>`,
-    actions: [{ label: 'Keep it' }, { label: 'Cancel invoice', kind: 'danger', onClick: b => { cancelInvoice(inv.id, readForm(b).reason || 'Cancelled'); render(); } }],
+    actions: [{ label: 'Keep it' }, { label: 'Cancel invoice', kind: 'danger', onClick: b => { const err = cancelInvoice(inv.id, readForm(b).reason || 'Cancelled'); toast(err || `${inv.no} cancelled; the job can raise a corrected invoice`, err ? 'bad' : ''); render(); } }],
   }));
 }

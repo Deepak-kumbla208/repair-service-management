@@ -7,7 +7,7 @@ import { html, $, $$, go, toast, openModal, fmtDate, fmtTime, chipGroup, readFor
 import { zoneLabel, vsLabel, vsOptions } from '../core/lookups.js';
 import { hydrateImages, removeBlob } from '../core/media.js';
 import { savePhotos, signaturePad, bindMics } from '../core/capture.js';
-import { seesJob, onMyWay, checkIn, workDoneFor, saveJob, completeWorkDone, workDoneProblems, requestLeave, checkOut } from '../core/jobs.js';
+import { seesJob, onMyWay, checkIn, workDoneFor, saveJob, completeWorkDone, requestLeave, checkOut } from '../core/jobs.js';
 import { invoiceForJob, balanceOf, recordPayment, paymentsFor } from '../core/billing.js';
 import { RATINGS } from '../web/print-docs.js';
 
@@ -230,7 +230,7 @@ export function mRepairStep(page, id, key) {
   });
   $('#ask', foot)?.addEventListener('click', () => {
     const now = store.get('jobs', id);
-    const problems = workDoneProblems(now).filter(p => !p.startsWith('Check in'));
+    const problems = now.workDone?.signedAt ? [] : ['Finish the sign-off first (step "Sign-off": Finish, customer signed).'];
     if (problems.length) { toast(problems[0], 'bad'); return; }
     requestLeave(id); toast('Request sent to the office'); repaint();
   });

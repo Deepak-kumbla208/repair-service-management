@@ -23,11 +23,11 @@ function jobCard(j, sug) {
   const blocked = !j.termApproved;
   const on = state.sel === j.id;
   return html`<div class="jobc ${zc(j.zoneId)} ${on ? 'on' : ''}" data-pick="${j.id}" style="${on ? 'outline:2px solid var(--blue-500)' : ''}">
-    <div class="row"><b>${j.no}</b><span class="zone-chip">${zoneCode(j.zoneId)}</span><span class="grow"></span>${blocked ? html`<span class="pill amber">Waiting for Approver</span>` : html`<span class="pill blue">To schedule</span>`}</div>
+    <div class="row"><b>${j.no}</b><span class="zone-chip">${zoneCode(j.zoneId)}</span><span class="grow"></span>${blocked ? (j.termNote ? html`<span class="pill red">Term returned</span>` : html`<span class="pill amber">Waiting for Approver</span>`) : html`<span class="pill blue">To schedule</span>`}</div>
     <div class="strong" style="margin-top:3px">${j.customer} · ${j.site}</div>
     <div class="l"><span class="k">Work</span><span>${j.tags.join(', ') || j.lines.length + ' line(s)'} · ${j.workHours} h + ${j.travelHours} h travel</span></div>
     <div class="l"><span class="k">Crew</span><span>${j.crew.label}</span></div>
-    <div class="l"><span class="k">Payment</span><span>${vsLabel('PAYMENT_TERMS', j.paymentTerm)}${j.paymentTerm === 'IMMEDIATE' ? ' · invoice raised when scheduled' : blocked ? ' · 🔒 the Approver must approve first' : ' · approved'}</span></div>
+    <div class="l"><span class="k">Payment</span><span>${vsLabel('PAYMENT_TERMS', j.paymentTerm)}${j.paymentTerm === 'IMMEDIATE' ? ' · invoice raised when scheduled' : blocked ? (j.termNote ? ' · returned: open the job to change it' : ' · 🔒 the Approver must approve first') : ' · approved'}</span></div>
     ${j.parts.length ? html`<ul class="parts">${j.parts.map(p => html`<li><label class="check"><input type="checkbox" data-part="${j.id}|${p.key}" ${p.ready ? 'checked' : ''} ${auth.can('job', 'edit') ? '' : 'disabled'}> ${p.qty} × ${p.name}</label>
       <span class="muted small">${p.ready ? 'in stock' : `order · ${p.leadDays} days`}</span></li>`)}</ul>
       <div class="small muted">Parts ready from <b>${ready}</b></div>` : ''}
@@ -45,7 +45,7 @@ function calendar(days, sel, sug) {
       ${days.map(d => {
         const ds = dstr(d);
         const items = bookings(t.id, ds);
-        const free = sel && freeStart(t.id, ds, jobDuration(sel), sel.id) != null && ds >= earliestDate(sel) && ds > today;
+        const free = sel && freeStart(t.id, ds, jobDuration(sel), sel.id) != null && ds >= earliestDate(sel) && ds >= today;
         const isSug = sug && sug.technicianId === t.id && sug.date === ds;
         return html`<div class="day ${free ? 'free' : ''}" ${free ? html`data-slot="${t.id}|${ds}" title="Place ${sel.no} here"` : ''}>
           ${items.map(b => html`<a class="blk ${zc(b.zoneId)}" href="#/${b.kind === 'job' ? `jobs/${b.id}` : `inspections/${b.id}`}" style="top:${(b.from - DAY0) * PX}px;height:${Math.max(28, (b.to - b.from) * PX - 2)}px">

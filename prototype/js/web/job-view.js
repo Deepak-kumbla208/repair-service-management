@@ -3,12 +3,12 @@
 // photos. Also the list of all jobs.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, fmtDate, fmtDateTime, pill, toast, openModal, readForm, dateInput } from '../core/ui.js';
+import { html, $, go, fmtDate, fmtDateTime, pill, toast, openModal, readForm, dateInput } from '../core/ui.js';
 import { zoneLabel, empName, vsLabel } from '../core/lookups.js';
 import { hydrateImages } from '../core/media.js';
-import { earliestDate, setPartReady, cancelJob, confirmLeave, seesJob, fmtHour, suggestSlot, workCompletion } from '../core/jobs.js';
+import { earliestDate, setPartReady, cancelJob, confirmLeave, seesJob, fmtHour, suggestSlot, workCompletion, canConfirmLeave, changeJobTerm } from '../core/jobs.js';
 import { openTaskFor } from '../core/workflow.js';
-import { balanceOf } from '../core/billing.js';
+import { balanceOf, paymentsFor, canRaiseInvoice, createInvoice } from '../core/billing.js';
 import { RATINGS } from './print-docs.js';
 import { scheduleDialog } from './job-board.js';
 import { openWorkflow, activityHtml } from './enquiry-view.js';
@@ -60,12 +60,15 @@ export function renderJob(el, id) {
         ${w ? html`<a class="btn" href="#/jobs/${j.id}/workdone">⎙ Work Done form</a>` : ''}
         ${inv ? html`<a class="btn" href="#/invoices/${inv.id}">${inv.no || 'Draft invoice'}</a>` : ''}
         ${w?.signedAt && auth.can('closure', 'view') ? html`<a class="btn" href="#/closure/${j.id}">Job closure</a>` : ''}
-        ${edit && ['To schedule', 'Scheduled'].includes(j.status) ? html`<button class="btn danger" id="cancel">Cancel job</button>` : ''}
+        ${canRaiseInvoice(j) ? html`<button class="btn primary" id="mkInv">Create invoice</button>` : ''}
+        ${edit && ['To schedule', 'Scheduled'].includes(j.status) && !(inv && paymentsFor(inv.id).length) ? html`<button class="btn danger" id="cancel">Cancel job</button>` : ''}
         ${edit && j.termApproved && ['To schedule', 'Scheduled'].includes(j.status) ? html`<button class="btn primary" id="sched">${j.status === 'To schedule' ? 'Schedule' : 'Move'}</button>` : ''}</div>
     </div>
     ${leaveTask ? html`<div class="note bad" style="margin-bottom:10px;display:flex;gap:10px;align-items:center"><span class="grow"><b>${empName(j.technicianId)} asks to leave the site</b> (since ${fmtDateTime(leaveTask.createdAt)}). ${w?.signedAt ? 'The Work Done form is signed.' : 'The Work Done form is not signed yet.'}</span>
-      ${auth.hasTasks('web') ? html`<button class="btn primary small" id="okLeave">✓ OK to leave</button>` : ''}</div>` : ''}
+      ${canConfirmLeave() ? html`<button class="btn primary small" id="okLeave">✓ OK to leave</button>` : ''}</div>` : ''}
     ${termTask ? html`<div class="note warn" style="margin-bottom:10px">The payment term ${vsLabel('PAYMENT_TERMS', j.paymentTerm)} is waiting for the Approver; scheduling is locked until then.</div>` : ''}
+    ${!termTask && !j.termApproved && j.termNote ? html`<div class="note bad" style="margin-bottom:10px;display:flex;gap:10px;align-items:center"><span class="grow"><b>The Approver returned the payment term ${vsLabel('PAYMENT_TERMS', j.paymentTerm)}:</b> ${j.termNote}</span>
+      ${edit ? html`<button class="btn small" id="termNow">Change to Immediate</button><button class="btn small" id="termAgain">Ask the Approver again</button>` : ''}</div>` : ''}
     <div class="e2">
       <div class="props form-lines">
         <div class="form-sec">Customer</div>
@@ -101,8 +104,11 @@ export function renderJob(el, id) {
   el.querySelectorAll('[data-part]').forEach(cb => cb.addEventListener('change', () => { setPartReady(j.id, cb.dataset.part, cb.checked); render(); }));
   $('#sched', el)?.addEventListener('click', () => { const sg = suggestSlot(j); scheduleDialog(el, j, j.start ? { technicianId: j.technicianId, date: dateInput(new Date(j.start)), start: new Date(j.start).getHours() + new Date(j.start).getMinutes() / 60 } : sg || {}); });
   $('#okLeave', el)?.addEventListener('click', () => { confirmLeave(leaveTask.id); toast(`${empName(j.technicianId)} may leave the site`); render(); });
+  $('#termNow', el)?.addEventListener('click', () => { changeJobTerm(j.id, 'IMMEDIATE'); toast('Payment term changed to Immediate: the job can be scheduled'); render(); });
+  $('#termAgain', el)?.addEventListener('click', () => { changeJobTerm(j.id, j.paymentTerm); toast('Sent to the Approver again'); render(); });
+  $('#mkInv', el)?.addEventListener('click', () => { const ni = createInvoice(j.id, { post: false, note: 'raised again from the job' }); go(`invoices/${ni.id}`); });
   $('#cancel', el)?.addEventListener('click', () => openModal({
     title: `Cancel ${j.no}`, body: html`<div class="form-lines"><div class="field"><label>Reason</label><input type="text" name="reason"></div>${inv?.status === 'Posted' ? html`<p class="small" style="margin-top:8px">${inv.no} is cancelled too. It keeps its number, so the invoice series has no gap.</p>` : ''}</div>`,
-    actions: [{ label: 'Keep the job' }, { label: 'Cancel the job', kind: 'danger', onClick: b => { cancelJob(j.id, readForm(b).reason || 'Cancelled'); toast(`${j.no} cancelled`); render(); } }],
+    actions: [{ label: 'Keep the job' }, { label: 'Cancel the job', kind: 'danger', onClick: b => { const err = cancelJob(j.id, readForm(b).reason || 'Cancelled'); toast(err || `${j.no} cancelled`, err ? 'bad' : ''); render(); } }],
   }));
 }

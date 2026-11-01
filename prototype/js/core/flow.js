@@ -63,6 +63,11 @@ export function stagesFor(enq) {
   if (est.status === 'Draft') set('estimation', { state: 'now', status: 'Revision being prepared' });
   if (!qDone) return steps;
 
+  if (job?.status === 'Cancelled') {
+    set('job', { doc: job.no, route: `jobs/${job.id}`, status: 'Cancelled', state: 'skip' });
+    steps.slice(steps.indexOf(by('job')) + 1).forEach(s => { s.state = 'skip'; });
+    return steps;
+  }
   const jobDone = job && (job.workDone?.signedAt || ['Completed & documented', 'Closed'].includes(job.status));
   set('job', { doc: job?.no || '', route: job ? `jobs/${job.id}` : null, status: job ? job.status : '', state: jobDone ? 'done' : 'now' });
   if (inv) {

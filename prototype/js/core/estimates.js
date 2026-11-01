@@ -4,6 +4,7 @@ import * as store from './store.js';
 import * as auth from './auth.js';
 import { findSite, zones, productName, withCompany } from './lookups.js';
 import { summarize, shutterLabour, hourlyRate, otRate, round2 } from './costing.js';
+import { cancelTasksFor } from './workflow.js';
 
 const rid = () => store.uid('r_');
 const pad = n => String(n).padStart(2, '0');
@@ -127,13 +128,32 @@ export function createEstimate(enqId) {
 }
 
 export const canEdit = est => est.status === 'Draft' && auth.can('estimation', 'edit');
-export const saveEstimate = (id, patch) => store.update('estimates', id, patch, false);
+// Saves only the estimate's content, and only while it is a draft: a late autosave from the page can never undo
+// "Create quotation" (status, quotation link) or edit a quoted revision.
+const CONTENT = ['header', 'costingLevel', 'sharedCosts', 'sharedLabel', 'overheads', 'marginBasis', 'marginPct', 'shutters', 'lines', 'labour', 'transport', 'materials', 'equipment'];
+export function saveEstimate(id, patch) {
+  const cur = store.get('estimates', id);
+  if (!cur || cur.status !== 'Draft') return cur;
+  const p = {};
+  CONTENT.forEach(k => { if (k in patch) p[k] = patch[k]; });
+  return store.update('estimates', id, p, false);
+}
+// The enquiry's live quotation revision (not superseded).
+const liveQuotation = enqId => store.list('quotations', q => q.enquiryId === enqId && q.status !== 'Superseded').sort((a, b) => b.rev - a.rev)[0] || null;
+export const CLOSED_QUOTE = ['Accepted', 'Rejected'];
+// Revise is offered while the live quotation is still open (not accepted or rejected).
+export const canRevise = est => {
+  const q = liveQuotation(est.enquiryId);
+  return est.status === 'Quoted' && auth.can('estimation', 'edit') && !!q && !CLOSED_QUOTE.includes(q.status);
+};
 export const estimateSummary = est => summarize(est, zones());
 
 // Revise: Rev n+1 as a new draft; the old revision is kept (Superseded). without: line keys to drop
 // (partial acceptance), with their rows; shared costs are then spread over the remaining lines.
 export function reviseEstimate(id, { without = [], note = '' } = {}) {
   const cur = store.get('estimates', id);
+  const live = liveQuotation(cur.enquiryId);
+  if (live && CLOSED_QUOTE.includes(live.status)) return null;
   const copy = structuredClone(cur);
   ['id', 'tenantId', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'status', 'statusHistory'].forEach(k => delete copy[k]);
   if (without.length) {
@@ -143,9 +163,16 @@ export function reviseEstimate(id, { without = [], note = '' } = {}) {
     ['labour', 'materials', 'transport', 'equipment'].forEach(k => { copy[k] = copy[k].filter(r => !drop(r)); });
     copy.header = { ...copy.header, description: copy.lines.map(l => l.description).join('; ') };
   }
-  const next = store.insert('estimates', { ...copy, rev: cur.rev + 1, prevId: cur.id, quotationId: '', returnNote: without.length ? null : cur.returnNote, header: { ...copy.header, date: today() } },
+  // The Approver's comment travels only when the live quotation was returned.
+  const returnNote = !without.length && live?.status === 'Returned' ? cur.returnNote : null;
+  const next = store.insert('estimates', { ...copy, rev: cur.rev + 1, prevId: cur.id, quotationId: '', returnNote, header: { ...copy.header, date: today() } },
     { status: 'Draft', note: `${cur.no} Rev ${cur.rev + 1}${note ? ` · ${note}` : ''}` });
   store.setStatus('estimates', cur.id, 'Superseded', `Revised as Rev ${cur.rev + 1}`);
+  // The open quotation is replaced by the coming revision: it can no longer be approved, sent or accepted.
+  if (live && live.status !== 'Superseded') {
+    cancelTasksFor('quotation', live.id, `Estimate revised as Rev ${cur.rev + 1}`);
+    store.setStatus('quotations', live.id, 'Superseded', `Estimate revised as Rev ${cur.rev + 1}`);
+  }
   store.setStatus('enquiries', cur.enquiryId, 'Estimating', `${cur.no} Rev ${cur.rev + 1}`);
   return next;
 }

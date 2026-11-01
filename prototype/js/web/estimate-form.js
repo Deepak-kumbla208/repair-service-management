@@ -5,7 +5,7 @@ import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, $$, go, on, debounce, fmtNum, pill, toast, openModal, chipGroup } from '../core/ui.js';
 import { vsOptions, zoneLabel } from '../core/lookups.js';
-import { estimateSummary, canEdit, saveEstimate, reviseEstimate, estimateProblems, revisions } from '../core/estimates.js';
+import { estimateSummary, canEdit, saveEstimate, reviseEstimate, estimateProblems, revisions, canRevise as mayRevise } from '../core/estimates.js';
 import { createFromEstimate } from '../core/quotations.js';
 import { TABS, tabHtml, newRow, applyChange } from './estimate-tabs.js';
 import { openWorkflow } from './enquiry-view.js';
@@ -56,7 +56,7 @@ export function renderEstimate(el, id) {
   const revs = revisions(est.no);
   const newer = revs.find(r => r.rev > est.rev);
   let tab = sessionStorage.getItem(TAB_KEY) || 'summary';
-  const canRevise = est.status === 'Quoted' && !newer && auth.can('estimation', 'edit') && q && !['Accepted', 'Rejected'].includes(q.status);
+  const canRevise = !newer && mayRevise(est);
   const rep = est.reportId ? store.get('siteReports', est.reportId) : null;
 
   el.innerHTML = String(html`<div class="page" style="max-width:1500px">
@@ -134,11 +134,13 @@ export function renderEstimate(el, id) {
     const problems = estimateProblems(est);
     if (problems.length) { openModal({ title: 'Not ready for a quotation', body: html`<ul>${problems.map(p => html`<li>${p}</li>`)}</ul>`, actions: [{ label: 'OK', kind: 'primary' }] }); return; }
     const nq = createFromEstimate(est.id);
+    if (!nq) { toast('The quotation of this enquiry is already accepted or rejected', 'bad'); return; }
     toast(`${nq.no} Rev ${nq.rev} created from ${est.no} Rev ${est.rev}`);
     go(`quotations/${nq.id}`);
   });
   const revise = () => {
     const next = reviseEstimate(est.id);
+    if (!next) { toast('The quotation is already accepted or rejected', 'bad'); return; }
     toast(`${est.no} Rev ${next.rev} created. Change the prices, then create the quotation revision.`);
     go(`estimates/${next.id}`);
   };

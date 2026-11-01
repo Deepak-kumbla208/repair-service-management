@@ -84,7 +84,7 @@ export function fmtNum(n, dp = 2) {
 const TONES = {
   amber: ['Waiting for inspection', 'To assign', 'Draft', 'Report in progress', 'Returned', 'To schedule', 'Waiting for estimate', 'Work done'],
   blue: ['Inspection assigned', 'Assigned', 'In counter-check', 'Quotation in check', 'Sent', 'Quoted', 'Scheduled', 'On the way', 'On site', 'Open'],
-  green: ['Inspected', 'Report submitted', 'Submitted', 'Active', 'Registered', 'Yes', 'Approved', 'Accepted', 'Won', 'Completed', 'Completed & documented', 'Closed', 'Posted', 'Done'],
+  green: ['Inspected', 'Report submitted', 'Submitted', 'Active', 'Registered', 'Yes', 'Approved', 'Quotation approved', 'Accepted', 'Won', 'Completed', 'Completed & documented', 'Closed', 'Posted', 'Done'],
   purple: ['BOQ study', 'Estimating'],
   red: ['Cancelled', 'Inactive', 'Over target', 'Rejected', 'Expired', 'Lost'],
 };

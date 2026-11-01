@@ -13,6 +13,7 @@ import { saveNewEnquiry } from './enquiries.js';
 import { makeShutter, nextShutterTag, addShutters } from './customers.js';
 import { openTask, closeTask, cancelTasksFor } from './workflow.js';
 import { createContractInvoice, balanceOf } from './billing.js';
+import { fmtDate } from './ui.js';
 
 const pad = n => String(n).padStart(2, '0');
 const dstr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -191,7 +192,7 @@ export function renewContract(id) {
   const enq = saveNewEnquiry({
     receivedAt: new Date().toISOString(), channel: 'OTHER', channelOther: `Renewal of ${c.no}`, type: 'AMC', enquiryStatus: 'WARM', priority: 'MEDIUM', siteInspection: 'NO',
     recordedBy: store.currentActor(), remarks: '', attachments: [], customerId: c.customerId, contactId: c.contactId, contactName: c.contact, mobile: c.phone, email: c.email,
-    siteId: c.sites[0].siteId, lines: [{ itemRef: '', itemName: '', qty: null, description: `Renewal of ${c.no} (${c.sites.map(s => s.name).join(', ')}), ends ${c.end}` }],
+    siteId: c.sites[0].siteId, lines: [{ itemRef: '', itemName: '', qty: null, description: `Renewal of ${c.no} (${c.sites.map(s => s.name).join(', ')}), ends ${fmtDate(c.end)}` }],
   });
   store.update('enquiries', enq.id, { renewsContractId: c.id, zoneId: enq0?.zoneId || enq.zoneId }, false);
   const est = createEstimate(enq.id, { from: c });
@@ -238,9 +239,9 @@ export function refreshAmc() {
       cur = store.get('contracts', c.id);
     }
     if (cur.renewal.reminderDate && t >= cur.renewal.reminderDate && !cur.renewal.taskId && !cur.renewal.enquiryId && !cur.renewal.renewedById && !cur.renewal.declined) {
-      const task = openTask({ kind: 'renewal', docType: 'contract', docId: c.id, docNo: c.no, title: `Renew ${c.no} (ends ${cur.end})`, customer: c.customer, amount: c.total,
+      const task = openTask({ kind: 'renewal', docType: 'contract', docId: c.id, docNo: c.no, title: `Renew ${c.no} (ends ${fmtDate(cur.end)})`, customer: c.customer, amount: c.total,
         level: 1, roleCode: 'OPS', roleName: store.findOne('roles', r => r.code === 'OPS')?.name || 'Operations Executive', rules: [] });
-      store.update('contracts', c.id, { renewal: { ...cur.renewal, taskId: task.id } }, `Renewal reminder: ends ${cur.end}`);
+      store.update('contracts', c.id, { renewal: { ...cur.renewal, taskId: task.id } }, `Renewal reminder: ends ${fmtDate(cur.end)}`);
     }
     if (t > cur.end) {
       store.setStatus('contracts', c.id, cur.renewal.renewedById ? 'Renewed' : 'Expired', `Ended ${cur.end}`);

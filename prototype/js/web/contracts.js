@@ -11,6 +11,7 @@ import { postInvoice, postContractDrafts, balanceOf, paymentStatus } from '../co
 import { isOverdue, visitDate } from '../core/visits.js';
 import { activityHtml, openWorkflow } from './enquiry-view.js';
 import { renderDocList } from './doc-list.js';
+import { trailHtml } from './doc-trail.js';
 import { render } from '../app.js';
 
 const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -61,7 +62,7 @@ export function renderContract(el, id) {
     <div class="page-head"><div class="grow">
       <div class="crumb"><a href="#/contracts">AMC Contract</a> › <a href="#/enquiries/${enq.id}">${enq.no}</a></div>
       <h1>${c.no} · ${c.customer} ${contractPill(c)}</h1>
-      <div class="page-meta">From <a href="#/quotations/${c.quotationId}">${c.quotationNo}</a>${c.po?.no ? ` · PO ${c.po.no}` : ''} · ${fmtDate(c.start)} – ${fmtDate(c.end)}${c.status === 'Active' ? ` · day ${Math.max(1, total - left)} of ${total}` : ''}${c.renewsNo ? ` · renews ${c.renewsNo}` : ''}</div></div>
+      <div class="page-meta">From <a href="#/quotations/${c.quotationId}">${c.quotationNo}</a>${c.po?.no ? ` · PO ${c.po.no}` : ''} · <span id="periodTxt">${fmtDate(c.start)} – ${fmtDate(c.end)}</span>${c.status === 'Active' ? ` · day ${Math.max(1, total - left)} of ${total}` : ''}${c.renewsNo ? ` · renews ${c.renewsNo}` : ''}</div></div>
       <div class="row"><button class="btn soft" id="wf">⇶ Workflow</button><a class="btn" href="#/contracts/${c.id}/print">⎙ Print contract</a>
         ${renewal ? html`<a class="btn" href="#/enquiries/${renewal.id}">Renewal ${renewal.no}</a>` : canRenew && (left <= 60 || c.status === 'Expired') ? html`<button class="btn" id="renew">⟳ Renew</button>` : ''}
         ${drafts.length && auth.can('invoice', 'edit') ? html`<button class="btn" id="postAll">Post ${drafts.length} due invoice${drafts.length > 1 ? 's' : ''}</button>` : ''}
@@ -69,6 +70,7 @@ export function renderContract(el, id) {
         ${edit ? html`<button class="btn primary" id="activate">Activate</button>` : ''}</div>
     </div>
     ${draft ? html`<div class="note" style="margin-bottom:10px">Draft from the accepted quotation. Check the start date; a signed copy is optional (flow step 6). "Activate" creates the ${c.sites.reduce((t, s) => t + s.visits, 0)} visits and the ${c.plan.length} billing line${c.plan.length > 1 ? 's' : ''} below.</div>` : ''}
+    ${trailHtml(c.enquiryId, c.id)}
     <div class="e2">
       <div class="props form-lines">
         <div class="form-sec">Contract</div>
@@ -139,7 +141,7 @@ export function renderContract(el, id) {
   on(el, 'click', '[data-post]', (e, b) => { const inv = postInvoice(b.dataset.post); toast(`Posted as ${inv.no}`); render(); });
   on(el, 'click', '[data-open]', async (e, a) => { e.preventDefault(); const u = await getUrl(a.dataset.open); if (u) window.open(u, '_blank'); });
   $('#wf', el).onclick = () => openWorkflow(enq);
-  $('#start', el)?.addEventListener('change', e => { const n = saveContract(c.id, { start: e.target.value }); $('#endTxt', el).textContent = fmtDate(n.end); paintTab(); });
+  $('#start', el)?.addEventListener('change', e => { const n = saveContract(c.id, { start: e.target.value }); $('#endTxt', el).textContent = fmtDate(n.end); $('#periodTxt', el).textContent = `${fmtDate(n.start)} – ${fmtDate(n.end)}`; paintTab(); });
   $('#signed', el)?.addEventListener('change', async e => { const f = e.target.files[0]; if (!f) return; const doc = await saveBlob(f, { name: f.name, kind: 'contract' }); store.update('contracts', c.id, { signedDoc: doc }, `Signed contract uploaded: ${f.name}`); render(); });
   $('#postAll', el)?.addEventListener('click', async () => { if (!await confirmBox('Post the due invoices', `${drafts.length} draft instalment invoice(s) get their numbers now.`, 'Post')) return; const done = postContractDrafts(c.id); toast(`Posted ${done.map(i => i.no).join(', ')}`); render(); });
   $('#activate', el)?.addEventListener('click', () => {

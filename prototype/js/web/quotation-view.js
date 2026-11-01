@@ -11,6 +11,7 @@ import { reviseEstimate } from '../core/estimates.js';
 import { openTaskFor } from '../core/workflow.js';
 import { quotationSheet } from './print-docs.js';
 import { openWorkflow } from './enquiry-view.js';
+import { trailHtml } from './doc-trail.js';
 
 const row = (label, value) => html`<div class="field"><div class="field-label">${label}</div><div class="ro">${value || html`<span class="muted">—</span>`}</div></div>`;
 const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -50,6 +51,7 @@ export function renderQuotation(el, id) {
       <br><span class="small">A price change: revise the estimate (this makes Rev ${q.rev + 1}). Wording only: change it here and submit again.</span></span>
       ${estOpen && auth.can('estimation', 'edit') ? html`<button class="btn small" id="revEst">Revise estimate</button>` : ''}</div>` : ''}
     ${q.status === 'Submitted' && task ? html`<div class="note" style="margin-bottom:10px">Waiting for the ${task.roleName} (level ${task.level}): ${task.rules.map(r => r.name).join(' + ')}. Send unlocks after approval.</div>` : ''}
+    ${trailHtml(enq.id, q.id)}
     <div class="s3">
       <form class="card form-lines" id="f" onsubmit="return false">
         <div class="form-sec">Quotation</div>

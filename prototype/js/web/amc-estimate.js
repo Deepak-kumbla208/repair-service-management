@@ -10,6 +10,7 @@ import { describe, addSiteTo, removeSiteFrom, setCovered, otherSites, isRenewal 
 import { createFromEstimate } from '../core/quotations.js';
 import { AMC_TABS, amcTabHtml, newAmcRow, applyAmcChange, setPath } from './amc-estimate-tabs.js';
 import { openWorkflow } from './enquiry-view.js';
+import { trailHtml } from './doc-trail.js';
 
 const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const TAB_KEY = 'rsmAmcEstTab';
@@ -52,6 +53,7 @@ export function renderAmcEstimate(el, id) {
     ${est.returnNote && !newer && (est.status === 'Draft' || q?.status === 'Returned') ? html`<div class="note bad" style="margin-bottom:10px;display:flex;gap:10px;align-items:center">
       <span class="grow"><b>Returned by ${auth.userName(est.returnNote.by)}</b> (quotation Rev ${est.returnNote.rev}): ${est.returnNote.comment}</span>
       ${canRevise ? html`<button class="btn small" id="revise2">Revise estimate</button>` : ''}</div>` : ''}
+    ${trailHtml(enq.id, est.id)}
     <div class="e2">
       <div class="props form-lines" id="props"></div>
       <div class="e2-main"><div class="card"><div id="kpi"></div>

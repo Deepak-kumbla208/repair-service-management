@@ -3,7 +3,7 @@
 // approvals; the Operations Executive sees technicians' leave-site requests.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, go, fmtDateTime, fmtDuration, toast, tiles, pill } from '../core/ui.js';
+import { html, $, go, fmtDate, fmtDateTime, fmtDuration, toast, tiles, pill } from '../core/ui.js';
 import { vsLabel } from '../core/lookups.js';
 import { myTasks } from '../core/workflow.js';
 import { decideQuotation, autoChecks } from '../core/quotations.js';
@@ -46,7 +46,7 @@ export function taskDetail(t, { compact = false } = {}) {
     const c = store.get('contracts', t.docId);
     const p = contractProgress(c);
     return html`<div class="card"><div class="card-head"><h2>${t.title}</h2></div>
-      <p>${c.no} for ${c.customer} ends on <b>${c.end}</b>. ${p.done} of ${p.visits} visits done; ${cur} ${m2(p.paid)} paid of ${m2(c.total)}.</p>
+      <p>${c.no} for ${c.customer} ends on <b>${fmtDate(c.end)}</b>. ${p.done} of ${p.visits} visits done; ${cur} ${m2(p.paid)} paid of ${m2(c.total)}.</p>
       <p class="small muted">Renew creates a renewal enquiry with an estimate pre-filled from this contract (same sites, shutters and visits, today's rates). It then goes to the quotation and the counter-check.</p>
       <div class="apr-foot"><a class="btn" href="#/contracts/${c.id}">Open ${c.no}</a><span class="grow"></span><button class="btn" data-do="decline">Not renewing</button><button class="btn primary" data-do="renew">⟳ Renew now</button></div></div>`;
   }
@@ -89,7 +89,10 @@ export function actOnTask(t, action, comment) {
   return '';
 }
 
-export function renderTasks(el) {
+export function renderTasks(el, openId) {
+  // #/tasks/<id> (from a dashboard row) opens that task; the address goes back to #/tasks so later renders keep the
+  // user's own choice.
+  if (openId) { sel.id = openId; history.replaceState(null, '', '#/tasks'); }
   const list = myTasks();
   if (!list.find(t => t.id === sel.id)) sel.id = list[0]?.id || '';
   const t = list.find(x => x.id === sel.id);

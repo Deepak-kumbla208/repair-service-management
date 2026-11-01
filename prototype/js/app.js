@@ -56,7 +56,8 @@ const WEB = [
   [/^estimates\/([^/]+)$/, 'estimation', renderEstimate],
   [/^quotations$/, 'quotation', renderQuotationList],
   [/^quotations\/([^/]+)$/, 'quotation', renderQuotation],
-  [/^tasks$/, null, renderTasks],
+  [/^tasks$/, null, el => renderTasks(el)],
+  [/^tasks\/([^/]+)$/, null, renderTasks],
   [/^jobs$/, 'job', renderJobBoard],
   [/^jobs\/list$/, 'job', renderJobList],
   [/^jobs\/([^/]+)$/, 'job', renderJob],
@@ -112,6 +113,7 @@ export function routeForView(route, view) {
     if ((m = route.match(/^jobs\/([^/]+)$/)) && m[1] !== 'list') return store.get('jobs', m[1])?.type === 'GS' ? `m/gjob/${m[1]}` : `m/rjob/${m[1]}`;
     if ((m = route.match(/^amc-visits\/([^/]+)$/)) && auth.can('amcExecution', 'view', 'mobile')) return `m/visit/${m[1]}`;
     if (route === 'tasks') return 'm/tasks';
+    if ((m = route.match(/^tasks\/([^/]+)$/))) return `m/task/${m[1]}`;
     return route.startsWith('m/') ? route : 'm/home';
   }
   if ((m = route.match(/^m\/enquiry\/([^/]+)/))) return `enquiries/${m[1]}`;

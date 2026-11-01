@@ -14,6 +14,7 @@ import { scheduleDialog } from './job-board.js';
 import { openWorkflow, activityHtml } from './enquiry-view.js';
 import { renderDocList } from './doc-list.js';
 import { gsChecklistCard } from './visits.js';
+import { trailHtml } from './doc-trail.js';
 import { render } from '../app.js';
 
 const row = (label, value) => html`<div class="field"><div class="field-label">${label}</div><div class="ro">${value || html`<span class="muted">—</span>`}</div></div>`;
@@ -71,6 +72,7 @@ export function renderJob(el, id) {
     ${termTask ? html`<div class="note warn" style="margin-bottom:10px">The payment term ${vsLabel('PAYMENT_TERMS', j.paymentTerm)} is waiting for the Approver; scheduling is locked until then.</div>` : ''}
     ${!termTask && !j.termApproved && j.termNote ? html`<div class="note bad" style="margin-bottom:10px;display:flex;gap:10px;align-items:center"><span class="grow"><b>The Approver returned the payment term ${vsLabel('PAYMENT_TERMS', j.paymentTerm)}:</b> ${j.termNote}</span>
       ${edit ? html`<button class="btn small" id="termNow">Change to Immediate</button><button class="btn small" id="termAgain">Ask the Approver again</button>` : ''}</div>` : ''}
+    ${trailHtml(enq.id, j.id)}
     <div class="e2">
       <div class="props form-lines">
         <div class="form-sec">Customer</div>

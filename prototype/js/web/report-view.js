@@ -12,6 +12,7 @@ import { STEPS } from '../mobile/site-report.js';
 import { pageHead } from './shell.js';
 import { svrSheetHtml } from './print-svr.js';
 import { canCreateFor, createEstimate, currentEstimate } from '../core/estimates.js';
+import { trailHtml } from './doc-trail.js';
 
 const OPEN_KEY = 'rsmSvrSection';
 
@@ -32,14 +33,15 @@ function renderEditor(el, rep, insp) {
 
   el.innerHTML = String(html`<div class="page" style="max-width:1500px">
     <div class="page-head"><div class="grow">
-      <div class="crumb"><a href="#/inspections">Site Inspection</a> › <a href="#/inspections/${insp.id}">${e.no}</a> › Site viewing report</div>
+      <div class="crumb"><a href="#/inspections">Site Inspection</a> › <a href="#/enquiries/${e.id}">${e.no}</a> › Site viewing report</div>
       <h1>${rep.no} · Site viewing report ${pill(rep.status)}</h1>
-      <div class="page-meta">${e.customerName} · ${empName(rep.technicianId)}${insp.visitAt ? ` · visit ${fmtDateTime(insp.visitAt)}` : ''} · pre-filled from ${e.no} · the technician can continue it on the phone${rep.submittedAt ? ` · ${rep.paper ? 'received on paper' : 'submitted'} ${fmtDateTime(rep.submittedAt)}` : ''}</div></div>
+      <div class="page-meta">${e.customerName} · ${empName(rep.technicianId)}${insp.visitAt ? ` · visit ${fmtDateTime(insp.visitAt)}` : ''} · pre-filled from <a href="#/enquiries/${e.id}">${e.no}</a> · the technician can continue it on the phone${rep.submittedAt ? ` · ${rep.paper ? 'received on paper' : 'submitted'} ${fmtDateTime(rep.submittedAt)}` : ''}</div></div>
       <div class="row"><button class="btn" id="saveBtn">Save</button>
         ${rep.status !== 'Submitted' ? html`<button class="btn" id="paperBtn" title="The technician filled the report on paper; you have typed it in">Mark received (paper)</button>` : ''}
         ${auth.can('inspection', 'print') ? html`<button class="btn" id="printBtn">⎙ Print</button>` : ''}
         ${canCreateFor(e) ? html`<button class="btn primary" id="mkEst">Create estimate</button>` : currentEstimate(e.id) ? html`<a class="btn primary" href="#/estimates/${currentEstimate(e.id).id}">Open the estimate</a>` : ''}</div>
     </div>
+    ${trailHtml(e.id, rep.id)}
     <div class="s3">
       <div class="card form-lines" id="acc"></div>
       <div class="preview"><div class="preview-bar"><span>Live print preview · A4</span><span>updates as you type</span></div><div id="pv"></div></div>

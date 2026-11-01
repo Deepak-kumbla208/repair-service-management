@@ -4,6 +4,7 @@
 import * as store from './store.js';
 import { empName } from './lookups.js';
 import { contractFor, contractProgress } from './contracts.js';
+import { fmtDate } from './ui.js';
 
 const FLOWS = {
   REPAIR: ['enquiry', 'inspection', 'estimation', 'quotation', 'job', 'invoice', 'payment', 'closure'],
@@ -97,7 +98,7 @@ function amcStages(enq, steps, set, now) {
     return steps;
   }
   const p = contractProgress(c);
-  set('amcContract', { doc: c.no, route, status: c.status === 'Draft' ? 'Draft · to activate' : `${c.status} · ends ${c.end}`, state: c.status === 'Draft' ? 'now' : 'done' });
+  set('amcContract', { doc: c.no, route, status: c.status === 'Draft' ? 'Draft · to activate' : `${c.status} · ends ${fmtDate(c.end)}`, state: c.status === 'Draft' ? 'now' : 'done' });
   if (c.status === 'Draft') return steps;
   const allVisits = p.done >= p.visits;
   set('amcVisits', { doc: `${p.done} of ${p.visits} done`, route: 'amc-scheduling', status: p.next ? `Next: visit ${p.next.n} of ${p.next.of} · ${p.next.status}` : 'All done', state: allVisits ? 'done' : 'now' });
@@ -105,7 +106,7 @@ function amcStages(enq, steps, set, now) {
   set('invoice', { doc: `${p.posted} of ${p.lines} posted`, route, status: allBilled ? 'All instalments posted' : 'From the billing plan', state: allBilled ? 'done' : 'now' });
   const paidAll = p.posted > 0 && p.balance <= 0.004 && allBilled;
   set('payment', { doc: p.posted ? `Paid ${money(p.paid)}` : 'Nothing due yet', route, status: p.balance > 0.004 ? `Balance ${money(p.balance)}` : 'Nothing owed', state: paidAll ? 'done' : p.posted ? 'now' : 'next' });
-  set('contractClosure', { doc: c.status === 'Closed' ? c.no : '', route, status: c.status === 'Closed' ? 'Closed' : c.status === 'Active' ? `Closes after ${c.end}` : c.status,
+  set('contractClosure', { doc: c.status === 'Closed' ? c.no : '', route, status: c.status === 'Closed' ? 'Closed' : c.status === 'Active' ? `Closes after ${fmtDate(c.end)}` : c.status,
     state: c.status === 'Closed' ? 'done' : allVisits && paidAll ? 'now' : 'next' });
   return steps;
 }

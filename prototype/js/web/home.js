@@ -39,7 +39,7 @@ export function renderHome(el) {
       </tbody></table></div>` : html`<div class="muted">Nothing waiting.</div>`}</div>` : ''}
     ${auth.hasTasks('web') ? html`<div class="card"><div class="card-head"><h2>My tasks</h2><a href="#/tasks">Open my tasks</a></div>
       ${tasks.length ? html`<div class="tbl-wrap" style="max-height:none"><table class="tbl"><thead><tr><th>Document</th><th>Task</th><th>Customer</th><th>Waiting since</th></tr></thead><tbody>
-        ${tasks.map(t => html`<tr class="click" data-go="tasks"><td class="lnk">${t.docNo}</td><td>${t.title}</td><td>${t.customer}</td><td>${fmtDateTime(t.createdAt)}</td></tr>`)}</tbody></table></div>` : html`<div class="muted">Nothing is waiting for you.</div>`}</div>` : ''}
+        ${tasks.map(t => html`<tr class="click" data-go="tasks/${t.id}"><td class="lnk">${t.docNo}</td><td>${t.title}</td><td>${t.customer}</td><td>${fmtDateTime(t.createdAt)}</td></tr>`)}</tbody></table></div>` : html`<div class="muted">Nothing is waiting for you.</div>`}</div>` : ''}
     ${auth.can('estimation') || auth.can('job') || auth.can('payment') ? html`<h2 style="margin:14px 0 8px">Money side of repair jobs</h2>${tiles([
       ...(auth.can('estimation') ? [{ key: 'est', label: 'Estimates being prepared', count: store.list('estimates', x => x.status === 'Draft').length, tone: 'warn' }] : []),
       ...(auth.can('quotation') ? [{ key: 'qt', label: 'Quotations to send', count: store.list('quotations', q => q.status === 'Approved').length, tone: 'warn', sub: 'counter-checked' }] : []),

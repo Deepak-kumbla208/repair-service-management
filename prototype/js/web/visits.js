@@ -14,6 +14,7 @@ import { RATINGS } from './print-docs.js';
 import { activityHtml, openWorkflow } from './enquiry-view.js';
 import { visitDialog } from './amc-scheduling.js';
 import { renderDocList } from './doc-list.js';
+import { trailHtml } from './doc-trail.js';
 import { render } from '../app.js';
 
 const row = (label, value) => html`<div class="field"><div class="field-label">${label}</div><div class="ro">${value || html`<span class="muted">—</span>`}</div></div>`;
@@ -75,6 +76,7 @@ export function renderVisit(el, id) {
         ${canFile ? html`<button class="btn primary" id="file">✓ Checked &amp; filed</button>` : ''}</div>
     </div>
     ${v.status === 'Done' ? html`<div class="note" style="margin-bottom:10px">Signed by the customer on ${fmtDateTime(s.signedAt)}. Check the report and the photos, then file it (flow step 9).</div>` : ''}
+    ${trailHtml(v.enquiryId, '')}
     <div class="e2">
       <div class="props form-lines">
         <div class="form-sec">Visit</div>

@@ -14,6 +14,7 @@ import { currentQuotation } from '../core/quotations.js';
 import { jobForEnquiry } from '../core/jobs.js';
 import { contractFor } from '../core/contracts.js';
 import { linesTable } from './enquiry-parts.js';
+import { trailHtml } from './doc-trail.js';
 
 const row = (label, value) => html`<div class="field"><div class="field-label">${label}</div><div class="ro">${value || html`<span class="muted">—</span>`}</div></div>`;
 export const channelText = e => (e.channel === 'OTHER' && e.channelOther ? `Other: ${e.channelOther}` : vsLabel('ENQ_CHANNEL', e.channel));
@@ -71,6 +72,7 @@ export function renderEnquiryView(el, id) {
         ${next}
       </div>
     </div>
+    ${trailHtml(e.id, e.id)}
     <div class="e2">
       <div class="props form-lines">
         <div class="form-sec">Customer</div>

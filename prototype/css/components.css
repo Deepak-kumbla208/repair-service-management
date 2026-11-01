@@ -424,3 +424,10 @@ label.chip input:focus-visible + span { box-shadow: 0 0 0 3px rgba(55, 138, 221,
 .ck-ph { height: 18px; vertical-align: middle; border-radius: 3px; }
 .tbl.edit select[data-p$="equipmentId"], .tbl.edit select[data-p$="itemId"] { min-width: 150px; }
 .tbl.edit select[data-p$="siteKey"] { min-width: 120px; }
+
+/* Linked documents: the whole chain of an enquiry under a document's title */
+.trail { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 12px; margin: -4px 0 10px; }
+.trail .muted { margin-right: 4px; }
+.trail .sep { color: var(--faint); }
+.trail a, .trail b { padding: 1px 7px; border-radius: 9px; background: var(--white); border: 1px solid var(--line); text-decoration: none; }
+.trail b { background: var(--blue-100); border-color: var(--blue-200); color: var(--navy-900); }

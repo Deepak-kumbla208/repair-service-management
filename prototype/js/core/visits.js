@@ -9,6 +9,7 @@ import { freeStart, nextWorkday, defaultHelper, bookings, fmtHour, toIso, DAY_ST
 import { createInvoice, invoiceForJob } from './billing.js';
 import { saveNewEnquiry } from './enquiries.js';
 import { todayStr, maybeCloseContract, BOOKABLE } from './contracts.js';
+import { fmtDate } from './ui.js';
 
 const pad = n => String(n).padStart(2, '0');
 const dstr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -84,8 +85,8 @@ export function cancelVisit(id, reason) {
 export function confirmVisitDate(id, { date, via }) {
   const v = store.get('amcVisits', id);
   if (!['Planned', 'Confirmed'].includes(v.status) || !date) return v;
-  store.update('amcVisits', id, { confirmedDate: date, confirmedVia: via || '' }, `Visit ${v.n} of ${v.of}: ${date} agreed with the customer${via ? ` (${via})` : ''}`);
-  store.setStatus('amcVisits', id, 'Confirmed', `${date}${via ? ` · ${via}` : ''}`);
+  store.update('amcVisits', id, { confirmedDate: date, confirmedVia: via || '' }, `Visit ${v.n} of ${v.of}: ${fmtDate(date)} agreed with the customer${via ? ` (${via})` : ''}`);
+  store.setStatus('amcVisits', id, 'Confirmed', `${fmtDate(date)}${via ? ` · ${via}` : ''}`);
   return store.get('amcVisits', id);
 }
 
@@ -101,7 +102,7 @@ export function scheduleVisit(id, { technicianId, helperIds = [], date, start, v
   const last = blocks[blocks.length - 1];
   const first = v.status !== 'Scheduled';
   store.update('amcVisits', id, { technicianId, helperIds, blocks, start: toIso(date, start), end: toIso(last.date, last.to) },
-    `${first ? 'Scheduled' : 'Moved'}: ${store.get('employees', technicianId)?.name}, ${date} ${fmtHour(start)}${blocks.length > 1 ? ` (${blocks.length} days)` : ''}`);
+    `${first ? 'Scheduled' : 'Moved'}: ${store.get('employees', technicianId)?.name}, ${fmtDate(date)} ${fmtHour(start)}${blocks.length > 1 ? ` (${blocks.length} days)` : ''}`);
   store.setStatus('amcVisits', id, 'Scheduled', store.get('employees', technicianId)?.name);
   return { problems: [] };
 }

@@ -4,7 +4,7 @@
 // helper) and the customer's agreement in one step. Repair jobs and inspections are checked for clashes.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, go, on, fmtDate, pill, toast, openModal, readForm, chipGroup, tiles } from '../core/ui.js';
+import { html, $, go, on, fmtDate, pill, toast, openModal, readForm, chipGroup, tiles, debounce } from '../core/ui.js';
 import { zones, zoneCode, technicians, empName } from '../core/lookups.js';
 import { refreshAmc, todayStr, addMonths } from '../core/contracts.js';
 import { suggestVisit, scheduleVisit, scheduleVisitProblems, confirmVisitDate, isOverdue, visitDate, perDayHours, OPEN_VISIT, DONE_VISIT } from '../core/visits.js';
@@ -90,7 +90,11 @@ export function renderAmcScheduling(el) {
   on(el, 'click', '[data-step]', (e, b) => { state.month = ym(addMonths(`${state.month}-01`, Number(b.dataset.step))); save(); render(); });
   $('#clear', el)?.addEventListener('click', () => { state.tile = ''; save(); render(); });
   el.querySelectorAll('[name="zone"]').forEach(r => r.addEventListener('change', () => { state.zone = r.value; save(); render(); }));
-  $('#q', el).addEventListener('change', e => { state.q = e.target.value; save(); render(); });
+  // Filter as you type; the page re-renders, so the cursor is put back in the search box.
+  $('#q', el).addEventListener('input', debounce(e => {
+    state.q = e.target.value; save(); render();
+    const q = document.getElementById('q'); q?.focus(); q?.setSelectionRange(q.value.length, q.value.length);
+  }, 250));
   on(el, 'click', '[data-quick]', (e, b) => {
     const v = store.get('amcVisits', b.dataset.quick);
     const s = suggestVisit(v);

@@ -9,6 +9,7 @@ import { checklist, estimatedVsActual, markDocumented, docInvoice } from '../cor
 import { balanceOf } from '../core/billing.js';
 import { renderDocList } from './doc-list.js';
 import { pageHead } from './shell.js';
+import { trailHtml } from './doc-trail.js';
 import { render } from '../app.js';
 
 const m2 = n => (n == null ? '—' : Number(n).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
@@ -41,6 +42,7 @@ export function renderClosure(el, id) {
     ${pageHead({ crumb: html`<a href="#/closure">Job Closure</a> › ${j.no}`, title: html`${j.no} · ${j.customer} ${pill(j.status)}`,
       sub: j.status === 'Closed' ? `Closed ${fmtDateTime(j.closedAt)}: all work completed, paid and filed.` : j.status === 'Completed & documented' ? `Documented ${fmtDateTime(j.documentedAt)}. It closes by itself when ${inv?.no || 'the invoice'} is fully paid.` : 'Check the documents, then mark the job completed and documented.',
       actions: html`<div class="row"><a class="btn" href="#/jobs/${j.id}">Open the job</a>${canMark ? html`<button class="btn primary" id="mark">✓ Completed &amp; documented</button>` : ''}</div>` })}
+    ${trailHtml(j.enquiryId, `closure_${j.id}`)}
     <div class="cols2">
       <div class="card"><div class="card-head"><h2>Documents</h2><span class="muted small">${items.filter(i => i.ok).length} of ${items.length}</span></div>
         <ul class="chk">${items.map(i => html`<li><span class="${i.ok ? 'ok' : 'wn'}" style="${!i.ok && i.optional ? 'color:var(--faint)' : ''}">${i.ok ? '✓' : i.optional ? '○' : '!'}</span>

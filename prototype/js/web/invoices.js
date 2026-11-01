@@ -8,6 +8,7 @@ import { vsLabel, vsOptions } from '../core/lookups.js';
 import { saveBlob } from '../core/media.js';
 import { canEditInvoice, canEditRows, postInvoice, removeRow, cancelInvoice, setRowAmount, balanceOf, paidAmount, paymentStatus, paymentsFor, recordPayment, followUpsFor, addFollowUp } from '../core/billing.js';
 import { invoiceSheet } from './print-docs.js';
+import { trailHtml } from './doc-trail.js';
 import { renderDocList } from './doc-list.js';
 import { render } from '../app.js';
 
@@ -89,6 +90,7 @@ export function renderInvoice(el, id) {
         ${canEditInvoice(inv) ? html`<button class="btn primary" id="post">Post invoice</button>` : ''}</div>
     </div>
     ${inv.status === 'Draft' && (inv.flagNote || inv.rows.some(r => r.flag)) ? html`<div class="note warn" style="margin-bottom:10px">Check before posting: ${inv.flagNote || 'lines marked not fully done on the Work Done form are flagged below.'}</div>` : ''}
+    ${trailHtml(inv.enquiryId, inv.id)}
     <div class="s3">
       <div>
         <div class="card form-lines">

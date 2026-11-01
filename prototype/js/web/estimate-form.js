@@ -11,6 +11,7 @@ import { createFromEstimate } from '../core/quotations.js';
 import { TABS, tabHtml, newRow, applyChange } from './estimate-tabs.js';
 import { openWorkflow } from './enquiry-view.js';
 import { renderAmcEstimate } from './amc-estimate.js';
+import { trailHtml } from './doc-trail.js';
 
 const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pc = v => `${(v * 100).toFixed(1)} %`;
@@ -76,6 +77,7 @@ export function renderEstimate(el, id) {
     ${est.returnNote && !newer && (est.status === 'Draft' || q?.status === 'Returned') ? html`<div class="note bad" style="margin-bottom:10px;display:flex;gap:10px;align-items:center">
       <span class="grow"><b>Returned by ${auth.userName(est.returnNote.by)}</b> (quotation Rev ${est.returnNote.rev}): ${est.returnNote.comment}</span>
       ${canRevise ? html`<button class="btn small" id="revise2">Revise estimate</button>` : est.status === 'Draft' ? html`<span class="small">Change the prices below, then create the quotation revision.</span>` : ''}</div>` : ''}
+    ${trailHtml(enq.id, est.id)}
     <div class="e2">
       <div class="props form-lines" id="props"></div>
       <div class="e2-main"><div class="card">

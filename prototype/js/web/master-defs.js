@@ -109,7 +109,7 @@ export const DEFS = {
     search: r => [r.code, r.name, r.values.map(v => `${v.code} ${v.label}`)],
   },
   tax: {
-    coll: 'taxes', title: 'Tax', codePrefix: '', note: 'Tax codes with rates and effective dates; used by estimation, quotation and invoice. Whether the company charges tax is set in Company Setup.',
+    coll: 'taxes', title: 'Tax', codePrefix: '', note: 'Tax codes with rates and effective dates; used by estimation, quotation and invoice. Tax on documents (on or off) is switched in Admin Setup › Company Setup › Registration and tax.',
     fields: [
       { name: 'code', label: 'Tax code', required: true }, { name: 'name', label: 'Name', required: true }, { name: 'rate', label: 'Rate %', type: 'number', step: '0.01', required: true },
       { name: 'from', label: 'Effective from', type: 'date', required: true }, { name: 'to', label: 'Effective to', type: 'date' },

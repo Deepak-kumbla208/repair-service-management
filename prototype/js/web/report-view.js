@@ -53,6 +53,8 @@ function renderEditor(el, rep, insp) {
   const ctx = {
     save(patch) { Object.assign(rep, patch); saveReport(rep.id, patch); },
     repaint() { paintAccordion(); },
+    // The customer's preview is the print page (roles that may print); the report is saved before it opens.
+    preview: auth.can('inspection', 'print') ? () => go(`reports/${rep.id}/print`) : null,
   };
   const flush = async () => {
     if (!form()) return;

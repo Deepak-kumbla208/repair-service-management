@@ -1,7 +1,8 @@
 // Phone shell: the whole screen becomes a phone; header (back, title, search, Web / Mobile switch),
 // scrolling body, optional footer buttons, and bottom tabs by role.
 import * as auth from '../core/auth.js';
-import { html, $ } from '../core/ui.js';
+import { html, $, icon, openModal } from '../core/ui.js';
+import { hydrateImages } from '../core/media.js';
 import { switchView } from '../app.js';
 import { openPalette } from '../web/palette.js';
 import { isOffline, waiting } from '../core/offline.js';
@@ -22,14 +23,14 @@ export function renderPhone(app, route, run) {
     <div class="m-head">
       <div class="m-status"><span>${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}</span><span>${auth.company().name}</span><span>▂▄▆ ▮</span></div>
       <div class="m-titlebar"><span id="mBack"></span><h1 id="mTitle"></h1>
-        <button class="m-icon-btn" id="mSearch" aria-label="Search" title="Search">⌕</button>
+        <button class="m-icon-btn" id="mSearch" aria-label="Search" title="Search">${icon('search', 17)}</button>
         <div class="seg" role="group" aria-label="View"><button id="toWeb" ${isOffline() ? 'disabled title="Go back online first"' : ''}>Web</button><button class="on">Mobile</button></div></div>
     </div>
     ${isOffline() ? html`<a class="m-offline" href="#/m/more">● Offline · ${waiting().length} change${waiting().length === 1 ? '' : 's'} waiting</a>`
       : sessionStorage.getItem('rsmSynced') ? html`<div class="m-online">✓ ${sessionStorage.getItem('rsmSynced')}</div>` : ''}
     <div class="m-body" id="mBody"></div>
     <div id="mFoot"></div>
-    <nav class="m-tabs">${tabs.map(t => html`<a class="m-tab ${t.key === on ? 'on' : ''}" href="#/${t.route}"><b>${t.icon}</b>${t.label}</a>`)}</nav>
+    <nav class="m-tabs">${tabs.map(t => html`<a class="m-tab ${t.key === on ? 'on' : ''}" href="#/${t.route}">${icon(t.key, 22)}${t.label}</a>`)}</nav>
   </div></div>`);
   sessionStorage.removeItem('rsmSynced'); // the green "sent" line shows once
   $('#toWeb', app).onclick = () => switchView('web');
@@ -39,9 +40,23 @@ export function renderPhone(app, route, run) {
     foot: $('#mFoot', app),
     setTitle(title, backRoute) {
       $('#mTitle', app).textContent = title;
-      $('#mBack', app).innerHTML = backRoute ? String(html`<a class="m-icon-btn" href="#/${backRoute}" aria-label="Back">←</a>`) : '';
+      $('#mBack', app).innerHTML = backRoute ? String(html`<a class="m-icon-btn" href="#/${backRoute}" aria-label="Back">${icon('back', 17)}</a>`) : '';
     },
     setFoot(content) { page.foot.innerHTML = content ? String(html`<div class="m-foot">${content}</div>`) : ''; return page.foot; },
   };
   run(page);
+}
+
+// A document on the phone (site viewing report, Work Done form, service report) as it prints, fitted to the
+// screen; "Zoom" makes it larger. Used to preview before starting, before the customer signs, and to view it after.
+export function openDocSheet(title, sheet, { actions = [] } = {}) {
+  return openModal({
+    title, cls: 'm-sheet',
+    body: html`<div class="row" style="justify-content:flex-end;margin-bottom:6px"><button type="button" class="btn small" data-zoom>Zoom</button></div><div class="m-a4">${sheet}</div>`,
+    actions: actions.length ? actions : [{ label: 'Close', kind: 'primary' }],
+    onOpen: body => {
+      hydrateImages(body);
+      body.querySelector('[data-zoom]').onclick = e => { const a4 = body.querySelector('.m-a4'); a4.classList.toggle('big'); e.target.textContent = a4.classList.contains('big') ? 'Fit to screen' : 'Zoom'; };
+    },
+  });
 }

@@ -2,7 +2,7 @@
 // Step 1 holds section 1 (pre-filled from the enquiry) and the screen-only shutter picker.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, $$, go, debounce, field, readForm, markInvalid, openModal, toast, fmtDateTime, fmtNum, MIC } from '../core/ui.js';
+import { html, $, $$, go, debounce, field, readForm, markInvalid, openModal, toast, fmtDateTime, fmtNum, MIC, pill } from '../core/ui.js';
 import { findSite, products, productName, sizes } from '../core/lookups.js';
 import { nextShutterTag } from '../core/customers.js';
 import { classifySize, toMetres } from '../core/costing.js';
@@ -10,6 +10,8 @@ import { saveReport, submitReport } from '../core/inspections.js';
 import { hydrateImages } from '../core/media.js';
 import { bindMics } from '../core/capture.js';
 import { STEPS_2_TO_7 } from './site-report-steps.js';
+import { svrSheetHtml } from '../web/print-svr.js';
+import { openDocSheet } from './shell.js';
 
 const S1 = [
   ['customer', 'Company / Customer'], ['site', 'Site / Project'], ['address', 'Full Address'], ['blockUnit', 'Block / Level / Unit'],
@@ -88,13 +90,17 @@ function newShutter(site, rep, ctx) {
 // Shared with the web editor (web/report-view.js), so the phone and the office fill the same report.
 export const STEPS = [step1, ...STEPS_2_TO_7];
 
-function submittedView(page, rep) {
-  page.body.innerHTML = String(html`<div class="note" style="margin-bottom:10px">${rep.no} was submitted ${fmtDateTime(rep.submittedAt)}. The office sees it on the web.</div>
-    <div class="m-section">Shutters inspected</div>${rep.shutters.map(s => html`<div class="m-card small"><b>${s.tag}</b> ${s.location} · ${s.sizeCode}${s.finding ? html`<br>${s.finding}` : ''}</div>`)}
-    <div class="m-section">Photos</div>${rep.photos.length ? html`<div class="photos">${rep.photos.map(p => html`<div class="photo"><img data-media="${p}" alt="Photo"></div>`)}</div>` : html`<div class="muted small">No photos</div>`}
-    <div class="m-section">Signed by ${rep.s7.name}</div>${rep.s7.signatureId ? html`<img class="sig-img" data-media="${rep.s7.signatureId}" alt="Signature">` : ''}`);
-  page.setFoot(html`<a class="btn" href="#/m/jobs">Back to My jobs</a>`);
+// The report as it prints, on the phone: after it is submitted (My jobs → Done → View report) and at any time before.
+export function mReportView(page, id) {
+  const rep = store.get('siteReports', id);
+  const insp = rep && store.get('inspections', rep.inspectionId);
+  page.setTitle(rep ? rep.no : 'Site viewing report', insp ? `m/job/${insp.id}` : 'm/jobs');
+  if (!rep || !auth.seesInspection(insp)) { page.body.innerHTML = '<div class="empty">Report not found.</div>'; return; }
+  page.body.innerHTML = String(html`<div class="row" style="margin-bottom:8px">${pill(rep.status)}<span class="small muted grow">${rep.submittedAt ? `${rep.paper ? 'Received on paper' : 'Submitted'} ${fmtDateTime(rep.submittedAt)}` : 'Not submitted yet'}</span>
+    <button type="button" class="btn small" id="zoom">Zoom</button></div><div class="m-a4">${svrSheetHtml(rep, auth.company())}</div>`);
   hydrateImages(page.body);
+  $('#zoom', page.body).onclick = e => { const a4 = $('.m-a4', page.body); a4.classList.toggle('big'); e.target.textContent = a4.classList.contains('big') ? 'Fit to screen' : 'Zoom'; };
+  page.setFoot(html`<a class="btn" href="#/m/jobs">My jobs</a>${insp ? html`<a class="btn primary" href="#/m/job/${insp.id}">Back to the job</a>` : ''}`);
 }
 
 export function mReport(page, id, stepStr) {
@@ -102,7 +108,7 @@ export function mReport(page, id, stepStr) {
   const insp = rep && store.get('inspections', rep.inspectionId);
   if (!rep || !auth.seesInspection(insp)) { page.setTitle('Site viewing report', 'm/jobs'); page.body.innerHTML = '<div class="empty">Report not found.</div>'; return; }
   page.setTitle(`${rep.no}`, `m/job/${insp.id}`);
-  if (rep.status === 'Submitted') return submittedView(page, rep);
+  if (rep.status === 'Submitted') return mReportView(page, id);
   if (!auth.can('inspection', 'edit', 'mobile')) { page.body.innerHTML = '<div class="empty">Only the technician fills in the report.</div>'; return; }
 
   const n = Math.min(7, Math.max(1, parseInt(stepStr, 10) || 1));
@@ -110,6 +116,7 @@ export function mReport(page, id, stepStr) {
   const ctx = {
     save(patch) { Object.assign(rep, patch); saveReport(rep.id, patch); },
     repaint() { paint(); },
+    preview() { openDocSheet(`Preview · ${rep.no}`, svrSheetHtml(rep, auth.company())); },
   };
   const flush = async () => {
     ctx.save(step.read(page.body, rep));
@@ -118,7 +125,7 @@ export function mReport(page, id, stepStr) {
 
   function paint() {
     page.body.innerHTML = String(html`
-      <div class="step-row"><span><b>Step ${n} of 7</b> · ${n}. ${step.title}</span><span>${rep.no}</span></div>
+      <div class="m-step-head"><b>${n}. ${step.title}</b><span>${n} of 7</span></div>
       <div class="steps">${STEPS.map((s, i) => html`<a href="#/m/report/${rep.id}/${i + 1}" data-jump="${i + 1}" class="${i + 1 === n ? 'on' : i + 1 < n ? 'done' : ''}" title="${i + 1}. ${s.title}"></a>`)}</div>
       <form id="stepForm" onsubmit="return false">${step.render(rep)}</form>`);
     const form = $('#stepForm', page.body);
@@ -149,6 +156,6 @@ export function mReport(page, id, stepStr) {
       return;
     }
     toast(`${rep.no} submitted · the office can see it now`);
-    go('m/jobs');
+    go(`m/job/${insp.id}`);
   });
 }

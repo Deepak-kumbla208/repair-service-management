@@ -57,7 +57,7 @@ function repairStory(k, startDay, lost) {
   const [code, tech, tag, fault, [item, qty], desc] = REPAIRS[k % REPAIRS.length];
   const d0 = day(startDay);
   const e = at(on(d0, '09:20'), () => newEnquiry(code, tech, `${tag}: ${fault.toLowerCase()}.`));
-  at(on(d0, '13:10'), () => fileReport(e, tech, { picks: [[tag, fault]], mats: [[item, qty, tag]], desc }, pics.tech));
+  at(on(d0, '13:10'), () => fileReport(e, tech, { picks: [[tag, fault]], mats: [[item, qty, tag]], desc }, pics.tech, pics.cust));
   const q = at(on(addDays(d0, 1), '10:00'), () => makeQuote(e));
   at(on(addDays(d0, 1), '14:00'), () => { for (let t = openTaskFor('quotation', q.id); t; t = openTaskFor('quotation', q.id)) { as(t.roleCode === 'MGT' ? 'mgmt' : 'approver'); decideQuotation(t.id, 'approve', ''); } });
   at(on(addDays(d0, 1), '15:00'), () => send(store.get('quotations', q.id)));

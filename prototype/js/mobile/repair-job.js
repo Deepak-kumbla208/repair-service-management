@@ -3,7 +3,7 @@
 // signatures and the company stamp photo (section 4), payment (immediate term), and the office's OK to leave.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, $$, go, toast, openModal, fmtDate, fmtTime, chipGroup, readForm, MIC } from '../core/ui.js';
+import { html, $, $$, go, toast, openModal, fmtDate, fmtTime, chipGroup, readForm, MIC, icon } from '../core/ui.js';
 import { zoneLabel, vsLabel, vsOptions } from '../core/lookups.js';
 import { hydrateImages, removeBlob } from '../core/media.js';
 import { savePhotos, signaturePad, bindMics } from '../core/capture.js';
@@ -11,6 +11,8 @@ import { seesJob, onMyWay, checkIn, workDoneFor, saveJob, completeWorkDone, requ
 import { invoiceForJob, balanceOf, recordPayment, paymentsFor } from '../core/billing.js';
 import { RATINGS } from '../web/print-docs.js';
 import { isOffline } from '../core/offline.js';
+import { workDoneSheet } from '../web/print-docs.js';
+import { openDocSheet } from './shell.js';
 
 export const STEPS = [['before', 'Before photos'], ['works', 'Works done'], ['feedback', 'Feedback'], ['signoff', 'Sign-off'], ['payment', 'Payment'], ['leave', 'Leave site']];
 const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -25,6 +27,15 @@ function stepDone(j, key) {
 }
 const progress = (j, cur) => html`<div class="prog">${STEPS.map(([k, label]) => html`<a href="#/m/rjob/${j.id}/${k}" class="${k === cur ? 'n' : stepDone(j, k) ? 'd' : ''}" style="text-decoration:none">${stepDone(j, k) && k !== cur ? '✓ ' : ''}${label}</a>`)}</div>`;
 const sec = (n, t) => html`<div class="wd-sec">${n} &nbsp; ${t}</div>`;
+// The whole visit as a list on the job page: done steps green, the current one blue.
+function jobSteps(j) {
+  const s = j.steps || {};
+  const list = [['On my way', 'The office sees you are travelling', !!s.onMyWayAt], ['Check in', 'Sets Time In', !!s.checkInAt],
+    ...STEPS.map(([k, label]) => [k === 'signoff' ? 'Customer signs' : label, k === 'signoff' ? 'After seeing the Work Done form' : k === 'leave' ? 'The office says OK' : '', stepDone(j, k)]),
+    ['Check out', 'Sets Time Out', !!s.checkOutAt]];
+  const now = list.findIndex(x => !x[2]);
+  return html`<ol class="m-steps">${list.map(([t, sub, done], n) => html`<li class="${done ? 'done' : n === now ? 'now' : ''}"><span class="n">${done ? '✓' : n + 1}</span><div><b>${t}</b>${sub ? html`<span class="s">${sub}</span>` : ''}</div></li>`)}</ol>`;
+}
 
 export function repairCard(j) {
   const done = DONE_ST.includes(j.status) && j.steps?.checkOutAt;
@@ -35,7 +46,7 @@ export function repairCard(j) {
     <div class="muted">${j.site} · Zone ${zoneLabel(j.zoneId)}</div>
     <div class="muted">${j.no} · ${j.tags.join(', ')} · ${j.contact}</div>
     <div class="row" style="margin-top:4px"><span class="pill">${j.status}</span></div>
-    <div class="actions">${j.phone ? html`<a class="btn" href="tel:${j.phone.replace(/\s/g, '')}">☎ Call</a>` : ''}<a class="btn primary" href="#/m/rjob/${j.id}" style="flex:2">${action}</a></div>
+    <div class="actions">${j.phone ? html`<a class="btn" href="tel:${j.phone.replace(/\s/g, '')}">${icon('call', 15)} Call</a>` : ''}<a class="btn primary" href="#/m/rjob/${j.id}" style="flex:2">${action}</a></div>
   </div>`;
 }
 
@@ -50,11 +61,12 @@ export function mRepairJob(page, id) {
     <div class="row"><span class="pill blue">Repair job</span><span class="pill">${j.status}</span><span class="grow"></span><b>${j.start ? fmtTime(j.start) : ''}</b></div>
     <h2 style="margin:8px 0 2px">${j.customer}</h2><div class="muted">${j.no} · ${j.start ? fmtDate(j.start) : ''}</div>
     <div class="m-card" style="margin-top:10px"><div class="k muted small">Address</div>${j.address || j.site}<br><span class="pill blue" style="margin-top:4px">Zone ${zoneLabel(j.zoneId)}</span></div>
-    <div class="m-card"><div class="k muted small">Contact</div>${j.contact}<br>${j.phone ? html`<a href="tel:${j.phone.replace(/\s/g, '')}">☎ ${j.phone}</a>` : ''}</div>
+    <div class="m-card"><div class="k muted small">Contact</div>${j.contact}${j.phone ? html`<div class="m-acts"><a class="btn" href="tel:${j.phone.replace(/\s/g, '')}">${icon('call', 15)} ${j.phone}</a></div>` : ''}</div>
+    <div class="m-section">Steps</div><div class="m-card">${jobSteps(j)}</div>
     <div class="m-section">Work to do</div>${j.lines.map((l, i) => html`<div class="m-card small"><b>${i + 1}.</b> ${l.description}</div>`)}
     ${j.parts.length ? html`<div class="m-section">Parts to bring</div>${j.parts.map(p => html`<div class="m-card small">${p.qty} ${p.unit} × ${p.name}</div>`)}` : ''}
     <div class="m-section">Payment</div><div class="m-card small">${vsLabel('PAYMENT_TERMS', j.paymentTerm)}${inv?.status === 'Posted' ? html` · ${inv.no} · ${j.paymentTerm === 'IMMEDIATE' ? html`<b>collect ${auth.company().currency} ${m2(balanceOf(inv))}</b>` : 'invoice from the office'}` : ' · invoice from the office'}</div>
-    ${j.steps?.checkInAt ? html`<div class="m-section">Steps</div>${progress(j, '')}` : ''}`);
+    `);
   if (!canWork) return;
   const foot = j.status === 'Scheduled' ? html`<button class="btn primary" id="go">On my way</button>`
     : j.status === 'On the way' ? html`<button class="btn primary" id="go">Check in · Time In now</button>`
@@ -117,6 +129,7 @@ const RENDER = {
       <div class="grid g2" style="margin:4px 0"><div class="field"><label>Name</label><input name="t_name" value="${w.tech.name}"></div><div class="field"><label>Designation</label><input name="t_designation" value="${w.tech.designation}"></div></div>
       ${pad('tech', w.tech.signatureId)}
       <div class="small strong" style="margin-top:12px">Acknowledged &amp; accepted by · Customer</div>
+      <button type="button" class="btn block" id="previewDoc" style="margin:6px 0">${icon('eye', 15)} Preview the Work Done form for the customer</button>
       <div class="grid g2" style="margin:4px 0"><div class="field"><label>Name</label><input name="c_name" value="${w.cust.name}"></div><div class="field"><label>Designation</label><input name="c_designation" value="${w.cust.designation}"></div></div>
       ${j.paymentTerm !== 'IMMEDIATE' ? html`<div class="note small" style="margin:4px 0">Payment due: ${vsLabel('PAYMENT_TERMS', j.paymentTerm)} from the invoice date.</div>` : ''}
       ${pad('cust', w.cust.signatureId)}
@@ -198,6 +211,11 @@ export function mRepairStep(page, id, key) {
     $('#stampIn', body)?.addEventListener('change', async e => { await savePads(); const [sid] = await savePhotos(e.target.files); if (sid) { const w = read(); w.cust.stampId = sid; saveJob(id, { workDone: w }); } repaint(); });
     $('[data-stampdel]', body)?.addEventListener('click', async () => { await savePads(); const w = read(); removeBlob(w.cust.stampId); w.cust.stampId = null; saveJob(id, { workDone: w }); repaint(); });
   }
+  // The customer reads the Work Done form before signing: what is drawn is kept, then the form opens as it prints.
+  $('#previewDoc', body)?.addEventListener('click', async () => {
+    if (!locked) { await savePads(); repaint(); }
+    openDocSheet('Preview · Work Done form', workDoneSheet(store.get('jobs', id), auth.company()));
+  });
   $('#recPay', body)?.addEventListener('click', async () => {
     const d = readForm(body);
     const f = $('#proofIn', body)?.files?.[0];

@@ -70,21 +70,15 @@ function markOnSite(insp, rep) {
   store.setStatus('enquiries', insp.enquiryId, 'Report in progress', rep.no);
 }
 
-// Start (or reopen) the report, pre-filled from the enquiry, its product lines, the customer, the site and the
-// assignment. fromOffice: opened on the web before the visit, so statuses and Time In are left alone.
-export function startReport(inspId, { fromOffice = false } = {}) {
+// The report pre-filled from the enquiry, its product lines, the customer, the site and the assignment, not saved:
+// the phone's "Preview form" shows it before the visit starts (no number, no Time In).
+export function reportDraft(inspId, { fromOffice = true } = {}) {
   const insp = store.get('inspections', inspId);
-  if (insp.reportId) {
-    const existing = store.get('siteReports', insp.reportId);
-    if (!fromOffice) markOnSite(insp, existing);
-    return store.get('siteReports', insp.reportId);
-  }
   const enq = store.get('enquiries', insp.enquiryId);
   const { site } = findSite(enq.siteId);
   const tech = store.get('employees', insp.technicianId);
-  const no = store.nextNumber('SVR');
-  const rep = store.insert('siteReports', {
-    no, inspectionId: inspId, enquiryId: enq.id, technicianId: insp.technicianId, customerId: enq.customerId, siteId: enq.siteId,
+  return {
+    inspectionId: inspId, enquiryId: enq.id, technicianId: insp.technicianId, customerId: enq.customerId, siteId: enq.siteId,
     s1: { customer: enq.customerName, site: site?.name || enq.siteName, address: site?.address || '', blockUnit: site?.blockUnit || '', viewedBy: tech?.name || '',
       viewDate: insp.visitAt ? localDate(insp.visitAt) : today(), contactPerson: enq.contactName, contactNo: [enq.mobile, enq.email].filter(Boolean).join(' / '),
       timeIn: fromOffice ? '' : nowTime(), timeOut: '' },
@@ -95,8 +89,24 @@ export function startReport(inspId, { fromOffice = false } = {}) {
     s5: { rows: materialRows(enq), consumables: '' },
     s6: { normalAccess: true, restricted: false, permit: false, safetyDocs: false, protection: false, barricade: false, remarks: '' },
     photos: [],
-    s7: { name: tech?.name || '', designation: tech?.designation || '', signatureId: null, date: today() },
-  }, { status: 'Draft', note: `${no} ${fromOffice ? 'pre-filled by the office' : 'started'} for ${enq.no}` });
+    // Sign-off: the technician (Viewed by) and the customer (Acknowledged by), or the reason the customer could not sign.
+    s7: { name: tech?.name || '', designation: tech?.designation || '', signatureId: null, date: today(),
+      custName: enq.contactName || '', custDesignation: '', custSignatureId: null, custAbsent: false, custAbsentReason: '' },
+  };
+}
+
+// Start (or reopen) the report. fromOffice: opened on the web before the visit, so statuses and Time In are left alone.
+export function startReport(inspId, { fromOffice = false } = {}) {
+  const insp = store.get('inspections', inspId);
+  if (insp.reportId) {
+    const existing = store.get('siteReports', insp.reportId);
+    if (!fromOffice) markOnSite(insp, existing);
+    return store.get('siteReports', insp.reportId);
+  }
+  const enq = store.get('enquiries', insp.enquiryId);
+  const no = store.nextNumber('SVR');
+  const rep = store.insert('siteReports', { no, ...reportDraft(inspId, { fromOffice }) },
+    { status: 'Draft', note: `${no} ${fromOffice ? 'pre-filled by the office' : 'started'} for ${enq.no}` });
   store.update('inspections', inspId, { reportId: rep.id }, false);
   if (!fromOffice) {
     store.setStatus('inspections', inspId, 'Report in progress', no);
@@ -116,6 +126,9 @@ export function reportProblems(rep, { paper = false } = {}) {
   if (!paper && !rep.s7.signatureId) p.push('Sign the report (step 7).');
   const left = (rep.asked || []).filter(a => !a.done).length;
   if (!paper && left) p.push(`Tick each thing the customer asked for once you have checked it (step 2): ${left} of ${rep.asked.length} not ticked yet.`);
+  const s7 = rep.s7;
+  if (!paper && s7.custAbsent && !s7.custAbsentReason) p.push('Give the reason the customer could not sign (step 7).');
+  if (!paper && !s7.custAbsent && !(s7.custSignatureId && s7.custName)) p.push('Let the customer sign with their name (step 7), or tick “Customer not available” and give the reason.');
   return p;
 }
 

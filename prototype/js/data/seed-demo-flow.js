@@ -102,7 +102,7 @@ export function newEnquiry(code, tech, text, priority = 'MEDIUM') {
     lines: [{ itemRef: '', itemName: '', qty: null, description: text }] }, { assign: { technicianId: tech, visitAt: new Date(Date.now() + 3600000).toISOString(), confirmedBy: 'Phone' } });
 }
 // The technician's site report: picks [[tag, fault]], mats [[item code, qty, tag]], s3 / s4 overrides.
-export function fileReport(enq, tech, { picks, mats = [], desc, s3 = {}, s4 = {} }, sigId) {
+export function fileReport(enq, tech, { picks, mats = [], desc, s3 = {}, s4 = {} }, sigId, custSigId) {
   as(techLogin[tech] || 'gadmin');
   const e = store.get('enquiries', enq.id);
   const { site } = findSite(e.siteId);
@@ -112,7 +112,7 @@ export function fileReport(enq, tech, { picks, mats = [], desc, s3 = {}, s4 = {}
   const rows = mats.map(([code, qty, tag]) => { const it = item(code); return { name: it.name, spec: it.spec || '', qty, unit: it.unit, remarks: '', itemId: it.id, shutterKey: sh(tag)?.id || '' }; });
   saveReport(rep.id, {
     s1: { ...rep.s1, timeIn: '10:10', timeOut: '10:55' }, shutters, s5: { rows, consumables: '' }, s3: { ...rep.s3, hoursPerDay: 6, ...s3 }, s4: { ...rep.s4, ...s4 },
-    s2: { ...rep.s2, replace: rows.length > 0, description: desc, findings: picks.map(([t, f]) => `${t} ${f}`).join('; ') }, s7: { ...rep.s7, signatureId: sigId },
+    s2: { ...rep.s2, replace: rows.length > 0, description: desc, findings: picks.map(([t, f]) => `${t} ${f}`).join('; ') }, s7: { ...rep.s7, signatureId: sigId, custName: e.contactName, custSignatureId: custSigId },
     asked: (rep.asked || []).map(a => ({ ...a, done: true })), // the technician checked everything the customer asked for
   });
   submitReport(rep.id);
@@ -182,8 +182,8 @@ async function demoShutters() {
 
   // 1. Invoice overdue and part paid, with a follow-up (Demo Retail, 15 days). Job documented, waiting for payment.
   e = phase({ days: -50, at: '09:30' }, () => newEnquiry('CUS-0003', B, 'Shop-front shutter guide rail hit by a trolley; shutter rubs.'));
-  const s1 = await sig();
-  phase({ days: -50, at: '11:30' }, () => fileReport(e, B, { picks: [['RS-1', 'Guide rail bent, shutter rubs']], mats: [['ITM-005', 3, 'RS-1'], ['ITM-001', 6, 'RS-1']], desc: 'Replace the bent guide rail on RS-1.' }, s1));
+  const s1 = await sig(), c1 = await signature(4);
+  phase({ days: -50, at: '11:30' }, () => fileReport(e, B, { picks: [['RS-1', 'Guide rail bent, shutter rubs']], mats: [['ITM-005', 3, 'RS-1'], ['ITM-001', 6, 'RS-1']], desc: 'Replace the bent guide rail on RS-1.' }, s1, c1));
   q = phase({ days: -49, at: '10:00' }, () => makeQuote(e));
   phase({ days: -49, at: '14:00' }, () => decide(q));
   phase({ days: -49, at: '15:00' }, () => send(q));
@@ -196,8 +196,8 @@ async function demoShutters() {
 
   // 2. Invoice due in 2 days (ABC Industries, 30 days), not documented yet.
   e = phase({ days: -34, at: '09:15' }, () => newEnquiry('CUS-0002', A, 'Loading bay 5 shutter drops when opened halfway.'));
-  const s2 = await sig();
-  phase({ days: -34, at: '11:00' }, () => fileReport(e, A, { picks: [['W-05', 'Springs tired, door drops']], mats: [['ITM-004', 2, 'W-05']], desc: 'Replace both springs on W-05.' }, s2));
+  const s2 = await sig(), c2 = await signature(4);
+  phase({ days: -34, at: '11:00' }, () => fileReport(e, A, { picks: [['W-05', 'Springs tired, door drops']], mats: [['ITM-004', 2, 'W-05']], desc: 'Replace both springs on W-05.' }, s2, c2));
   q = phase({ days: -33, at: '10:00' }, () => makeQuote(e));
   phase({ days: -33, at: '11:30' }, () => decide(q));
   phase({ days: -33, at: '12:00' }, () => send(q));
@@ -208,8 +208,8 @@ async function demoShutters() {
 
   // 3. Closed: the whole story, paid on site (Demo Cafe, immediate).
   e = phase({ days: -21, at: '08:50' }, () => newEnquiry('CUS-0006', B, 'Shop-front lock jammed, cannot open the cafe.', 'HIGH'));
-  const s3 = await sig();
-  phase({ days: -21, at: '10:20' }, () => fileReport(e, B, { picks: [['TP-1', 'Lock jammed']], mats: [['ITM-006', 1, 'TP-1']], desc: 'Replace the lock set on TP-1.' }, s3));
+  const s3 = await sig(), c3 = await signature(4);
+  phase({ days: -21, at: '10:20' }, () => fileReport(e, B, { picks: [['TP-1', 'Lock jammed']], mats: [['ITM-006', 1, 'TP-1']], desc: 'Replace the lock set on TP-1.' }, s3, c3));
   q = phase({ days: -21, at: '11:00' }, () => makeQuote(e));
   phase({ days: -21, at: '11:40' }, () => decide(q));
   phase({ days: -21, at: '12:00' }, () => send(q));
@@ -220,8 +220,8 @@ async function demoShutters() {
 
   // 4. Work done, draft invoice to post; one line partly done (Island Demo Chemicals, Line costing, 15 days).
   e = phase({ days: -14, at: '09:40' }, () => newEnquiry('CUS-0005', B, 'Store room shutter jammed; workshop motorised shutter dead.'));
-  const s4 = await sig();
-  phase({ days: -14, at: '13:00' }, () => fileReport(e, B, { picks: [['JI-1', 'Jammed, guide rail bent'], ['JI-3', 'Motor burnt out']], mats: [['ITM-005', 6, 'JI-1'], ['ITM-002', 1, 'JI-3'], ['ITM-010', 1, 'JI-3']], desc: 'Straighten or replace the JI-1 guide rail; replace the JI-3 motor and remote.', s3: { days: 1, persons: 2 } }, s4));
+  const s4 = await sig(), c4 = await signature(4);
+  phase({ days: -14, at: '13:00' }, () => fileReport(e, B, { picks: [['JI-1', 'Jammed, guide rail bent'], ['JI-3', 'Motor burnt out']], mats: [['ITM-005', 6, 'JI-1'], ['ITM-002', 1, 'JI-3'], ['ITM-010', 1, 'JI-3']], desc: 'Straighten or replace the JI-1 guide rail; replace the JI-3 motor and remote.', s3: { days: 1, persons: 2 } }, s4, c4));
   q = phase({ days: -12, at: '10:00' }, () => makeQuote(e, { line: true }));
   phase({ days: -12, at: '15:00' }, () => decide(q));
   phase({ days: -12, at: '16:00' }, () => send(q));
@@ -231,8 +231,8 @@ async function demoShutters() {
 
   // 5. Rejected: the customer chose another vendor (Changi Demo Logistics).
   e = phase({ days: -12, at: '14:00' }, () => newEnquiry('CUS-0004', A, 'Office back door shutter noisy and stiff.'));
-  const s5 = await sig();
-  phase({ days: -11, at: '10:30' }, () => fileReport(e, A, { picks: [['CG-3', 'Noisy and stiff, needs servicing']], mats: [['ITM-009', 2, 'CG-3']], desc: 'Clean, lubricate and adjust CG-3.' }, s5));
+  const s5 = await sig(), c5 = await signature(4);
+  phase({ days: -11, at: '10:30' }, () => fileReport(e, A, { picks: [['CG-3', 'Noisy and stiff, needs servicing']], mats: [['ITM-009', 2, 'CG-3']], desc: 'Clean, lubricate and adjust CG-3.' }, s5, c5));
   q = phase({ days: -10, at: '10:00' }, () => makeQuote(e));
   phase({ days: -10, at: '11:00' }, () => decide(q));
   phase({ days: -10, at: '11:30' }, () => send(q));
@@ -240,16 +240,16 @@ async function demoShutters() {
 
   // 6. Sent, waiting for the customer; expires in 2 days (Demo Retail, 15 days).
   e = phase({ days: -7, at: '09:00' }, () => newEnquiry('CUS-0003', B, 'Shop-front lock broken and bottom bar bent.'));
-  const s6 = await sig();
-  phase({ days: -7, at: '11:15' }, () => fileReport(e, B, { picks: [['RS-1', 'Lock broken, bottom bar bent']], mats: [['ITM-006', 1, 'RS-1'], ['ITM-007', 4.2, 'RS-1']], desc: 'Replace the lock set and the bottom bar on RS-1.' }, s6));
+  const s6 = await sig(), c6 = await signature(4);
+  phase({ days: -7, at: '11:15' }, () => fileReport(e, B, { picks: [['RS-1', 'Lock broken, bottom bar bent']], mats: [['ITM-006', 1, 'RS-1'], ['ITM-007', 4.2, 'RS-1']], desc: 'Replace the lock set and the bottom bar on RS-1.' }, s6, c6));
   q = phase({ days: -6, at: '10:00' }, () => makeQuote(e));
   phase({ days: -5, at: '09:30' }, () => decide(q));
   phase({ days: -5, at: '10:00' }, () => send(q));
 
   // 7. Job to schedule; the motor is on order (ABC Industries, 30 days approved at the counter-check).
   e = phase({ days: -6, at: '10:00' }, () => newEnquiry('CUS-0002', A, 'Loading bay 12 motorised shutter does not respond.', 'HIGH'));
-  const s7 = await sig();
-  phase({ days: -6, at: '14:00' }, () => fileReport(e, A, { picks: [['W-12', 'Motor does not respond']], mats: [['ITM-003', 1, 'W-12']], desc: 'Replace the 400 kg single phase motor on W-12.' }, s7));
+  const s7 = await sig(), c7 = await signature(4);
+  phase({ days: -6, at: '14:00' }, () => fileReport(e, A, { picks: [['W-12', 'Motor does not respond']], mats: [['ITM-003', 1, 'W-12']], desc: 'Replace the 400 kg single phase motor on W-12.' }, s7, c7));
   q = phase({ days: -4, at: '10:00' }, () => makeQuote(e));
   phase({ days: -4, at: '11:00' }, () => decide(q));
   phase({ days: -4, at: '11:30' }, () => send(q));
@@ -257,8 +257,8 @@ async function demoShutters() {
 
   // 8. On site now: Technician B has finished and is waiting for the office's OK to leave (Demo Cafe, paid on site).
   e = phase({ days: -4, at: '09:20' }, () => newEnquiry('CUS-0006', B, 'Side entrance collapsible gate very stiff.'));
-  const s8 = await sig();
-  phase({ days: -4, at: '11:00' }, () => fileReport(e, B, { picks: [['TP-2', 'Gate stiff, rollers dry']], mats: [['ITM-009', 1, 'TP-2']], desc: 'Clean and lubricate the TP-2 gate rollers.' }, s8));
+  const s8 = await sig(), c8 = await signature(4);
+  phase({ days: -4, at: '11:00' }, () => fileReport(e, B, { picks: [['TP-2', 'Gate stiff, rollers dry']], mats: [['ITM-009', 1, 'TP-2']], desc: 'Clean and lubricate the TP-2 gate rollers.' }, s8, c8));
   q = phase({ days: -3, at: '10:00' }, () => makeQuote(e));
   phase({ days: -3, at: '10:30' }, () => decide(q));
   phase({ days: -3, at: '11:00' }, () => send(q));
@@ -271,22 +271,22 @@ async function demoShutters() {
 
   // 9. Level 2: a big quotation the Approver has approved, now waiting for Management (Island Demo Chemicals).
   e = phase({ days: -3, at: '09:00' }, () => newEnquiry('CUS-0005', B, 'Fire exit shutter slats badly corroded; replace the curtain.'));
-  const s9 = await sig();
-  phase({ days: -3, at: '14:00' }, () => fileReport(e, B, { picks: [['JI-2', 'Slats corroded, curtain to replace']], mats: [['ITM-008', 120, 'JI-2'], ['ITM-007', 8, 'JI-2']], desc: 'Replace the JI-2 curtain slats and bottom bar; scissor lift for 2 days.', s3: { persons: 3, days: 2 }, s4: { scissor: true, scissorNos: 1, maxHeight: 6, providedBy: 'Contractor' } }, s9));
+  const s9 = await sig(), c9 = await signature(4);
+  phase({ days: -3, at: '14:00' }, () => fileReport(e, B, { picks: [['JI-2', 'Slats corroded, curtain to replace']], mats: [['ITM-008', 120, 'JI-2'], ['ITM-007', 8, 'JI-2']], desc: 'Replace the JI-2 curtain slats and bottom bar; scissor lift for 2 days.', s3: { persons: 3, days: 2 }, s4: { scissor: true, scissorNos: 1, maxHeight: 6, providedBy: 'Contractor' } }, s9, c9));
   q = phase({ days: -1, at: '10:00' }, () => makeQuote(e));
   phase({ days: -1, at: '16:00' }, () => decide(q));
 
   // 10. Approved, ready to send (ABC Industries, 30 days: the counter-check approved the term too).
   e = phase({ days: -3, at: '11:00' }, () => newEnquiry('CUS-0002', A, 'Loading bays 7 and 8: shutters drop, one lock broken.'));
-  const s10 = await sig();
-  phase({ days: -3, at: '15:00' }, () => fileReport(e, A, { picks: [['W-07', 'Springs tired, lock broken'], ['W-08', 'Springs tired']], mats: [['ITM-004', 2, 'W-07'], ['ITM-006', 1, 'W-07'], ['ITM-004', 2, 'W-08']], desc: 'Replace the springs on W-07 and W-08 and the W-07 lock.' }, s10));
+  const s10 = await sig(), c10 = await signature(4);
+  phase({ days: -3, at: '15:00' }, () => fileReport(e, A, { picks: [['W-07', 'Springs tired, lock broken'], ['W-08', 'Springs tired']], mats: [['ITM-004', 2, 'W-07'], ['ITM-006', 1, 'W-07'], ['ITM-004', 2, 'W-08']], desc: 'Replace the springs on W-07 and W-08 and the W-07 lock.' }, s10, c10));
   q = phase({ days: -1, at: '11:00' }, () => makeQuote(e, { line: true }));
   phase({ hoursAgo: 3 }, () => decide(q));
 
   // 11. Scheduled for Technician A, invoice raised at scheduling (ABC Industries; the customer asked to pay on completion).
   e = phase({ days: -3, at: '13:00' }, () => newEnquiry('CUS-0002', A, 'Loading bay 2 shutter noisy.'));
-  const s11 = await sig();
-  phase({ days: -2, at: '10:00' }, () => fileReport(e, A, { picks: [['W-02', 'Noisy, needs adjusting']], mats: [['ITM-009', 1, 'W-02']], desc: 'Adjust and lubricate W-02.' }, s11));
+  const s11 = await sig(), c11 = await signature(4);
+  phase({ days: -2, at: '10:00' }, () => fileReport(e, A, { picks: [['W-02', 'Noisy, needs adjusting']], mats: [['ITM-009', 1, 'W-02']], desc: 'Adjust and lubricate W-02.' }, s11, c11));
   q = phase({ days: -2, at: '14:00' }, () => makeQuote(e));
   phase({ days: -2, at: '15:00' }, () => decide(q));
   phase({ days: -2, at: '15:30' }, () => send(q));
@@ -295,14 +295,14 @@ async function demoShutters() {
 
   // 12. Waiting for the Approver's counter-check (Demo Cafe, immediate).
   e = phase({ days: -2, at: '16:30' }, () => newEnquiry('CUS-0006', B, 'Shop-front shutter very heavy to lift.'));
-  const s12 = await sig();
-  phase({ days: -1, at: '10:00' }, () => fileReport(e, B, { picks: [['TP-1', 'Spring broken, very heavy']], mats: [['ITM-004', 2, 'TP-1'], ['ITM-009', 1, 'TP-1']], desc: 'Replace both springs on TP-1 and lubricate.' }, s12));
+  const s12 = await sig(), c12 = await signature(4);
+  phase({ days: -1, at: '10:00' }, () => fileReport(e, B, { picks: [['TP-1', 'Spring broken, very heavy']], mats: [['ITM-004', 2, 'TP-1'], ['ITM-009', 1, 'TP-1']], desc: 'Replace both springs on TP-1 and lubricate.' }, s12, c12));
   q = phase({ hoursAgo: 2 }, () => makeQuote(e));
 
   // 13. Estimate being prepared (Changi Demo Logistics, Line costing).
   e = phase({ days: -1, at: '09:10' }, () => newEnquiry('CUS-0004', A, 'Loading bay doors: bay 1 drops, bay 2 motor overheats.', 'HIGH'));
-  const s13 = await sig();
-  phase({ days: -1, at: '13:30' }, () => fileReport(e, A, { picks: [['CG-1', 'Lift cable snapped, door drops'], ['CG-2', 'Motor overheats and stops']], mats: [['ITM-005', 4, 'CG-1'], ['ITM-002', 1, 'CG-2']], desc: 'Replace the CG-1 guide rails and the CG-2 motor.', s3: { persons: 3 }, s4: { scissor: true, scissorNos: 1, maxHeight: 5, providedBy: 'Contractor' } }, s13));
+  const s13 = await sig(), c13 = await signature(4);
+  phase({ days: -1, at: '13:30' }, () => fileReport(e, A, { picks: [['CG-1', 'Lift cable snapped, door drops'], ['CG-2', 'Motor overheats and stops']], mats: [['ITM-005', 4, 'CG-1'], ['ITM-002', 1, 'CG-2']], desc: 'Replace the CG-1 guide rails and the CG-2 motor.', s3: { persons: 3 }, s4: { scissor: true, scissorNos: 1, maxHeight: 5, providedBy: 'Contractor' } }, s13, c13));
   phase({ hoursAgo: 1 }, () => { as('ops'); const est = createEstimate(e.id); saveEstimate(est.id, { costingLevel: 'LINE' }); });
 }
 

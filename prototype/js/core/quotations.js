@@ -88,6 +88,25 @@ export function createFromEstimate(estId) {
   return q;
 }
 
+// "Tax on documents" switched in Company Setup: draft estimates and quotations not yet sent for checking (Draft,
+// Returned) take the new tax; their prices before tax stay. Documents in checking, sent, accepted or posted keep theirs.
+export function retaxDrafts() {
+  const tax = companyTax();
+  const same = e => e.taxRate === tax.taxRate && e.taxCode === tax.taxCode;
+  let estimates = 0, quotations = 0;
+  store.list('estimates', e => e.status === 'Draft' && !same(e)).forEach(e => { store.update('estimates', e.id, tax, `Tax setting changed: ${tax.taxRate ? `${tax.taxLabel} ${tax.taxRate} %` : 'no tax'}`); estimates++; });
+  store.list('quotations', q => ['Draft', 'Returned'].includes(q.status)).forEach(q => {
+    const est = store.get('estimates', q.estimateId);
+    if (!est || same(est) && q.taxRate === tax.taxRate) return;
+    if (!same(est)) store.update('estimates', est.id, tax, false);
+    const { s } = rowsFromEstimate(store.get('estimates', est.id));
+    const amc = q.amc ? { ...q.amc, plan: s.plan, perMonth: s.metrics.perMonth } : null;
+    store.update('quotations', q.id, { taxLabel: tax.taxLabel, taxRate: tax.taxRate, tax: s.tax, total: s.total, amc }, `Tax setting changed: total ${s.total.toFixed(2)}`);
+    quotations++;
+  });
+  return { estimates, quotations };
+}
+
 function supersede(q, note) {
   cancelTasksFor('quotation', q.id, note);
   store.setStatus('quotations', q.id, 'Superseded', note);

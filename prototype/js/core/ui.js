@@ -107,6 +107,25 @@ export function tiles(list, activeKey, cls = 'tiles') {
 
 // ---------- Form fields ----------
 // f: {name, label, type, value, options, required, readonly, hint, cls, placeholder, mic, list, step}
+// Line icons for the phone (tabs, header, buttons): one stroke style, drawn in the text colour.
+const ICON_PATHS = {
+  home: '<path d="M3 11 12 4l9 7v9h-7v-6h-4v6H3z"/>',
+  jobs: '<path d="M4 8h16v12H4zM9 8V5h6v3"/>',
+  enquiries: '<path d="M5 4h14v16H5zM8 9h8M8 13h8M8 17h5"/>',
+  tasks: '<path d="M4 12l5 5L20 6"/>',
+  more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
+  back: '<path d="M15 5l-7 7 7 7"/>',
+  search: '<circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/>',
+  call: '<path d="M5 4h4l2 5-2 1a11 11 0 0 0 5 5l1-2 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
+  pin: '<path d="M12 21s7-6 7-11a7 7 0 0 0-14 0c0 5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  play: '<path d="M8 5v14l11-7z"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+};
+export const icon = (name, size = 16) => raw(`<svg class="ico" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name] || ''}</svg>`);
+
 // The header of an entry page: customer, site and document details in one full-width card that folds to a summary
 // line (the sections follow one below another). Forms open it; a saved record shows it folded. With an id, the
 // reader's choice is kept for that record while browsing.

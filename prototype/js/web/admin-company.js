@@ -9,6 +9,7 @@ import { shrinkImage } from '../core/media.js';
 import { saveCompany, saveLogo, removeLogo, logoSrc, setupToFinish, hasPostedInvoices, LOCKED_ONCE_POSTED, DAY_NAMES, fmtHours } from '../core/setup.js';
 import { pageHead } from './shell.js';
 import { render } from '../app.js';
+import { retaxDrafts } from '../core/quotations.js';
 
 const toHours = t => { const [h, m] = String(t || '0:0').split(':').map(Number); return h + (m || 0) / 60; };
 
@@ -53,8 +54,8 @@ export function renderCompanySetup(el) {
         ${line('currency', 'Currency', { lock: locked })}
         </div><div><div class="form-sec">Registration and tax</div>
         ${line('regLabel', 'Registration label')}${line('regNo', 'Registration no.', { tag: ph('regNo') })}
-        <div class="field"><label>Charges tax</label><span class="chips">${[['true', 'Yes'], ['false', 'No']].map(([v, l]) => html`<label class="chip"><input type="radio" name="chargesTax" value="${v}" ${String(!!c.chargesTax) === v ? 'checked' : ''} ${edit ? '' : 'disabled'}><span>${l}</span></label>`)}</span>
-          <div class="hint">New estimates take the change; drafts keep their tax</div></div>
+        <div class="field"><label>Tax on documents</label><span class="chips">${[['true', 'On'], ['false', 'Off']].map(([v, l]) => html`<label class="chip"><input type="radio" name="chargesTax" value="${v}" ${String(!!c.chargesTax) === v ? 'checked' : ''} ${edit ? '' : 'disabled'}><span>${l}</span></label>`)}</span>
+          <div class="hint">${c.chargesTax ? `On: estimates, quotations and invoices add ${c.taxLabel || 'tax'}.` : 'Off: no tax line, prints say INVOICE (not TAX INVOICE) and leave out the tax number.'} A change re-prices draft estimates and quotations not yet sent for checking; documents in checking, sent, accepted or posted keep their tax.</div></div>
         ${line('taxLabel', 'Tax label')}${line('taxRegLabel', 'Tax number label')}${line('taxRegNo', 'Tax number', { tag: ph('taxRegNo') })}
         <div class="field"><label for="c-tax">Default tax code</label><select id="c-tax" name="defaultTaxCode" ${edit ? '' : 'disabled'}>${taxes.map(t => html`<option value="${t.code}" ${t.code === c.defaultTaxCode ? 'selected' : ''}>${t.code} · ${t.name}</option>`)}</select><div class="hint">From the Tax master</div></div>
         </div><div><div class="form-sec">Contact</div>
@@ -94,9 +95,11 @@ export function renderCompanySetup(el) {
   };
   form.addEventListener('input', () => { $('#lh', el).innerHTML = String(letterheadPreview({ ...c, ...read() })); });
   $('#save', el)?.addEventListener('click', () => {
-    const err = saveCompany(read());
+    const before = !!c.chargesTax, patch = read();
+    const err = saveCompany(patch);
     if (err) { toast(err, 'bad'); return; }
-    toast('Company Setup saved'); render();
+    const n = before !== patch.chargesTax ? retaxDrafts() : null;
+    toast(n ? `Company Setup saved · tax ${patch.chargesTax ? 'on' : 'off'}: ${n.estimates} draft estimate(s) and ${n.quotations} quotation(s) re-priced` : 'Company Setup saved'); render();
   });
   $('#logo', el)?.addEventListener('change', async e => {
     const f = e.target.files[0];

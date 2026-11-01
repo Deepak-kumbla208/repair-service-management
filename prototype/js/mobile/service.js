@@ -4,7 +4,7 @@
 // payment (GS with immediate payment only) and check-out. kind: 'visit' (amcVisits) or 'gjob' (a GS job in jobs).
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, $$, go, toast, openModal, fmtDate, fmtTime, chipGroup, readForm, pill, MIC } from '../core/ui.js';
+import { html, $, $$, go, toast, openModal, fmtDate, fmtTime, chipGroup, readForm, pill, MIC, icon } from '../core/ui.js';
 import { zoneLabel, vsLabel, vsOptions, items } from '../core/lookups.js';
 import { hydrateImages, removeBlob } from '../core/media.js';
 import { savePhotos, signaturePad, bindMics } from '../core/capture.js';
@@ -12,6 +12,8 @@ import { startTravel, arrive, saveSvc, signOf, shutterState, setItem, setUnsafe,
 import { visitsOf } from '../core/contracts.js';
 import { invoiceForJob, balanceOf, recordPayment, paymentsFor } from '../core/billing.js';
 import { RATINGS } from '../web/print-docs.js';
+import { serviceSheet } from '../web/print-amc.js';
+import { openDocSheet } from './shell.js';
 
 const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const COLL = { visit: 'amcVisits', gjob: 'jobs' };
@@ -41,7 +43,7 @@ export function serviceCard(kind, d) {
     <div class="muted">${d.site} · Zone ${zoneLabel(d.zoneId)}</div>
     <div class="muted">${kind === 'visit' ? d.contractNo : d.no} · ${(d.shutters || []).length} shutters · ${d.contact}</div>
     <div class="row" style="margin-top:4px"><span class="pill">${d.status}</span>${d.days > 1 ? html`<span class="small muted">${d.days} days</span>` : ''}</div>
-    <div class="actions">${d.phone ? html`<a class="btn" href="tel:${d.phone.replace(/\s/g, '')}">☎ Call</a>` : ''}<a class="btn primary" href="#/m/${kind}/${d.id}" style="flex:2">${action}</a></div>
+    <div class="actions">${d.phone ? html`<a class="btn" href="tel:${d.phone.replace(/\s/g, '')}">${icon('call', 15)} Call</a>` : ''}<a class="btn primary" href="#/m/${kind}/${d.id}" style="flex:2">${action}</a></div>
   </div>`;
 }
 
@@ -56,7 +58,7 @@ export function mService(page, kind, id) {
     <div class="row"><span class="pill ${kind === 'visit' ? 'green' : 'purple'}">${kind === 'visit' ? 'AMC visit' : 'General servicing'}</span><span class="pill">${d.status}</span><span class="grow"></span><b>${d.start ? fmtTime(d.start) : ''}</b></div>
     <h2 style="margin:8px 0 2px">${d.customer}</h2><div class="muted">${kind === 'visit' ? `${d.contractNo} · visit ${d.n} of ${d.of}` : d.no} · ${d.start ? fmtDate(d.start) : ''}</div>
     <div class="m-card" style="margin-top:10px"><div class="k muted small">Address</div>${d.address || d.site}<br><span class="pill blue" style="margin-top:4px">Zone ${zoneLabel(d.zoneId)}</span>${d.access ? html`<div class="small" style="margin-top:4px">Access: ${d.access}</div>` : ''}</div>
-    <div class="m-card"><div class="k muted small">Contact</div>${d.contact}<br>${d.phone ? html`<a href="tel:${d.phone.replace(/\s/g, '')}">☎ ${d.phone}</a>` : ''}</div>
+    <div class="m-card"><div class="k muted small">Contact</div>${d.contact}<br>${d.phone ? html`<div class="m-acts"><a class="btn" href="tel:${d.phone.replace(/\s/g, '')}">${icon('call', 15)} ${d.phone}</a></div>` : ''}</div>
     <div class="m-section">Shutters to check (${d.shutters.length})</div>${d.shutters.map(sh => html`<div class="m-card small"><b>${sh.tag}</b> ${sh.location} · ${sh.typeName} · ${sh.sizeCode}${sh.fireRated ? ' · fire-rated' : ''}</div>`)}
     ${kind === 'gjob' ? html`<div class="m-section">Payment</div><div class="m-card small">${vsLabel('PAYMENT_TERMS', d.paymentTerm)}${inv?.status === 'Posted' && d.paymentTerm === 'IMMEDIATE' ? html` · ${inv.no} · <b>collect ${auth.company().currency} ${m2(balanceOf(inv))}</b>` : ' · invoice from the office'}</div>`
       : html`<div class="m-section">Payment</div><div class="m-card small">Nothing to collect: the contract is billed by its plan.</div>`}
@@ -160,6 +162,7 @@ const RENDER = {
       <div class="grid g2" style="margin:4px 0"><div class="field"><label>Name</label><input name="t_name" value="${s.tech.name}" ${locked ? 'disabled' : ''}></div><div class="field"><label>Designation</label><input name="t_designation" value="${s.tech.designation}" ${locked ? 'disabled' : ''}></div></div>
       ${pad('tech', s.tech.signatureId)}
       <div class="small strong" style="margin-top:10px">Acknowledged by · Customer</div>
+      <button type="button" class="btn block" id="previewDoc" style="margin:6px 0">${icon('eye', 15)} Preview the service report for the customer</button>
       <div class="grid g2" style="margin:4px 0"><div class="field"><label>Name</label><input name="c_name" value="${s.cust.name}" ${locked ? 'disabled' : ''}></div><div class="field"><label>Designation</label><input name="c_designation" value="${s.cust.designation}" ${locked ? 'disabled' : ''}></div></div>
       ${pad('cust', s.cust.signatureId)}
       <div class="m-section">Company stamp</div>
@@ -219,6 +222,11 @@ export function mServiceStep(page, kind, id, key) {
     $$('[data-resign]', body).forEach(b => b.addEventListener('click', async () => { await savePads(); const s = readSign(); removeBlob(s[b.dataset.resign].signatureId); s[b.dataset.resign].signatureId = null; saveSvc(coll, id, { [sk]: s }); repaint(); }));
     $('#stampIn', body)?.addEventListener('change', async e => { await savePads(); const [sid] = await savePhotos(e.target.files); if (sid) { const s = readSign(); s.cust.stampId = sid; saveSvc(coll, id, { [sk]: s }); } repaint(); });
   }
+  // The customer reads the service report before signing: what is drawn is kept, then the report opens as it prints.
+  $('#previewDoc', body)?.addEventListener('click', async () => {
+    if (!locked) { await savePads(); repaint(); }
+    openDocSheet('Preview · Service report', serviceSheet(store.get(coll, id), coll, auth.company()));
+  });
   $('#recPay', body)?.addEventListener('click', () => {
     const f = readForm(body);
     const r = recordPayment({ invoiceId: invoiceForJob(id).id, amount: f.amount, method: f.method, reference: f.reference, via: 'phone' });

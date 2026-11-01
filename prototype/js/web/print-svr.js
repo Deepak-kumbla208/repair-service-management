@@ -75,12 +75,13 @@ export function svrSheetHtml(rep, company) {
     </table>
     <table><tr><td class="lbl">Remarks / Exclusions / Assumptions</td><td data-f="s6.remarks">${s6.remarks}</td></tr></table>
     <table style="margin-top:6px">
-      ${sec(7, 'SIGN-OFF', 2)}
-      <tr><td colspan="2"><b>VIEWED BY</b> &nbsp; Company Representative</td></tr>
-      <tr><td class="lbl">Name</td><td data-f="s7.name">${s7.name}</td></tr>
-      <tr><td class="lbl">Designation</td><td data-f="s7.designation">${s7.designation}</td></tr>
-      <tr><td class="lbl">Signature</td><td data-f="s7.signature">${s7.signatureId ? html`<img class="sig" data-media="${s7.signatureId}" alt="Signature">` : ''}</td></tr>
-      <tr><td class="lbl">Date <span class="small">DD / MM / YYYY</span></td><td data-f="s7.date">${dmy(s7.date)}</td></tr>
+      ${sec(7, 'SIGN-OFF', 4)}
+      <tr><td colspan="2"><b>VIEWED BY</b> &nbsp; Company Representative</td><td colspan="2"><b>ACKNOWLEDGED BY</b> &nbsp; Customer</td></tr>
+      <tr><td class="lbl">Name</td><td>${s7.name}</td><td class="lbl">Name</td><td>${s7.custAbsent ? '' : s7.custName || ''}</td></tr>
+      <tr><td class="lbl">Designation</td><td>${s7.designation}</td><td class="lbl">Designation</td><td>${s7.custAbsent ? '' : s7.custDesignation || ''}</td></tr>
+      <tr><td class="lbl">Signature</td><td>${s7.signatureId ? html`<img class="sig" data-media="${s7.signatureId}" alt="Signature">` : ''}</td>
+        <td class="lbl">Signature</td><td>${s7.custAbsent ? `Not signed: ${s7.custAbsentReason || 'customer not available'}` : s7.custSignatureId ? html`<img class="sig" data-media="${s7.custSignatureId}" alt="Customer signature">` : ''}</td></tr>
+      <tr><td class="lbl">Date <span class="small">DD / MM / YYYY</span></td><td>${dmy(s7.date)}</td><td class="lbl">Date</td><td>${s7.custSignatureId && !s7.custAbsent ? dmy(s7.date) : ''}</td></tr>
     </table>
     <div class="eoe">E. &amp; O.E. (errors and omissions excepted). This report is for quotation purposes; final quantities are subject to confirmation on site.</div>
     <div class="foot"><span>${company.name} &nbsp;|&nbsp; Site Viewing Report</span><span>Page 1 of 1</span></div>

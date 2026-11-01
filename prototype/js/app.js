@@ -39,8 +39,10 @@ import { mService, mServiceStep, mShutter } from './mobile/service.js';
 import { mTasks, mTask } from './mobile/tasks.js';
 import { mHome, mMore, mSoon } from './mobile/home.js';
 import { mJobs, mJob } from './mobile/jobs.js';
-import { mReport } from './mobile/site-report.js';
+import { mReport, mReportView } from './mobile/site-report.js';
 import { mEnquiries, mEnquiry } from './mobile/enquiries.js';
+import { mEnquiryForm } from './mobile/enquiry-form.js';
+import { mCustomers, mCustomer, mCustomerForm } from './mobile/customers.js';
 
 const app = document.getElementById('app');
 
@@ -86,8 +88,15 @@ const MOBILE = [
   [/^m\/jobs$/, mJobs],
   [/^m\/job\/([^/]+)$/, mJob, 'inspection'],
   [/^m\/report\/([^/]+)\/(\d)$/, mReport, 'inspection'],
+  [/^m\/report\/([^/]+)\/view$/, mReportView, 'inspection'],
   [/^m\/enquiries$/, mEnquiries, 'enquiry'],
   [/^m\/enquiry\/([^/]+)$/, mEnquiry, 'enquiry'],
+  [/^m\/enquiry-new$/, page => mEnquiryForm(page), 'enquiry'],
+  [/^m\/enquiry\/([^/]+)\/edit$/, mEnquiryForm, 'enquiry'],
+  [/^m\/customers$/, mCustomers, 'customer'],
+  [/^m\/customer-new$/, page => mCustomerForm(page), 'customer'],
+  [/^m\/customer\/([^/]+)$/, mCustomer, 'customer'],
+  [/^m\/customer\/([^/]+)\/edit$/, mCustomerForm, 'customer'],
   [/^m\/rjob\/([^/]+)$/, mRepairJob, 'job'],
   [/^m\/rjob\/([^/]+)\/(\w+)$/, mRepairStep, 'job'],
   [/^m\/(visit|gjob)\/([^/]+)$/, mService, m => (m[1] === 'visit' ? 'amcExecution' : 'job')],
@@ -121,6 +130,7 @@ export function routeForView(route, view) {
   }
   if ((m = route.match(/^m\/enquiry\/([^/]+)/))) return `enquiries/${m[1]}`;
   if ((m = route.match(/^m\/job\/([^/]+)/))) return `inspections/${m[1]}`;
+  if ((m = route.match(/^m\/report\/([^/]+)/))) return `reports/${m[1]}`;
   if ((m = route.match(/^m\/(rjob|gjob)\/([^/]+)/))) return `jobs/${m[2]}`;
   if ((m = route.match(/^m\/visit\/([^/]+)/))) return `amc-visits/${m[1]}`;
   if (route === 'm/tasks' || route.startsWith('m/task/')) return 'tasks';

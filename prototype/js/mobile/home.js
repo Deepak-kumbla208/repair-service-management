@@ -1,12 +1,12 @@
 // Phone: Home (role-based tiles and today's work), More (view switch, switch user, reset), and later-stretch tabs.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, on, go, tiles, confirmBox, toast, fmtTime } from '../core/ui.js';
+import { html, on, go, tiles, confirmBox, toast, fmtTime, icon } from '../core/ui.js';
 import { isToday } from '../core/enquiries.js';
 import { switchView, resetDemo, render } from '../app.js';
 import { logoutTo } from '../web/shell.js';
 import { enquiryTiles, setEnquiryTile } from '../web/enquiry-list.js';
-import { myWork, openReport } from './jobs.js';
+import { myWork } from './jobs.js';
 import { myTasks } from '../core/workflow.js';
 import { taskCard } from './tasks.js';
 import { revenue, owed, amcEnding, visitsOverdue } from '../core/dashboard.js';
@@ -14,24 +14,37 @@ import { isOffline, waiting, goOffline, goOnline } from '../core/offline.js';
 
 const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; };
+const today = () => new Date().toLocaleDateString('en-SG', { weekday: 'long', day: 'numeric', month: 'short' });
+
 export function mHome(page) {
   const u = auth.user(), r = auth.role(), c = auth.company();
-  page.setTitle('Home');
   const own = auth.scope('inspection') === 'own' && auth.can('inspection', 'view', 'mobile');
-  let body = html`<h2>Welcome, ${u.name}</h2><div class="muted" style="margin-bottom:12px">${r.name !== u.name ? `${r.name} · ` : ''}${c.name}</div>`;
+  page.setTitle(own ? greeting() : 'Home');
+  let body = html`<div class="m-hello">${u.name}${r.name !== u.name ? ` · ${r.name}` : ''} · ${today()}</div>`;
   if (own) {
+    // The technician: the next job first, with its one button, then the rest of today.
     const jobs = myWork();
-    const today = jobs.filter(x => isToday(x.at) && !x.done);
+    const todays = jobs.filter(x => isToday(x.at) && !x.done);
     const open = jobs.filter(x => !x.done);
-    body = html`${body}${tiles([
-      { key: 'today', label: 'Today', count: today.length },
-      { key: 'upcoming', label: 'Upcoming', count: open.length - today.length },
-      { key: 'done', label: 'Done', count: jobs.length - open.length },
-    ], '', 'm-tiles')}
-    <div class="m-section">Today's jobs</div>
-    ${today.length ? html`${today.map(x => x.card())}` : html`<div class="empty">No visits today. Check “Upcoming” in My jobs.</div>`}`;
+    const next = todays[0] || open[0];
+    const later = todays.filter(x => x !== next);
+    body = html`${body}<h2>${todays.length ? `${todays.length} job${todays.length > 1 ? 's' : ''} today` : 'No jobs today'}</h2>
+    <div class="m-kpi">${[['today', 'Today', todays.length], ['upcoming', 'Upcoming', open.length - todays.length], ['done', 'Done', jobs.length - open.length]]
+      .map(([k, label, n]) => html`<a href="#/m/jobs" data-tile="${k}"><b>${n}</b><span>${label}</span></a>`)}</div>
+    ${next ? html`<div class="m-section">${isToday(next.at) ? 'Next' : 'Next job'}</div><div class="m-next">${next.card()}</div>` : html`<div class="empty">Nothing planned. New jobs appear here when the office assigns them.</div>`}
+    ${later.length ? html`<div class="m-section">Later today</div>${later.map(x => x.card())}` : ''}`;
   } else {
     const tasks = auth.hasTasks('mobile') ? myTasks() : [];
+    // Quick actions for what this role may do on the phone.
+    const quick = [
+      auth.can('enquiry', 'create', 'mobile') && ['m/enquiry-new', 'plus', 'New enquiry'],
+      auth.can('enquiry', 'view', 'mobile') && ['m/enquiries', 'enquiries', 'Enquiries'],
+      auth.can('customer', 'view', 'mobile') && ['m/customers', 'users', 'Customers'],
+      auth.hasTasks('mobile') && ['m/tasks', 'tasks', `Tasks (${tasks.length})`],
+    ].filter(Boolean);
+    body = html`${body}<h2>${greeting()}</h2>
+      ${quick.length ? html`<div class="m-quick" style="margin-top:12px">${quick.map(([route, ic, label]) => html`<a href="#/${route}">${icon(ic, 20)}${label}</a>`)}</div>` : ''}`;
     if (auth.hasTasks('mobile')) body = html`${body}<div class="m-section">Tasks waiting for you (${tasks.length})</div>${tasks.length ? html`${tasks.slice(0, 3).map(taskCard)}` : html`<div class="muted small">Nothing waiting.</div>`}`;
     if (r.dashboard === 'management') {
       const money = owed();
@@ -47,10 +60,10 @@ export function mHome(page) {
   }
   page.body.innerHTML = String(body);
   on(page.body, 'click', '[data-tile]', (e, b) => {
+    e.preventDefault();
     if (own) { sessionStorage.setItem('rsmMobJobs', JSON.stringify({ tile: b.dataset.tile, q: '' })); go('m/jobs'); }
     else { setEnquiryTile(b.dataset.tile); go('m/enquiries'); }
   });
-  on(page.body, 'click', '[data-start]', (e, b) => openReport(b.dataset.start));
 }
 
 export function mMore(page) {
@@ -58,6 +71,7 @@ export function mMore(page) {
   page.setTitle('More');
   page.body.innerHTML = String(html`
     <div class="m-card"><b>${u.name}</b>${r.name !== u.name ? html`<br><span class="muted">${r.name}</span>` : ''}<br><span class="small">${c.name} · ${c.country}</span></div>
+    ${auth.can('customer', 'view', 'mobile') ? html`<div class="m-quick" style="grid-template-columns:1fr"><a href="#/m/customers">${icon('users', 20)}Customers</a></div>` : ''}
     <div class="m-section">Work offline</div>
     <label class="m-card row" style="justify-content:space-between;cursor:pointer"><span>Work offline<br><span class="muted small">${isOffline() ? 'Changes stay on this phone until you go back online' : 'For places without signal: the office gets your changes when you are back online'}</span></span>
       <input type="checkbox" id="offline" ${isOffline() ? 'checked' : ''}></label>

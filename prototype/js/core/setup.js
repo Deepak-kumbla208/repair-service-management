@@ -34,7 +34,7 @@ export const issued = (doc, company) => (doc?.letterhead ? { ...company, ...doc.
 export const logoSrc = c => (c?.logoId ? store.get('logos', c.logoId)?.dataUrl || '' : '');
 
 export const COMPANY_LABELS = {
-  name: 'Company name', country: 'Country', currency: 'Currency', regLabel: 'Registration label', regNo: 'Registration no.', chargesTax: 'Charges tax',
+  name: 'Company name', country: 'Country', currency: 'Currency', regLabel: 'Registration label', regNo: 'Registration no.', chargesTax: 'Tax on documents',
   taxLabel: 'Tax label', taxRegLabel: 'Tax number label', taxRegNo: 'Tax number', defaultTaxCode: 'Default tax code', address: 'Address', tel: 'Tel',
   mobile: 'Mobile', email: 'Email', bank: 'Bank', payNow: 'PayNow', logoId: 'Logo', workDays: 'Working days', workStart: 'Day starts', workEnd: 'Day ends',
   dpo: 'DPO contact', inspectionTargetHours: 'Inspection target (hours)',

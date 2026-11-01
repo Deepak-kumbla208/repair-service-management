@@ -1,6 +1,6 @@
 // Phone: Site Viewing Report steps 2–7, one per section of the team lead's form.
 // Photos (step 2) are attached to the report but are not part of the printed form.
-import { html, $, $$, field, readForm, toast, MIC } from '../core/ui.js';
+import { html, $, $$, field, readForm, toast, MIC, icon } from '../core/ui.js';
 import { zones, items } from '../core/lookups.js';
 import { manHours } from '../core/costing.js';
 import { removeBlob } from '../core/media.js';
@@ -164,37 +164,62 @@ const step6 = {
   read: (body, rep) => ({ s6: readSection(body, 's6', rep.s6) }),
 };
 
-let pad = null;
+// Sign-off (section 7): the technician (Viewed by) and the customer (Acknowledged by), who first sees the report
+// ("Preview the report for the customer"). A customer who is not there is marked with the reason.
+let pads = {};
+const SIG = { tech: 'signatureId', cust: 'custSignatureId' };
+const sigBox = (who, id, label) => html`<div class="field"><div class="row"><span class="field-label grow">${label}</span><button type="button" class="btn link small" data-clear="${who}">${id ? 'Sign again' : 'Clear'}</button></div>
+  ${id ? html`<img class="sig-img" data-media="${id}" alt="Saved signature">` : html`<canvas class="sig-pad" id="sig_${who}" style="height:120px"></canvas><div class="hint small muted">Sign with a finger or the mouse.</div>`}</div>`;
 const step7 = {
   title: 'Sign-off',
-  render: rep => html`
+  render: rep => {
+    const s = rep.s7;
+    return html`
     <div class="m-card small">
       <div>${rep.shutters.length ? '✓' : '•'} Shutters picked: <b>${rep.shutters.length}</b></div>
       <div>${rep.photos.length ? '✓' : '•'} Photos: <b>${rep.photos.length}</b></div>
       <div>${rep.s5.rows.length ? '✓' : '•'} Materials listed: <b>${rep.s5.rows.length}</b></div>
     </div>
-    <div class="m-section">VIEWED BY · Company Representative</div>
-    <div class="stack">
-      ${field({ name: 's7_name', label: 'Name', value: rep.s7.name })}
-      ${field({ name: 's7_designation', label: 'Designation', value: rep.s7.designation })}
-      ${field({ name: 's7_date', label: 'Date', type: 'date', value: rep.s7.date })}
-      <div class="field"><div class="row"><span class="field-label grow">Signature</span><button type="button" class="btn link small" id="clearSig">${rep.s7.signatureId ? 'Sign again' : 'Clear'}</button></div>
-        ${rep.s7.signatureId ? html`<img class="sig-img" data-media="${rep.s7.signatureId}" alt="Saved signature">` : html`<canvas class="sig-pad" id="sig"></canvas><div class="hint small muted">Sign with your finger or the mouse.</div>`}</div>
-    </div>`,
+    <div class="m-section">Viewed by · company representative</div>
+    <div class="m-card stack">
+      ${field({ name: 's7_name', label: 'Name', value: s.name })}
+      ${field({ name: 's7_designation', label: 'Designation', value: s.designation })}
+      ${field({ name: 's7_date', label: 'Date', type: 'date', value: s.date })}
+      ${sigBox('tech', s.signatureId, 'Signature')}
+    </div>
+    <div class="m-section">Acknowledged by · customer</div>
+    <div class="m-card stack">
+      <button type="button" class="btn block" id="previewRep">${icon('eye', 15)} Preview the report for the customer</button>
+      <div class="hint small muted" style="margin-top:-4px">Let the customer read it before signing.</div>
+      ${s.custAbsent ? '' : html`${field({ name: 's7_custName', label: 'Customer name', value: s.custName || '' })}
+        ${field({ name: 's7_custDesignation', label: 'Designation', value: s.custDesignation || '', placeholder: 'e.g. Facilities Manager' })}
+        ${sigBox('cust', s.custSignatureId, 'Customer signature')}`}
+      ${check('s7_custAbsent', 'Customer not available to sign', s.custAbsent)}
+      ${s.custAbsent ? field({ name: 's7_custAbsentReason', label: 'Reason', value: s.custAbsentReason || '', placeholder: 'e.g. shop closed; the guard let us in' }) : ''}
+    </div>`;
+  },
   read: (body, rep) => ({ s7: readSection(body, 's7', rep.s7) }),
   bind(body, rep, ctx) {
-    const canvas = $('#sig', body);
-    pad = canvas ? signaturePad(canvas) : null;
-    $('#clearSig', body).addEventListener('click', () => {
-      if (rep.s7.signatureId) { removeBlob(rep.s7.signatureId); ctx.save({ s7: { ...step7.read(body, rep).s7, signatureId: null } }); ctx.repaint(); } else pad?.clear();
-    });
+    pads = {};
+    Object.keys(SIG).forEach(who => { const c = $(`#sig_${who}`, body); if (c) pads[who] = signaturePad(c); });
+    // Keep what is drawn, then redraw the step (clearing a saved signature, or the customer-not-available tick).
+    const keepAndRepaint = async patch => { ctx.save(step7.read(body, rep)); ctx.save(await step7.leave(body, rep)); if (patch) ctx.save({ s7: { ...rep.s7, ...patch } }); ctx.repaint(); };
+    $$('[data-clear]', body).forEach(b => b.addEventListener('click', () => {
+      const who = b.dataset.clear, id = rep.s7[SIG[who]];
+      if (!id) { pads[who]?.clear(); return; }
+      keepAndRepaint({ [SIG[who]]: null });
+    }));
+    $('[name="s7_custAbsent"]', body)?.addEventListener('change', () => keepAndRepaint());
+    const pv = $('#previewRep', body);
+    if (!ctx.preview) pv.hidden = true;
+    pv.addEventListener('click', async () => { ctx.save(step7.read(body, rep)); ctx.save(await step7.leave(body, rep)); ctx.repaint(); ctx.preview(); });
   },
-  // Save the drawn signature before leaving the step or submitting.
+  // Save the drawn signatures before leaving the step, previewing or submitting.
   async leave(body, rep) {
-    if (!pad || pad.isEmpty()) return {};
-    const m = await pad.save();
-    pad = null;
-    return { s7: { ...rep.s7, signatureId: m.id } };
+    const patch = {};
+    for (const who of Object.keys(pads)) if (!pads[who].isEmpty()) patch[SIG[who]] = (await pads[who].save()).id;
+    Object.keys(patch).forEach(k => { delete pads[Object.keys(SIG).find(w => SIG[w] === k)]; });
+    return Object.keys(patch).length ? { s7: { ...rep.s7, ...patch } } : {};
   },
 };
 

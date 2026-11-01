@@ -121,14 +121,15 @@ export const saveReport = (id, patch) => store.update('siteReports', id, patch, 
 // paper: the office marks a report filled in on paper as received, so no on-screen signature is needed.
 export function reportProblems(rep, { paper = false } = {}) {
   const p = [];
-  if (!rep.shutters.length && !rep.s2.description) p.push('Pick at least one shutter (step 1) or describe the job scope (step 2).');
-  if (!rep.s7.name) p.push('Enter the name in the sign-off (step 7).');
-  if (!paper && !rep.s7.signatureId) p.push('Sign the report (step 7).');
+  // Each message names the section and the field to fill, the same words on the web and the phone.
+  if (!rep.shutters.length && !rep.s2.description) p.push('Tick at least one shutter under “Shutters at this site” (section 1 General details), or write the “Job Scope / Description of Work” (section 2 Job scope).');
+  if (!rep.s7.name) p.push('Enter the name under “Viewed by” (section 7 Sign-off).');
+  if (!paper && !rep.s7.signatureId) p.push('Sign under “Viewed by” (section 7 Sign-off).');
   const left = (rep.asked || []).filter(a => !a.done).length;
-  if (!paper && left) p.push(`Tick each thing the customer asked for once you have checked it (step 2): ${left} of ${rep.asked.length} not ticked yet.`);
+  if (!paper && left) p.push(`Tick each line under “What the customer asked for” once you have checked it on site (section 2 Job scope): ${left} of ${rep.asked.length} not ticked yet.`);
   const s7 = rep.s7;
-  if (!paper && s7.custAbsent && !s7.custAbsentReason) p.push('Give the reason the customer could not sign (step 7).');
-  if (!paper && !s7.custAbsent && !(s7.custSignatureId && s7.custName)) p.push('Let the customer sign with their name (step 7), or tick “Customer not available” and give the reason.');
+  if (!paper && s7.custAbsent && !s7.custAbsentReason) p.push('Give the reason under “Customer not available to sign” (section 7 Sign-off).');
+  if (!paper && !s7.custAbsent && !(s7.custSignatureId && s7.custName)) p.push('Let the customer sign under “Acknowledged by” with their name (section 7 Sign-off), or tick “Customer not available to sign” and give the reason.');
   return p;
 }
 

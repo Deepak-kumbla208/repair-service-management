@@ -108,9 +108,9 @@ export function renderInvoice(el, id) {
             ${r.flag ? html`<br><span class="tag">${r.flag}</span>${edit && inv.rows.length > 1 ? html` <button class="btn link small" data-rm="${i}">Remove this line</button>` : ''}` : ''}
             ${edit && (r.flag || inv.flagNote) ? html` <button class="btn link small" data-amt="${i}">Change amount</button>` : ''}${r.note ? html`<br><span class="small muted">Changed: ${r.note}</span>` : ''}</td>
             <td class="num">${fmtNum(r.qty)}</td><td>${r.unit}</td><td class="num">${m2(r.rate)}</td><td class="num">${m2(r.amount)}</td></tr>`)}
-          <tr class="sum"><td colspan="5" class="num">Total</td><td class="num">${m2(inv.subtotal)}</td></tr>
-          ${inv.taxRate || inv.tax ? html`<tr><td colspan="5" class="num">${inv.taxLabel} ${fmtNum(inv.taxRate)} %</td><td class="num">${m2(inv.tax)}</td></tr>` : ''}
-          <tr class="sum"><td colspan="5" class="num"><b>Total incl. ${inv.taxLabel || 'tax'}</b></td><td class="num"><b>${m2(inv.total)}</b></td></tr>
+          ${inv.taxRate || inv.tax ? html`<tr class="sum"><td colspan="5" class="num">Total</td><td class="num">${m2(inv.subtotal)}</td></tr>
+            <tr><td colspan="5" class="num">${inv.taxLabel} ${fmtNum(inv.taxRate)} %</td><td class="num">${m2(inv.tax)}</td></tr>` : ''}
+          <tr class="sum"><td colspan="5" class="num"><b>${inv.taxRate || inv.tax ? `Total incl. ${inv.taxLabel || 'tax'}` : 'Total'}</b></td><td class="num"><b>${m2(inv.total)}</b></td></tr>
         </tbody></table></div>
       ${pays.length ? html`<div class="card form-lines"><div class="card-head"><h2>Payments</h2></div>${pays.map(p => row(p.no, `${fmtDate(p.date)} · ${vsLabel('PAYMENT_METHOD', p.method)} · ${m2(p.amount)}${p.reference ? ` · ${p.reference}` : ''}${p.via === 'phone' ? ' · collected on site' : ''}`))}</div>` : ''}
       ${fus.length ? html`<div class="card form-lines"><div class="card-head"><h2>Follow-ups</h2></div>${fus.map(f => row(fmtDate(f.at), `${f.method} · ${f.note}${f.nextDate ? ` · next ${fmtDate(f.nextDate)}` : ''} · ${auth.userName(f.by)}`))}</div>` : ''}

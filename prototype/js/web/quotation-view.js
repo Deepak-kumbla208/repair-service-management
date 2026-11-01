@@ -70,9 +70,9 @@ export function renderQuotation(el, id) {
           ${q.rows.map((r, i) => html`<tr><td>${i + 1}</td><td class="wrap">${!editable ? r.description : q.costingLevel === 'JOB'
             ? html`<textarea name="description" rows="2" style="width:100%">${q.description}</textarea>` : html`<input type="text" name="row_${i}" value="${r.description}" style="width:100%">`}</td>
             <td class="num">${fmtNum(r.qty)}</td><td>${r.unit}</td><td class="num">${m2(r.rate)}</td><td class="num">${m2(r.amount)}</td></tr>`)}
-          <tr class="sum"><td colspan="5" class="num">Total</td><td class="num">${m2(q.subtotal)}</td></tr>
-          ${q.taxRate || q.tax ? html`<tr><td colspan="5" class="num">${q.taxLabel} ${fmtNum(q.taxRate)} %</td><td class="num">${m2(q.tax)}</td></tr>` : ''}
-          <tr class="sum"><td colspan="5" class="num"><b>Total incl. ${q.taxLabel || 'tax'}</b></td><td class="num"><b>${m2(q.total)}</b></td></tr>
+          ${q.taxRate || q.tax ? html`<tr class="sum"><td colspan="5" class="num">Total</td><td class="num">${m2(q.subtotal)}</td></tr>
+            <tr><td colspan="5" class="num">${q.taxLabel} ${fmtNum(q.taxRate)} %</td><td class="num">${m2(q.tax)}</td></tr>` : ''}
+          <tr class="sum"><td colspan="5" class="num"><b>${q.taxRate || q.tax ? `Total incl. ${q.taxLabel || 'tax'}` : 'Total'}</b></td><td class="num"><b>${m2(q.total)}</b></td></tr>
         </tbody></table></div>
       <div class="card form-lines"><div class="card-head"><h2>Wording</h2></div>
         ${editable ? html`<div class="field"><label>Findings</label><input type="text" name="findings" value="${q.findings}"></div>` : row('Findings', q.findings)}

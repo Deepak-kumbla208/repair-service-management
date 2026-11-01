@@ -27,7 +27,7 @@ function sidebar(activeKey) {
     const hasActive = items.some(m => m.key === activeKey);
     const isOpen = g === 'Dashboard' || hasActive || open.includes(g) || collapsed;
     const links = items.map(m => html`<a class="side-item ${m.key === activeKey ? 'on' : ''}" href="#/${routeOf(m)}" title="${m.label}">
-      <span class="ic">${m.icon}</span><span class="lbl">${m.label}</span>${m.stretch > BUILT_STRETCH ? html`<span class="soon" title="${m.preview ? 'Read-only view now; editing screen in Stretch ' + m.stretch : 'Built in Stretch ' + m.stretch}">${m.preview ? 'view' : 'S' + m.stretch}</span>` : ''}</a>`);
+      <span class="ic">${m.icon}</span><span class="lbl">${m.label}</span>${m.stretch > BUILT_STRETCH ? html`<span class="soon" title="${m.preview ? 'Read-only view now; editing screen in Stretch 3 Part B' : 'Built in Stretch 3 Part B'}">${m.preview ? 'view' : 'Part B'}</span>` : ''}</a>`);
     if (g === 'Dashboard') return html`<div>${links}</div>`;
     return html`<div class="side-group"><button class="side-head" data-group="${g}">${g}<span>${isOpen ? '▾' : '▸'}</span></button>${isOpen ? links : ''}</div>`;
   })}</nav>`;

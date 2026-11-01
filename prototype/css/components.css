@@ -368,3 +368,59 @@ label.chip input:focus-visible + span { box-shadow: 0 0 0 3px rgba(55, 138, 221,
 .tbl.edit select[data-f="labourId"], .tbl.edit select[data-f="itemId"], .tbl.edit select[data-f="equipmentId"], .tbl.edit select[data-f="zoneId"] { min-width: 160px; }
 .tbl.edit select[data-f="lineKey"] { min-width: 96px; }
 .tbl.edit select[data-f="basis"] { min-width: 130px; }
+
+/* ---------- Stretch 3: AMC estimate, contracts, scheduling, check list ---------- */
+.kpi.k4 { grid-template-columns: repeat(4, 1fr); }
+.kpi span { display: block; }
+.ycal { width: 100%; border-collapse: collapse; background: var(--white); font-size: 12px; }
+.ycal th, .ycal td { border: 1px solid var(--line-soft); padding: 4px 6px; text-align: center; }
+.ycal th { background: var(--blue-100); color: var(--navy-800); font-weight: 400; }
+.ycal td:first-child, .ycal th:first-child { text-align: left; white-space: nowrap; }
+.ycal td[data-month] { cursor: pointer; }
+.ycal td.on { outline: 2px solid var(--blue-500); outline-offset: -2px; }
+.ycal .n { display: inline-block; min-width: 18px; border-radius: 9px; padding: 0 5px; font-weight: 600; background: var(--blue-100); }
+.ycal .n.late { background: var(--red-bg); color: var(--red-ink); }
+.zch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; border: 1px solid; }
+.mcal { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--white); }
+.mcal .hd { background: var(--blue-100); color: var(--navy-800); padding: 5px 8px; font-size: 12px; border-left: 1px solid var(--white); }
+.mcal .c { min-height: 88px; border-top: 1px solid var(--line); border-left: 1px solid var(--line-soft); padding: 4px 5px; font-size: 11px; }
+.mcal .c .d { color: var(--faint); }
+.mcal .c.out { background: var(--zebra); }
+.mcal .c.today { background: var(--blue-50); }
+.mcal .c.today .d { color: var(--blue-600); font-weight: 700; }
+.vb { display: block; border-radius: 5px; padding: 3px 6px; margin-top: 3px; border: 1px solid; line-height: 1.25; text-decoration: none; }
+.vb:hover { text-decoration: none; filter: brightness(.96); }
+.vb.plan { border-style: dashed; background: var(--white); }
+.vb.conf { opacity: .8; }
+.vb.done { opacity: .55; }
+.vb.late { background: var(--red-bg); border-color: var(--red); color: var(--red-ink); }
+.vcard { border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; background: var(--white); margin-bottom: 9px; box-shadow: inset 3px 0 0 var(--zc, var(--blue-500)); }
+.vcard.late { box-shadow: inset 3px 0 0 var(--red); }
+.vcard .l { display: flex; gap: 6px; font-size: 12px; margin-top: 3px; }
+.vcard .l .k { color: var(--faint); width: 70px; flex: none; }
+.blk.amc { border-style: double; border-width: 3px; }
+/* Check list (phone and web) */
+.ck { border-top: 1px solid var(--line-soft); padding: 7px 0; }
+.ck .t { display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; }
+.ck .t b { flex: 1; font-weight: 600; }
+.ck .t small { display: block; font-weight: 400; color: var(--faint); font-size: 11px; }
+.ck.na .t b { color: var(--faint); font-weight: 400; }
+.pf { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; flex: none; }
+.pf button, .pf span { padding: 4px 9px; font: inherit; font-size: 11px; color: var(--muted); border: 0; border-left: 1px solid var(--line); background: var(--white); cursor: pointer; }
+.pf > :first-child { border-left: 0; }
+.pf .p { background: var(--green-bg); color: var(--green-ink); font-weight: 700; }
+.pf .f { background: var(--red-bg); color: var(--red-ink); font-weight: 700; }
+.pf .na { background: var(--page); color: var(--ink-2); font-weight: 700; }
+.failbox { margin-top: 6px; border: 1px solid #E8B4B4; background: #FFF6F6; border-radius: 6px; padding: 7px; font-size: 12px; }
+.shl { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 7px; background: var(--white); }
+.shl .r { display: flex; gap: 6px; align-items: center; }
+.minibar { height: 6px; border-radius: 3px; background: var(--line-soft); overflow: hidden; margin-top: 5px; }
+.minibar i { display: block; height: 100%; background: var(--blue-600); border-radius: 3px; }
+.ck-web { border-top: 1px solid var(--line-soft); padding: 7px 0; }
+.ck-web:first-child { border-top: 0; }
+.ck-items { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.ck-i { font-size: 11px; padding: 1px 7px; border-radius: 9px; background: var(--page); color: var(--ink-2); }
+.ck-i.f { background: var(--red-bg); color: var(--red-ink); }
+.ck-ph { height: 18px; vertical-align: middle; border-radius: 3px; }
+.tbl.edit select[data-p$="equipmentId"], .tbl.edit select[data-p$="itemId"] { min-width: 150px; }
+.tbl.edit select[data-p$="siteKey"] { min-width: 120px; }

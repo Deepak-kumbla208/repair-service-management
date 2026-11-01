@@ -76,7 +76,7 @@ function shutter(t, siteId, n, [tag, location, productCode, w, h, unit, motor], 
   return { id: `sht_${siteId}_${n}`, tag, location, productId: `prd_${t}_${productCode}`, width: w, height: h, unit, widthM, heightM, sizeCode: classifySize(widthM, heightM, sizeRows), motor: motor || '', serial: '', installDate: '', status: 'Active', source: 'Sample data' };
 }
 
-function customer(t, code, data, sites, sizeRows) {
+export function customer(t, code, data, sites, sizeRows) {
   const id = `cus_${t}_${code}`;
   return base(t, id, {
     code, ...data,

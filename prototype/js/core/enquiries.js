@@ -4,9 +4,10 @@
 import * as store from './store.js';
 import { quickCreate, addSite } from './customers.js';
 import { assignTechnician } from './inspections.js';
+import { contractFor, contractProgress, invoicesOf } from './contracts.js';
 
 export const ENQ_STATUSES = ['Waiting for inspection', 'Inspection assigned', 'Report in progress', 'Inspected', 'BOQ study', 'Waiting for estimate',
-  'Estimating', 'Quotation in check', 'Quotation approved', 'Quoted', 'Won', 'Completed', 'Closed', 'Lost', 'Cancelled'];
+  'Estimating', 'Quotation in check', 'Quotation approved', 'Quoted', 'Won', 'Contract active', 'Completed', 'Closed', 'Lost', 'Cancelled'];
 
 // Enquiry Type decides the next step: Repair goes to site inspection; AMC and General Servicing go to BOQ study
 // (site inspection optional, decided by the "Site Inspection" Yes / No column).
@@ -107,6 +108,7 @@ export function laterColumns(e) {
   const qs = store.list('quotations', q => q.enquiryId === e.id).sort((a, b) => b.rev - a.rev);
   const q = qs.find(x => x.status !== 'Superseded') || qs[0];
   const sent = qs.find(x => x.sentAt);
+  if (e.type === 'AMC') return amcColumns(e, q, sent);
   const job = store.list('jobs', j => j.enquiryId === e.id)[0];
   const inv = store.list('invoices', i => i.enquiryId === e.id && i.status === 'Posted')[0];
   const paid = inv ? store.list('payments', p => p.invoiceId === inv.id).reduce((t, p) => t + Number(p.amount || 0), 0) : 0;
@@ -120,6 +122,23 @@ export function laterColumns(e) {
     jobStatus: label('JOB_STATUS', jobStatus), workCompletion: label('WORK_COMPLETION', wc), workCompletionDate: day(job?.workDone?.signedAt),
     invoiceDate: inv ? day(inv.date) : '', invoiceNo: inv?.no || '', invoiceValue: inv ? money(inv.total) : '',
     paymentReceived: inv ? label('PAYMENT_RECEIVED', paid <= 0 ? 'NOT_PAID' : paid + 0.004 >= inv.total ? 'PAID' : 'PARTLY') : '',
+  };
+}
+
+// An AMC row: Job Status Confirmed once the contract exists; Work Completion follows the visits; the invoice columns
+// show the latest posted instalment and the value invoiced so far; Payment Received is over all instalments.
+function amcColumns(e, q, sent) {
+  const c = contractFor(e.id);
+  const p = c && c.status !== 'Draft' ? contractProgress(c) : null;
+  const posted = c ? invoicesOf(c).filter(i => i.status === 'Posted').sort((a, b) => (b.date || '').localeCompare(a.date || '')) : [];
+  const last = posted[0];
+  const jobStatus = q?.status === 'Rejected' || (!c && store.list('contracts', x => x.enquiryId === e.id).length) ? 'CANCELLED' : c ? 'CONFIRMED' : sent ? 'PENDING' : '';
+  const wc = !p ? '' : p.done >= p.visits ? 'COMPLETED' : p.done ? 'IN_PROGRESS' : 'NOT_STARTED';
+  return {
+    quotationDate: sent ? day(sent.sentAt) : '', quotationStatus: label('QUOT_STATUS', sent ? 'QUOTED' : 'NOT_QUOTED'), quotationValue: sent ? money(sent.total) : '',
+    jobStatus: label('JOB_STATUS', jobStatus), workCompletion: label('WORK_COMPLETION', wc), workCompletionDate: wc === 'COMPLETED' ? day(p.lastDone) : '',
+    invoiceDate: last ? day(last.date) : '', invoiceNo: last ? `${last.no}${posted.length > 1 ? ` (${posted.length} of ${p.lines})` : ''}` : '', invoiceValue: posted.length ? money(p.invoiced) : '',
+    paymentReceived: posted.length ? label('PAYMENT_RECEIVED', p.paid <= 0.004 ? 'NOT_PAID' : p.balance <= 0.004 ? 'PAID' : 'PARTLY') : '',
   };
 }
 

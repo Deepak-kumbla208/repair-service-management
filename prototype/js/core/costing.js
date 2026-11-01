@@ -1,6 +1,7 @@
 // Calculations only (no screen code), so results can be checked against the team lead's Excel.
 // Stretch 1: shutter size rule and labour rates. Stretch 2: the Repair estimate (Excel tabs Labour, Transport,
-// Materials, Equipment, Overhead_Margin and Summary), Job / Line costing and money rounding.
+// Materials, Equipment, Overhead_Margin and Summary), Job / Line costing and money rounding. Stretch 3: the AMC estimate
+// (also used for General Servicing) and the billing-plan instalments.
 
 export const FT_TO_M = 0.3048;
 export const round2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -159,4 +160,73 @@ export function ageBucket(daysOverdue) {
   if (daysOverdue <= 60) return '31–60';
   if (daysOverdue <= 90) return '61–90';
   return '90+';
+}
+
+// ---------- AMC and General Servicing (AMC estimator Excel: Labour_Matrix, Shutters, Transport, Equipment,
+// Overhead_Margin, Summary) ----------
+// Billing plan: how many invoices a contract year has. ONCE = General Servicing (no contract).
+export const BILLING_COUNT = { MONTHLY: 12, QUARTERLY: 4, HALF: 2, YEARLY: 1, ONCE: 1 };
+
+// Labour_Matrix F: cost per shutter per visit = team hrs × team rate + extra workers × their hrs × extra worker rate.
+export const matrixCost = (size, teamRate, extraRate) => num(size.teamHrs) * num(teamRate) + num(size.extraWorkers) * num(size.extraHrs) * num(extraRate);
+// Days on site for one visit (8 working hours a day); a screen helper for the calendar, not part of the price.
+export const daysOnSite = (teamHrs, hoursPerDay = 8) => Math.max(1, Math.ceil(num(teamHrs) / hoursPerDay - 1e-9));
+
+// One row of the Shutters sheet: J total shutters, K std team hrs per visit, L labour per visit, M annual labour (L × D).
+export function amcSiteRow(site, matrix) {
+  const sizes = matrix?.sizes || [];
+  const count = code => num(site.counts?.[code]);
+  const shutters = sum(sizes, s => count(s.code));
+  const hrsVisit = sum(sizes, s => count(s.code) * num(s.teamHrs));
+  const perVisit = sum(sizes, s => count(s.code) * matrixCost(s, matrix.team?.rate, matrix.extra?.rate));
+  return { shutters, hrsVisit, perVisit, annual: perVisit * num(site.visits), days: daysOnSite(hrsVisit) };
+}
+
+// Visits a row is used on: its site's visits, or every site's visits for a row shared by all sites.
+const visitsFor = (est, siteKey) => (siteKey ? num((est.sites || []).find(s => s.key === siteKey)?.visits) : sum(est.sites || [], s => num(s.visits)));
+
+// The AMC tabs as the generic rows summarize() uses, so overhead, margin, rounding and Line costing (one line per site)
+// are the Repair estimate's own rules: labour = M (per visit × visits); transport = visits × the zone's travel hrs ×
+// its rate; equipment = qty × duration per visit × visits × rate; materials = qty per visit × visits.
+export function amcRows(est) {
+  const zoneRow = id => (est.transport || []).find(t => t.zoneId === id);
+  const labour = (est.sites || []).map(s => ({ key: `lab_${s.key}`, trade: 'AMC labour (Labour_Matrix)', team: 1, hrs: num(s.visits), rate: amcSiteRow(s, est.matrix).perVisit, otHrs: 0, otRate: 0, lineKey: s.key }));
+  const transport = (est.sites || []).map(s => { const z = zoneRow(s.zoneId); return { key: `tr_${s.key}`, zoneId: s.zoneId, hrs: num(s.visits) * num(z?.hrs), rate: num(z?.rate), lineKey: s.key }; });
+  const equipment = (est.equipment || []).map(r => ({ ...r, duration: num(r.duration) * visitsFor(est, r.siteKey), lineKey: r.siteKey || '' }));
+  const materials = (est.materials || []).map(r => ({ ...r, qty: num(r.qty) * visitsFor(est, r.siteKey), lineKey: r.siteKey || '' }));
+  const lines = (est.sites || []).map(s => { const x = amcSiteRow(s, est.matrix); return { key: s.key, tag: '', description: `${s.name}: ${x.shutters} shutter${x.shutters === 1 ? '' : 's'}, ${num(s.visits)} visit${num(s.visits) === 1 ? '' : 's'} a year` }; });
+  return { labour, transport, equipment, materials, lines };
+}
+
+// Instalments of the billing plan: rounded down to cents, the left-over cents on the last one; tax on each invoice.
+export function instalments(subtotal, taxRate, n = 1) {
+  const s = round2(subtotal), count = Math.max(1, num(n));
+  const each = Math.floor((s / count) * 100 + 1e-6) / 100;
+  return Array.from({ length: count }, (_, i) => {
+    const amount = i === count - 1 ? round2(s - each * (count - 1)) : each;
+    const tax = round2(amount * num(taxRate) / 100);
+    return { n: i + 1, of: count, amount, tax, total: round2(amount + tax) };
+  });
+}
+
+// The AMC Summary sheet: cost heads, the AMC metrics (per shutter per year, per month) and the zone-wise table.
+// GST is the sum of the GST on each planned invoice, so the quotation and its invoices match to the cent.
+export function summarizeAmc(est, zones = []) {
+  const rows = amcRows(est);
+  const base = summarize({ ...est, ...rows, sharedLabel: est.sharedLabel || 'Shared equipment and materials' }, zones);
+  const sites = (est.sites || []).map(s => ({ key: s.key, zoneId: s.zoneId, visits: num(s.visits), ...amcSiteRow(s, est.matrix) }));
+  const shutters = sum(sites, s => s.shutters), visits = sum(sites, s => s.visits);
+  const plan = instalments(base.subtotal, base.taxRate, BILLING_COUNT[est.billing] || 1);
+  const tax = round2(sum(plan, p => p.tax));
+  const total = round2(base.subtotal + tax);
+  const zoneTable = zones.map(z => {
+    const at = sites.filter(s => s.zoneId === z.id);
+    const cost = sum(rows.transport.filter(t => t.zoneId === z.id), transportRow);
+    return { zoneId: z.id, code: z.code, name: z.name, shutters: sum(at, s => s.shutters), visits: sum(at, s => s.visits), cost, pct: base.heads.transport ? cost / base.heads.transport : 0 };
+  });
+  const other = { shutters: shutters - sum(zoneTable, z => z.shutters), visits: visits - sum(zoneTable, z => z.visits), cost: base.heads.transport - sum(zoneTable, z => z.cost) };
+  return {
+    ...base, tax, total, sites, plan, zoneTable, zoneOther: { ...other, pct: base.heads.transport ? other.cost / base.heads.transport : 0 },
+    metrics: { shutters, visits, perShutterYear: shutters ? base.sell / shutters : 0, perMonth: total / 12, perMonthEx: base.sell / 12, teamHrs: sum(sites, s => s.hrsVisit) },
+  };
 }

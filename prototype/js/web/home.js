@@ -10,6 +10,8 @@ import { pageHead } from './shell.js';
 import { switchView } from '../app.js';
 import { myTasks } from '../core/workflow.js';
 import { openInvoices } from '../core/billing.js';
+import { daysLeft, todayStr, addDays } from '../core/contracts.js';
+import { isOverdue, visitDate } from '../core/visits.js';
 
 export function renderHome(el) {
   const u = auth.user(), r = auth.role(), c = auth.company();
@@ -27,7 +29,7 @@ export function renderHome(el) {
     .sort((a, b) => a.e.receivedAt.localeCompare(b.e.receivedAt));
 
   el.innerHTML = String(html`<div class="page">
-    ${pageHead({ crumb: 'Dashboard', title: `Welcome, ${u.name}`, sub: `${r.name !== u.name ? `${r.name} · ` : ''}${c.name}. Full dashboards for each role come in Stretch 3.`,
+    ${pageHead({ crumb: 'Dashboard', title: `Welcome, ${u.name}`, sub: `${r.name !== u.name ? `${r.name} · ` : ''}${c.name}. Full dashboards for each role come in Stretch 3 Part B.`,
       actions: auth.can('enquiry', 'create') ? html`<div class="row"><button class="btn" id="paste">✉ Paste email</button><a class="btn primary" href="#/enquiries/new">+ New enquiry</a></div>` : '' })}
     ${auth.can('enquiry') ? html`<h2 style="margin:4px 0 8px">Enquiries</h2>${tiles(enquiryTiles(enquiries, c), '')}` : ''}
     ${auth.can('inspection') ? html`<div class="card"><div class="card-head"><h2>Site inspections not finished</h2><a href="#/inspections">Open the list</a></div>
@@ -45,9 +47,17 @@ export function renderHome(el) {
       ...(auth.can('invoice') ? [{ key: 'inv', label: 'Invoices to post', count: store.list('invoices', i => i.status === 'Draft').length }] : []),
       ...(auth.can('payment') ? [{ key: 'pay', label: 'Overdue invoices', count: openInvoices().filter(o => o.dueIn < 0).length, tone: 'bad' }] : []),
     ], '', 'tiles money')}` : ''}
+    ${auth.can('amcContract') || auth.can('amcScheduling') ? html`<h2 style="margin:14px 0 8px">AMC contracts and visits</h2>${tiles([
+      ...(auth.can('amcContract') ? [{ key: 'con', label: 'Contracts to activate', count: store.list('contracts', c => c.status === 'Draft').length, tone: 'warn' },
+        { key: 'ren', label: 'Ending in 60 days', count: store.list('contracts', c => c.status === 'Active' && daysLeft(c) <= 60).length, tone: 'warn', sub: 'renew' }] : []),
+      ...(auth.can('amcScheduling') ? [{ key: 'vis', label: 'Visits to confirm or assign', count: store.list('amcVisits', v => ['Planned', 'Confirmed'].includes(v.status) && visitDate(v) <= addDays(todayStr(), 30)).length, sub: 'next 30 days' },
+        { key: 'late', label: 'Overdue visits', count: store.list('amcVisits', isOverdue).length, tone: 'bad' }] : []),
+      ...(auth.can('amcExecution') ? [{ key: 'file', label: 'Service reports to file', count: store.list('amcVisits', v => v.status === 'Done').length }] : []),
+      ...(auth.can('invoice') ? [{ key: 'ainv', label: 'AMC invoices to post', count: store.list('invoices', i => i.contractId && i.status === 'Draft').length, tone: 'warn' }] : []),
+    ], '', 'tiles money')}` : ''}
   </div>`);
 
-  const MONEY = { est: 'estimates', qt: 'quotations', job: 'jobs', inv: 'invoices', pay: 'payments' };
+  const MONEY = { est: 'estimates', qt: 'quotations', job: 'jobs', inv: 'invoices', pay: 'payments', con: 'contracts', ren: 'contracts', vis: 'amc-scheduling', late: 'amc-scheduling', file: 'amc-visits', ainv: 'invoices' };
   on(el, 'click', '[data-tile]', (e, b) => { if (MONEY[b.dataset.tile]) return go(MONEY[b.dataset.tile]); setEnquiryTile(b.dataset.tile); go('enquiries'); });
   on(el, 'click', '[data-go]', (e, tr) => go(tr.dataset.go));
   el.querySelector('#paste')?.addEventListener('click', () => { sessionStorage.setItem('rsmOpenPaste', '1'); go('enquiries/new'); });

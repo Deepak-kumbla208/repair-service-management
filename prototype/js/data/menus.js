@@ -1,7 +1,8 @@
 // Menu catalogue, following the team lead's "Application Menu Structure" sheet.
-// stretch: the build stretch that delivers the screen; menus above BUILT_STRETCH show a "coming" page.
+// stretch: the build stretch that delivers the screen; menus above BUILT_STRETCH show a "coming" page
+// (3.5 = Stretch 3 Part B: the admin screens).
 export const GROUPS = ['Dashboard', 'Master', 'Transactions', 'Admin Setup'];
-export const BUILT_STRETCH = 2;
+export const BUILT_STRETCH = 3;
 
 export const MENUS = [
   { key: 'dashboard', label: 'Dashboard', group: 'Dashboard', icon: '◧', route: 'home', stretch: 1 },
@@ -23,18 +24,18 @@ export const MENUS = [
   { key: 'estimation', label: 'Estimation', group: 'Transactions', icon: '∑', route: 'estimates', stretch: 2 },
   { key: 'quotation', label: 'Sales Quotation', group: 'Transactions', icon: '▤', route: 'quotations', stretch: 2 },
   { key: 'job', label: 'Job Execution', group: 'Transactions', icon: '⚑', route: 'jobs', stretch: 2 },
-  { key: 'amcContract', label: 'AMC Contract', group: 'Transactions', icon: '▦', stretch: 3 },
-  { key: 'amcScheduling', label: 'AMC Scheduling', group: 'Transactions', icon: '◷', stretch: 3 },
-  { key: 'amcExecution', label: 'AMC Execution', group: 'Transactions', icon: '✓', stretch: 3 },
+  { key: 'amcContract', label: 'AMC Contract', group: 'Transactions', icon: '▦', route: 'contracts', stretch: 3 },
+  { key: 'amcScheduling', label: 'AMC Scheduling', group: 'Transactions', icon: '◷', route: 'amc-scheduling', stretch: 3 },
+  { key: 'amcExecution', label: 'AMC Execution', group: 'Transactions', icon: '✓', route: 'amc-visits', stretch: 3 },
   { key: 'closure', label: 'Job Closure', group: 'Transactions', icon: '⊠', route: 'closure', stretch: 2 },
   { key: 'invoice', label: 'Invoice', group: 'Transactions', icon: '▧', route: 'invoices', stretch: 2 },
   { key: 'payment', label: 'Payment Collection', group: 'Transactions', icon: '$', route: 'payments', stretch: 2 },
 
-  { key: 'companySetup', label: 'Company Setup', group: 'Admin Setup', icon: '⌂', route: 'admin/companySetup', stretch: 3, preview: true },
-  { key: 'transactionSetup', label: 'Transaction Setup', group: 'Admin Setup', icon: '#', route: 'admin/transactionSetup', stretch: 3, preview: true },
-  { key: 'userRole', label: 'User Role', group: 'Admin Setup', icon: '☻', route: 'admin/userRole', stretch: 3, preview: true },
-  { key: 'menuAccess', label: 'Menu Access', group: 'Admin Setup', icon: '⊞', route: 'admin/menuAccess', stretch: 3, preview: true },
-  { key: 'authWorkflow', label: 'Authorization Workflow Master', group: 'Admin Setup', icon: '⇶', stretch: 3 },
+  { key: 'companySetup', label: 'Company Setup', group: 'Admin Setup', icon: '⌂', route: 'admin/companySetup', stretch: 3.5, preview: true },
+  { key: 'transactionSetup', label: 'Transaction Setup', group: 'Admin Setup', icon: '#', route: 'admin/transactionSetup', stretch: 3.5, preview: true },
+  { key: 'userRole', label: 'User Role', group: 'Admin Setup', icon: '☻', route: 'admin/userRole', stretch: 3.5, preview: true },
+  { key: 'menuAccess', label: 'Menu Access', group: 'Admin Setup', icon: '⊞', route: 'admin/menuAccess', stretch: 3.5, preview: true },
+  { key: 'authWorkflow', label: 'Authorization Workflow Master', group: 'Admin Setup', icon: '⇶', stretch: 3.5 },
 ];
 
 export const MASTER_KEYS = MENUS.filter(m => m.group === 'Master').map(m => m.key);

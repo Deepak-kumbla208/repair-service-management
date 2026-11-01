@@ -1,11 +1,13 @@
 // Invoices and payments (recorded only, no gateway). An invoice is drafted from the accepted quotation and gets its
 // number only when posted, so the series has no gaps; a cancelled invoice keeps its number. Payments may be partial;
-// the job closes itself once it is documented and fully paid (core/closure.js).
+// the job closes itself once it is documented and fully paid (core/closure.js). AMC contracts are invoiced from their
+// billing plan only (one invoice per line, never from visits) and close by their own rule (core/contracts.js).
 import * as store from './store.js';
 import * as auth from './auth.js';
 import { withCompany } from './lookups.js';
 import { taxTotals, termDays, round2, ageBucket } from './costing.js';
 import { maybeClose } from './closure.js';
+import { maybeCloseContract } from './contracts.js';
 
 const pad = n => String(n).padStart(2, '0');
 const dstr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -55,7 +57,39 @@ export function createInvoice(jobId, { post = false, note = '' } = {}) {
   return post ? postInvoice(inv.id) : inv;
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const dmy = ds => { const d = new Date(`${ds}T00:00`); return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`; };
+
+// The invoice of one AMC billing-plan line. The line keeps its invoice, so it is never billed twice; a cancelled
+// invoice frees the line and the daily check drafts a corrected one.
+export function createContractInvoice(contractId, lineKey, { post = false } = {}) {
+  const c = store.get('contracts', contractId);
+  const line = c?.billingPlan.find(l => l.key === lineKey);
+  if (!line || line.status === 'Cancelled') return null;
+  const live = line.invoiceId ? store.get('invoices', line.invoiceId) : null;
+  if (live && live.status !== 'Cancelled') return live;
+  const customer = store.get('customers', c.customerId);
+  const date = today();
+  const description = `Annual maintenance contract ${c.no} · instalment ${line.n} of ${line.of} · ${dmy(line.from)} – ${dmy(line.to)}`;
+  const inv = store.insert('invoices', {
+    no: '', jobId: '', jobNo: c.no, contractId: c.id, contractNo: c.no, instalment: { key: line.key, n: line.n, of: line.of, from: line.from, to: line.to },
+    quotationId: c.quotationId, quotationNo: c.quotationNo, enquiryId: c.enquiryId, customerId: c.customerId, customer: c.customer, billingAddress: customer?.address || c.billingAddress,
+    contact: c.contact, phone: c.phone, site: c.sites.map(s => s.name).join(', '), siteAddress: c.sites[0]?.address || '', poNo: c.po?.no || '', date, paymentTerm: c.paymentTerm,
+    dueDate: addDays(date, termDays(c.paymentTerm)), costingLevel: 'JOB', description, findings: '', flagNote: '',
+    rows: [{ lineKey: line.key, description, qty: 1, unit: 'Nos', rate: line.amount, amount: line.amount }],
+    subtotal: line.amount, taxLabel: c.taxLabel, taxRate: c.taxRate, tax: line.tax, total: line.total, terms: invoiceTerms(), preparedBy: store.currentActor(),
+  }, { status: 'Draft', note: `${c.no} instalment ${line.n} of ${line.of} (bill date ${line.billDate})` });
+  store.update('contracts', c.id, { billingPlan: c.billingPlan.map(l => (l.key === line.key ? { ...l, invoiceId: inv.id, status: 'Invoiced' } : l)) }, `Instalment ${line.n} of ${line.of} drafted`);
+  return post ? postInvoice(inv.id) : inv;
+}
+// "Post all due": every draft instalment invoice of a contract.
+export function postContractDrafts(contractId) {
+  return store.list('invoices', i => i.contractId === contractId && i.status === 'Draft').map(i => postInvoice(i.id));
+}
+
+// Contract invoices follow the plan exactly, so their lines are not edited.
 export const canEditInvoice = inv => inv.status === 'Draft' && auth.can('invoice', 'edit');
+export const canEditRows = inv => canEditInvoice(inv) && !inv.contractId;
 
 export function removeRow(invId, index) {
   const inv = store.get('invoices', invId);
@@ -69,7 +103,7 @@ export function postInvoice(id) {
   if (inv.status !== 'Draft') return inv;
   const date = today();
   const no = store.nextNumber('INV');
-  store.update('invoices', id, { no, date, dueDate: dueFor(store.get('jobs', inv.jobId), inv.paymentTerm, date), postedAt: new Date().toISOString(), postedBy: store.currentActor() }, `Posted as ${no}`);
+  store.update('invoices', id, { no, date, dueDate: dueFor(inv.jobId ? store.get('jobs', inv.jobId) : null, inv.paymentTerm, date), postedAt: new Date().toISOString(), postedBy: store.currentActor() }, `Posted as ${no}`);
   store.setStatus('invoices', id, 'Posted', no);
   return store.get('invoices', id);
 }
@@ -79,8 +113,15 @@ export function cancelInvoice(id, reason) {
   const inv = store.get('invoices', id);
   if (paymentsFor(id).length) return `${inv.no} has a payment and cannot be cancelled.`;
   store.setStatus('invoices', id, 'Cancelled', reason);
-  const job = store.get('jobs', inv.jobId);
+  const job = inv.jobId ? store.get('jobs', inv.jobId) : null;
   if (job?.invoiceId === id) store.update('jobs', job.id, { invoiceId: '' }, false);
+  const c = inv.contractId ? store.get('contracts', inv.contractId) : null;
+  // The line is invoiced again (the daily check drafts a corrected invoice), unless the contract was terminated before
+  // its period started; then the line is dropped.
+  const drop = l => c.status === 'Terminated' && l.from > (c.terminatedOn || '');
+  if (c) store.update('contracts', c.id, { billingPlan: c.billingPlan.map(l => (l.invoiceId === id ? { ...l, invoiceId: '', status: drop(l) ? 'Cancelled' : 'Scheduled' } : l)) },
+    `${inv.no} cancelled: instalment ${inv.instalment.n} ${c.status === 'Terminated' && drop(c.billingPlan.find(l => l.invoiceId === id)) ? 'dropped (after the termination)' : 'to invoice again'}`);
+  if (c) maybeCloseContract(c.id);
   return '';
 }
 
@@ -120,6 +161,7 @@ export function recordPayment({ invoiceId, amount, method, reference = '', date 
   const pay = store.insert('payments', { no, invoiceId, invoiceNo: inv.no, jobId: inv.jobId, customerId: inv.customerId, customer: inv.customer, date, amount: round2(amount), method, reference, proofId, via },
     { note: `${no}: ${round2(amount).toFixed(2)} for ${inv.no}${via === 'phone' ? ' (collected on site)' : ''}` });
   maybeClose(inv.jobId);
+  if (inv.contractId) maybeCloseContract(inv.contractId);
   return { problems: [], payment: pay };
 }
 

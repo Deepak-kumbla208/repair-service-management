@@ -49,6 +49,17 @@ export function globalSearch(query, channel = auth.view()) {
       .filter(j => hit(j.no, j.customer, j.site, j.quotationNo, empName(j.technicianId)))
       .map(j => ({ icon: '⚑', title: `${j.no} · ${j.customer}`, sub: `${j.site} · ${j.status}`, route: mobile ? `m/rjob/${j.id}` : `jobs/${j.id}` })));
   }
+  // AMC contracts and visits (a technician finds only their own visits).
+  if (can('amcExecution')) {
+    const own = auth.scope('amcExecution') === 'own';
+    add(own ? 'My AMC visits' : 'AMC visits', store.list('amcVisits', v => v.status !== 'Cancelled' && (!own || v.technicianId === auth.user()?.employeeId))
+      .filter(v => hit(v.reportNo, v.contractNo, v.customer, v.site, empName(v.technicianId), 'amc visit'))
+      .map(v => ({ icon: '✓', title: `${v.contractNo} · visit ${v.n} of ${v.of} · ${v.customer}`, sub: `${v.site} · ${v.status}`, route: mobile ? `m/visit/${v.id}` : `amc-visits/${v.id}` })));
+  }
+  if (can('amcContract') && !mobile) {
+    add('AMC contracts', store.list('contracts').filter(c => hit(c.no, c.customer, c.quotationNo, c.po?.no, c.sites.map(s => s.name)))
+      .map(c => ({ icon: '▦', title: `${c.no} · ${c.customer}`, sub: `${c.sites.map(s => s.name).join(', ')} · ${c.status}`, route: `contracts/${c.id}` })));
+  }
   if (!mobile) {
     const docs = [
       ['estimation', 'Estimates', 'estimates', '∑', e => e.status !== 'Superseded', e => [e.no, e.header.customer, e.header.site], e => `${e.no} Rev ${e.rev} · ${e.header.customer}`, e => `${e.header.site} · ${e.status}`, 'estimates'],

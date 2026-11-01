@@ -108,7 +108,7 @@ export function renderCustomerForm(el, id) {
         <div class="tbl-wrap" style="max-height:none;margin-top:8px"><table class="tbl"><thead><tr><th>Tag</th><th>Location</th><th>Type</th><th>Width × height</th><th>Size</th><th>Motor</th><th>Serial</th><th>Install date</th><th>Added from</th><th>Status</th>${editable ? html`<th></th>` : ''}</tr></thead><tbody>
           ${list.length ? html`${list.map(sh => html`<tr><td class="lnk">${sh.tag}</td><td>${sh.location}</td><td>${productName(sh.productId)}</td>
             <td>${fmtNum(sh.width)} × ${fmtNum(sh.height)} ${sh.unit}${sh.unit === 'ft' ? html` <span class="muted small">(${fmtNum(sh.widthM)} × ${fmtNum(sh.heightM)} m)</span>` : ''}</td>
-            <td><b>${sh.sizeCode}</b></td><td>${sh.motor}</td><td>${sh.serial}</td><td>${sh.installDate}</td><td class="small">${sh.source}</td><td>${pill(sh.status)}</td>
+            <td><b>${sh.sizeCode}</b>${sh.fireRated ? html` <span class="tag">fire</span>` : ''}</td><td>${sh.motor}</td><td>${sh.serial}</td><td>${sh.installDate}</td><td class="small">${sh.source}</td><td>${sh.outOfService ? pill('Out of service', 'red') : pill(sh.status)}</td>
             ${editable ? html`<td><button type="button" class="btn link small" data-edsh="${i}:${sh.id}">Edit</button></td>` : ''}</tr>`)}` : emptyRow(11, terms.length ? 'No shutter matches.' : 'No shutters recorded at this site yet.')}
         </tbody></table></div></div>`;
     });
@@ -132,7 +132,8 @@ export function renderCustomerForm(el, id) {
         <div class="field"><div class="field-label">Size class (one rule, in metres)</div><div class="strong" id="sizeOut" style="padding:6px 0">${sizeOf(sh) || '—'}</div></div>
         ${field({ name: 'status', label: 'Status', type: 'select', options: ['Active', 'Inactive'], value: sh.status, blank: false })}
         ${field({ name: 'motor', label: 'Motor (make / model)', value: sh.motor })}${field({ name: 'serial', label: 'Serial no.', value: sh.serial })}
-        ${field({ name: 'installDate', label: 'Install date', type: 'date', value: sh.installDate })}</div>`,
+        ${field({ name: 'installDate', label: 'Install date', type: 'date', value: sh.installDate })}
+        ${field({ name: 'fireRated', label: 'Fire-rated shutter (the AMC check list adds the fire drop test)', type: 'checkbox', value: sh.fireRated, cls: 'span2' })}</div>`,
       onOpen: body => body.addEventListener('input', () => { $('#sizeOut', body).textContent = sizeOf(readForm(body)) || '—'; }),
       actions: [{ label: 'Cancel' }, { label: shutterId ? 'Update shutter' : 'Add shutter', kind: 'primary', onClick: body => {
         const d = readForm(body);

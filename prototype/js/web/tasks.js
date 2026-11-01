@@ -3,12 +3,13 @@
 // approvals; the Operations Executive sees technicians' leave-site requests.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, fmtDateTime, fmtDuration, toast, tiles, pill } from '../core/ui.js';
+import { html, $, go, fmtDateTime, fmtDuration, toast, tiles, pill } from '../core/ui.js';
 import { vsLabel } from '../core/lookups.js';
 import { myTasks } from '../core/workflow.js';
 import { decideQuotation, autoChecks } from '../core/quotations.js';
 import { estimateSummary } from '../core/estimates.js';
 import { approveJobTerm, confirmLeave } from '../core/jobs.js';
+import { renewContract, declineRenewal, contractProgress } from '../core/contracts.js';
 import { invoiceForJob, balanceOf } from '../core/billing.js';
 import { bindMics } from '../core/capture.js';
 import { quotationSheet } from './print-docs.js';
@@ -20,6 +21,7 @@ const sel = { id: '' };
 
 export function taskLabel(t) {
   if (t.kind === 'leaveSite') return 'Leave site';
+  if (t.kind === 'renewal') return 'AMC renewal';
   return t.docType === 'job' ? 'Payment term' : t.level > 1 ? `Approval level ${t.level}` : 'Counter-check';
 }
 
@@ -39,6 +41,14 @@ export function taskDetail(t, { compact = false } = {}) {
       </ul>
       <div class="muted small" style="margin-top:6px">${j.no} · ${j.customer} · asked ${fmtDateTime(t.createdAt)} (${fmtDuration(Date.now() - new Date(t.createdAt))} ago)</div>
       <div class="apr-foot"><input type="text" class="grow" name="comment" placeholder="Note (optional)"><button class="btn primary" data-do="confirm">✓ OK to leave</button></div></div>`;
+  }
+  if (t.kind === 'renewal') {
+    const c = store.get('contracts', t.docId);
+    const p = contractProgress(c);
+    return html`<div class="card"><div class="card-head"><h2>${t.title}</h2></div>
+      <p>${c.no} for ${c.customer} ends on <b>${c.end}</b>. ${p.done} of ${p.visits} visits done; ${cur} ${m2(p.paid)} paid of ${m2(c.total)}.</p>
+      <p class="small muted">Renew creates a renewal enquiry with an estimate pre-filled from this contract (same sites, shutters and visits, today's rates). It then goes to the quotation and the counter-check.</p>
+      <div class="apr-foot"><a class="btn" href="#/contracts/${c.id}">Open ${c.no}</a><span class="grow"></span><button class="btn" data-do="decline">Not renewing</button><button class="btn primary" data-do="renew">⟳ Renew now</button></div></div>`;
   }
   if (t.docType === 'job') {
     const j = store.get('jobs', t.docId);
@@ -72,6 +82,8 @@ const decision = (compact = false) => html`<div class="apr-foot" style="${compac
 export function actOnTask(t, action, comment) {
   if (action === 'return' && !comment.trim()) return 'Write a comment to say what needs changing.';
   if (t.kind === 'leaveSite') { confirmLeave(t.id, comment); return ''; }
+  if (t.kind === 'renewal' && action === 'decline') { declineRenewal(t.docId, comment); return ''; }
+  if (t.kind === 'renewal') { const r = renewContract(t.docId); go(`estimates/${r.estimate.id}`); return ''; }
   if (t.docType === 'job') { approveJobTerm(t.id, action, comment); return ''; }
   decideQuotation(t.id, action, comment);
   return '';
@@ -88,7 +100,7 @@ export function renderTasks(el) {
       { key: 'ok', label: 'Approved or confirmed today', count: doneToday.filter(x => x.status === 'Done').length }], 'open')}
     ${list.length ? html`<div class="apr">
       <div>${list.map(x => html`<div class="task ${x.id === sel.id ? 'on' : ''}" data-task="${x.id}"><div class="row"><b>${x.docNo}</b><span class="grow"></span><span class="small muted">${fmtDuration(Date.now() - new Date(x.createdAt))} ago</span></div>
-        <div>${x.customer}</div><div class="row small"><span class="pill ${x.kind === 'leaveSite' ? 'amber' : 'blue'}">${taskLabel(x)}</span>${x.rules?.some(r => r.code === 'PAY_TERM') && x.docType === 'quotation' ? pill('Payment term', 'purple') : ''}<span class="grow"></span>${x.amount != null ? html`<b>${auth.company().currency} ${m2(x.amount)}</b>` : ''}</div></div>`)}</div>
+        <div>${x.customer}</div><div class="row small"><span class="pill ${x.kind === 'leaveSite' ? 'amber' : x.kind === 'renewal' ? 'purple' : 'blue'}">${taskLabel(x)}</span>${x.rules?.some(r => r.code === 'PAY_TERM') && x.docType === 'quotation' ? pill('Payment term', 'purple') : ''}<span class="grow"></span>${x.amount != null ? html`<b>${auth.company().currency} ${m2(x.amount)}</b>` : ''}</div></div>`)}</div>
       <div id="detail">${taskDetail(t)}</div>
       ${t.docType === 'quotation' ? html`<div class="preview" style="padding:8px;overflow:hidden"><div class="preview-bar"><span>Quotation as the customer will see it</span><a href="#/quotations/${t.docId}">open</a></div>
         <div style="zoom:.55">${quotationSheet(store.get('quotations', t.docId), auth.company())}</div></div>` : html`<div></div>`}
@@ -102,8 +114,8 @@ export function renderTasks(el) {
     if (!b) return;
     const err = actOnTask(t, b.dataset.do, $('[name="comment"]', el)?.value || '');
     if (err) { toast(err, 'bad'); return; }
-    toast(`${t.docNo}: ${b.dataset.do === 'return' ? 'returned with your comment' : b.dataset.do === 'confirm' ? 'the technician may leave the site' : 'approved'}`);
+    toast(`${t.docNo}: ${b.dataset.do === 'return' ? 'returned with your comment' : b.dataset.do === 'confirm' ? 'the technician may leave the site' : b.dataset.do === 'renew' ? 'renewal enquiry and estimate created' : b.dataset.do === 'decline' ? 'marked as not renewing' : 'approved'}`);
     sel.id = '';
-    render();
+    if (b.dataset.do !== 'renew') render();
   };
 }

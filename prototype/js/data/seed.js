@@ -2,6 +2,7 @@
 import { MENUS, ACTIONS } from './menus.js';
 import { singaporeMasters, uaeMasters } from './seed-masters.js';
 import { approvalRules, TX_DEFAULTS, kosmicRepair } from './seed-stretch2.js';
+import { addAmcMasters, AMC_TX } from './seed-amc.js';
 
 const DSH = 'co_dsh';
 const GDD = 'co_gdd';
@@ -11,12 +12,12 @@ const COMPANIES = [
     taxLabel: 'GST', taxRegLabel: 'GST Reg. No.', taxRegNo: 'M9-0000000-0', chargesTax: true, defaultTaxCode: 'SR9',
     regLabel: 'UEN', regNo: '200000000D', address: 'Blk 10 Demo Road, #01-01, Singapore 100010',
     tel: '+65 6000 0000', mobile: '+65 8000 0000', email: 'sales@demo-shutters.example', inspectionTargetHours: 2,
-    bank: 'Demo Bank Singapore · account 000-000000-0', payNow: 'PayNow to UEN 200000000D', txDefaults: TX_DEFAULTS, placeholders: ['taxRegNo', 'regNo', 'bank', 'payNow'] },
+    bank: 'Demo Bank Singapore · account 000-000000-0', payNow: 'PayNow to UEN 200000000D', txDefaults: { ...TX_DEFAULTS, amc: AMC_TX }, placeholders: ['taxRegNo', 'regNo', 'bank', 'payNow'] },
   { id: GDD, tenantId: GDD, code: 'GDD', name: 'Gulf Demo Doors LLC', country: 'United Arab Emirates', currency: 'AED',
     taxLabel: 'VAT', taxRegLabel: 'TRN', taxRegNo: '100000000000003', chargesTax: true, defaultTaxCode: 'VAT5',
     regLabel: 'Trade licence', regNo: '000000', address: 'Office 12, Demo Business Centre, Al Quoz, Dubai, UAE',
     tel: '+971 4 000 0000', mobile: '+971 50 000 0000', email: 'sales@gulf-demo-doors.example', inspectionTargetHours: 2,
-    bank: 'Demo Bank UAE · IBAN AE00 0000 0000 0000 0000 000', payNow: '', txDefaults: TX_DEFAULTS, placeholders: ['taxRegNo', 'regNo', 'bank'] },
+    bank: 'Demo Bank UAE · IBAN AE00 0000 0000 0000 0000 000', payNow: '', txDefaults: { ...TX_DEFAULTS, amc: AMC_TX }, placeholders: ['taxRegNo', 'regNo', 'bank'] },
 ];
 
 const ROLES = [
@@ -46,10 +47,11 @@ function accessFor(role) {
     set('inspection', 'web', RW);
     set(DOCS, 'web', RW);
     set('job', 'both', RW); // confirms leave-site requests on the phone too
+    set('amcExecution', 'web', ['view', 'edit', 'print']); // service reports: "Checked & filed" (flow step 9)
   }
   if (role === 'APR') {
     set('dashboard', 'both', V);
-    set(['customer', 'enquiry', 'estimation', 'amcContract', 'invoice', 'payment', 'closure'], 'web', V);
+    set(['customer', 'enquiry', 'estimation', 'amcContract', 'amcScheduling', 'amcExecution', 'invoice', 'payment', 'closure'], 'web', V);
     set('inspection', 'web', VP);
     set('quotation', 'both', ['view', 'approve', 'print']);
     set('job', 'both', ['view', 'approve']);
@@ -144,9 +146,9 @@ function gulfTransactions(cust) {
 
 export function buildSeed() {
   const out = { companies: COMPANIES, users: [], roles: [], menuAccess: [], series: [], audit: [], siteReports: [], enquiries: [], inspections: [],
-    estimates: [], quotations: [], jobs: [], invoices: [], payments: [], followUps: [], tasks: [], approvalRules: [...approvalRules(DSH), ...approvalRules(GDD)] };
-  const sg = singaporeMasters(DSH);
-  const ae = uaeMasters(GDD);
+    estimates: [], quotations: [], jobs: [], invoices: [], payments: [], followUps: [], tasks: [], contracts: [], amcVisits: [], approvalRules: [...approvalRules(DSH), ...approvalRules(GDD)] };
+  const sg = addAmcMasters(DSH, singaporeMasters(DSH), { sampleCustomers: true });
+  const ae = addAmcMasters(GDD, uaeMasters(GDD));
   for (const coll of Object.keys(sg)) out[coll] = [...sg[coll], ...ae[coll]];
   [DSH, GDD].forEach(t => {
     const ra = rolesAndAccess(t);

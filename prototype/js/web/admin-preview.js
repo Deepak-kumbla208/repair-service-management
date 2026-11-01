@@ -22,12 +22,12 @@ const LATER = {
 export function renderSoon(el, key) {
   const m = menuByKey(key);
   el.innerHTML = String(html`<div class="page">${pageHead({ crumb: m?.group || '', title: m?.label || key })}
-    <div class="card" style="max-width:640px"><span class="tag info">Stretch ${m?.stretch || '2'}</span>
+    <div class="card" style="max-width:640px"><span class="tag info">${m?.stretch === 3.5 ? 'Stretch 3 Part B' : `Stretch ${m?.stretch || 2}`}</span>
     <p style="margin-top:8px">${LATER[key] || 'This screen is built in a later stretch.'}</p>
     <p class="muted">The menu is already here so that roles and menu access can be set up for it.</p></div></div>`);
 }
 
-const note = html`<div class="note" style="margin-bottom:10px">Read-only in Stretch 1: this is the seeded setup. The editing screen comes in Stretch 3.</div>`;
+const note = html`<div class="note" style="margin-bottom:10px">Read-only in Stretch 1: this is the seeded setup. The editing screen comes in Stretch 3 Part B.</div>`;
 
 function companySetup(c) {
   const row = (k, label) => html`<div><div class="k">${label}</div><div class="v">${c[k] === true ? 'Yes' : c[k] === false ? 'No' : c[k]} ${c.placeholders?.includes(k) ? placeholderTag('dummy') : ''}</div></div>`;
@@ -45,7 +45,7 @@ function transactionSetup() {
       <div><div class="k">Costing Level</div><div class="v">${label('COSTING_LEVEL', d.costingLevel)}</div></div><div><div class="k">Shared Costs</div><div class="v">${label('SHARED_COSTS', d.sharedCosts)}</div></div>
       <div><div class="k">Overheads</div><div class="v">${d.overheadPct} % of direct cost</div></div><div><div class="k">Margin</div><div class="v">${label('MARGIN_BASIS', d.marginBasis)} ${d.marginPct} %</div></div>
       <div><div class="k">Quotation validity</div><div class="v">${d.quoteValidityDays} days (Terms master, term 6)</div></div></div></div>
-    <div class="card" style="margin-bottom:10px"><div class="card-head"><h2>Approval rules</h2><span class="muted small">preset; the editing screen is the Authorization Workflow Master (Stretch 3)</span></div>
+    <div class="card" style="margin-bottom:10px"><div class="card-head"><h2>Approval rules</h2><span class="muted small">preset; the editing screen is the Authorization Workflow Master (Stretch 3 Part B)</span></div>
       <div class="tbl-wrap" style="max-height:none"><table class="tbl"><thead><tr><th>Rule</th><th>When</th><th>Level</th><th>Approver role</th></tr></thead><tbody>
         ${store.list('approvalRules').map(r => html`<tr><td>${r.name}</td><td class="wrap">${r.when}</td><td>${r.level}</td><td>${store.findOne('roles', x => x.code === r.roleCode)?.name || r.roleCode}</td></tr>`)}</tbody></table></div></div>
     <div class="tbl-wrap" style="max-height:none"><table class="tbl"><thead><tr><th>Document</th><th>Prefix</th><th>Format</th><th>Reset</th><th>Last number ${year}</th></tr></thead><tbody>

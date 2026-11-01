@@ -12,6 +12,7 @@ import { clockHtml } from './site-inspection.js';
 import { canCreateFor, createEstimate, currentEstimate } from '../core/estimates.js';
 import { currentQuotation } from '../core/quotations.js';
 import { jobForEnquiry } from '../core/jobs.js';
+import { contractFor } from '../core/contracts.js';
 import { linesTable } from './enquiry-parts.js';
 
 const row = (label, value) => html`<div class="field"><div class="field-label">${label}</div><div class="ro">${value || html`<span class="muted">—</span>`}</div></div>`;
@@ -49,9 +50,10 @@ export function renderEnquiryView(el, id) {
   const l = laterColumns(e);
   const openInsp = insp && insp.status !== 'Cancelled';
   const canAssign = openInsp && ['To assign', 'Assigned'].includes(insp.status) && auth.can('inspection', 'edit');
-  const est = currentEstimate(e.id), q = currentQuotation(e.id), job = jobForEnquiry(e.id);
+  const est = currentEstimate(e.id), q = currentQuotation(e.id), job = jobForEnquiry(e.id), contract = contractFor(e.id);
   // The next document is one click away on the page where it is due.
   const next = canCreateFor(e) ? html`<button class="btn primary" id="mkEst">Create estimate</button>`
+    : contract ? html`<a class="btn primary" href="#/contracts/${contract.id}">Open ${contract.no}</a>`
     : job ? html`<a class="btn primary" href="#/jobs/${job.id}">Open ${job.no}</a>`
       : q ? html`<a class="btn primary" href="#/quotations/${q.id}">Open ${q.no} Rev ${q.rev}</a>`
         : est ? html`<a class="btn primary" href="#/estimates/${est.id}">Open ${est.no} Rev ${est.rev}</a>` : '';
@@ -120,8 +122,9 @@ export function openWorkflow(e) {
     title: `Workflow · ${e.no} · ${vsLabel('ENQ_TYPE', e.type)}`, cls: 'wf-modal',
     body: html`<p class="muted" style="margin:0 0 10px">One box per transaction. The current one is highlighted; click a finished box to open its document.</p>
       ${workflowHtml(e)}
-      <div class="muted small" style="margin-top:14px;line-height:1.8"><b>Other enquiry types</b><br>
-        AMC: Enquiry → Site inspection (optional) → Estimation → Quotation → AMC contract → AMC visits → Invoice → Payment<br>
+      <div class="muted small" style="margin-top:14px;line-height:1.8"><b>The three enquiry types</b><br>
+        Repair: Enquiry → Site inspection → Estimation → Quotation → Job → Invoice → Payment → Job closure<br>
+        AMC: Enquiry → Site inspection (optional) → Estimation → Quotation → AMC contract → AMC visits → Invoice → Payment → Contract closure<br>
         General Servicing: Enquiry → Site inspection (optional) → Estimation → Quotation → Job → Invoice → Payment → Job closure</div>`,
     actions: [{ label: 'Close' }],
   });

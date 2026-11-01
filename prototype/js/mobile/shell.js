@@ -6,7 +6,7 @@ import { switchView } from '../app.js';
 import { openPalette } from '../web/palette.js';
 
 function activeTab(route) {
-  if (/^m\/(jobs|job|report|rjob)/.test(route)) return 'jobs';
+  if (/^m\/(jobs|job|report|rjob|gjob|visit)/.test(route)) return 'jobs';
   if (/^m\/tasks?(\/|$)/.test(route)) return 'tasks';
   if (/^m\/enquir/.test(route)) return 'enquiries';
   if (route === 'm/more') return 'more';

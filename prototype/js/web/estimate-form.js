@@ -1,6 +1,7 @@
-// Estimate page ("E2" layout): the header on the left in line style (customer, estimate, Costing Level, Shared
+// Repair estimate page ("E2" layout): the header on the left in line style (customer, estimate, Costing Level, Shared
 // Costs, margin), the team lead's tabs on the right. Pre-filled from the site report and the masters; changes save
-// as you type. "Create quotation" makes the quotation (or its next revision) from this revision.
+// as you type. "Create quotation" makes the quotation (or its next revision) from this revision. AMC and General
+// Servicing estimates open the AMC page (amc-estimate.js).
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, $$, go, on, debounce, fmtNum, pill, toast, openModal, chipGroup } from '../core/ui.js';
@@ -9,6 +10,7 @@ import { estimateSummary, canEdit, saveEstimate, reviseEstimate, estimateProblem
 import { createFromEstimate } from '../core/quotations.js';
 import { TABS, tabHtml, newRow, applyChange } from './estimate-tabs.js';
 import { openWorkflow } from './enquiry-view.js';
+import { renderAmcEstimate } from './amc-estimate.js';
 
 const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pc = v => `${(v * 100).toFixed(1)} %`;
@@ -48,6 +50,7 @@ const kpiHtml = (s, cur) => html`<div class="kpi"><div><b>${m2(s.total)}</b><spa
 export function renderEstimate(el, id) {
   const saved = store.get('estimates', id);
   if (!saved) { el.innerHTML = '<div class="page"><div class="empty">Estimate not found.</div></div>'; return; }
+  if (saved.kind === 'AMC') return renderAmcEstimate(el, id);
   const est = structuredClone(saved);
   const enq = store.get('enquiries', est.enquiryId);
   const q = est.quotationId ? store.get('quotations', est.quotationId) : null;

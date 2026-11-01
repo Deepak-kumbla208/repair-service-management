@@ -6,7 +6,7 @@ import * as auth from '../core/auth.js';
 import { html, $, fmtDate, pill, toast, openModal, readForm, chipGroup, confirmBox, dateInput } from '../core/ui.js';
 import { vsLabel, vsOptions } from '../core/lookups.js';
 import { saveBlob } from '../core/media.js';
-import { canEditInvoice, postInvoice, removeRow, cancelInvoice, setRowAmount, balanceOf, paidAmount, paymentStatus, paymentsFor, recordPayment, followUpsFor, addFollowUp } from '../core/billing.js';
+import { canEditInvoice, canEditRows, postInvoice, removeRow, cancelInvoice, setRowAmount, balanceOf, paidAmount, paymentStatus, paymentsFor, recordPayment, followUpsFor, addFollowUp } from '../core/billing.js';
 import { invoiceSheet } from './print-docs.js';
 import { renderDocList } from './doc-list.js';
 import { render } from '../app.js';
@@ -18,7 +18,7 @@ export const payPill = inv => { const s = paymentStatus(inv); return s ? pill(vs
 export function renderInvoiceList(el) {
   const cur = auth.company().currency;
   renderDocList(el, {
-    key: 'rsmInvList', crumb: 'Transactions › Invoice', title: 'Invoices', sub: 'Drafted from the accepted quotation; the number is given when an invoice is posted.',
+    key: 'rsmInvList', crumb: 'Transactions › Invoice', title: 'Invoices', sub: 'Drafted from the accepted quotation (AMC: from the contract\'s billing plan); the number is given when an invoice is posted.',
     placeholder: 'Search invoices: invoice no, customer, job, quotation, PO',
     rows: () => store.list('invoices').sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     tiles: [
@@ -27,7 +27,7 @@ export function renderInvoiceList(el) {
       { key: 'paid', label: 'Paid in full', test: i => paymentStatus(i) === 'PAID' },
       { key: 'cancel', label: 'Cancelled', test: i => i.status === 'Cancelled' },
     ],
-    columns: [['Invoice No', i => i.no || 'Draft'], ['Date', i => fmtDate(i.date)], ['Customer', i => i.customer], ['Job', i => i.jobNo], ['Payment term', i => vsLabel('PAYMENT_TERMS', i.paymentTerm)],
+    columns: [['Invoice No', i => i.no || 'Draft'], ['Date', i => fmtDate(i.date)], ['Customer', i => i.customer], ['Job / contract', i => (i.contractId ? `${i.contractNo} · ${i.instalment.n} of ${i.instalment.of}` : i.jobNo)], ['Payment term', i => vsLabel('PAYMENT_TERMS', i.paymentTerm)],
       ['Due', i => fmtDate(i.dueDate)], [`Total (${cur})`, i => m2(i.total), 'num'], [`Balance (${cur})`, i => (i.status === 'Posted' ? m2(balanceOf(i)) : ''), 'num'], ['Status', i => html`${pill(i.status, i.status === 'Posted' ? 'green' : '')} ${payPill(i)}`]],
     search: i => [i.no, i.customer, i.jobNo, i.quotationNo, i.poNo], route: i => `invoices/${i.id}`, empty: 'No invoices yet.',
   });
@@ -73,20 +73,20 @@ export function renderInvoice(el, id) {
   const inv = store.get('invoices', id);
   if (!inv) { el.innerHTML = '<div class="page"><div class="empty">Invoice not found.</div></div>'; return; }
   const company = auth.company();
-  const edit = canEditInvoice(inv);
+  const edit = canEditRows(inv);
   const pays = paymentsFor(inv.id);
   const fus = followUpsFor(inv.id);
   const canPay = inv.status === 'Posted' && balanceOf(inv) > 0 && auth.can('payment', 'create');
   el.innerHTML = String(html`<div class="page" style="max-width:1500px">
     <div class="page-head"><div class="grow">
-      <div class="crumb"><a href="#/invoices">Invoice</a> › <a href="#/jobs/${inv.jobId}">${inv.jobNo}</a></div>
+      <div class="crumb"><a href="#/invoices">Invoice</a> › ${inv.contractId ? html`<a href="#/contracts/${inv.contractId}">${inv.contractNo}</a>` : html`<a href="#/jobs/${inv.jobId}">${inv.jobNo}</a>`}</div>
       <h1>${inv.no || 'Draft invoice'} · ${inv.customer} ${pill(inv.status, inv.status === 'Posted' ? 'green' : '')} ${payPill(inv)}</h1>
-      <div class="page-meta">from <a href="#/quotations/${inv.quotationId}">${inv.quotationNo}</a>${inv.poNo ? ` · PO ${inv.poNo}` : ''} · ${vsLabel('PAYMENT_TERMS', inv.paymentTerm)}</div></div>
+      <div class="page-meta">${inv.contractId ? `Instalment ${inv.instalment.n} of ${inv.instalment.of} of ${inv.contractNo} · ` : ''}from <a href="#/quotations/${inv.quotationId}">${inv.quotationNo}</a>${inv.poNo ? ` · PO ${inv.poNo}` : ''} · ${vsLabel('PAYMENT_TERMS', inv.paymentTerm)}</div></div>
       <div class="row"><a class="btn" href="#/invoices/${inv.id}/print">⎙ Print</a>
         ${auth.can('invoice', 'edit') && inv.status === 'Posted' && !pays.length ? html`<button class="btn danger" id="cancel">Cancel invoice</button>` : ''}
         ${inv.status === 'Posted' && balanceOf(inv) > 0 && auth.can('payment', 'edit') ? html`<button class="btn" id="fu">Log follow-up</button>` : ''}
         ${canPay ? html`<button class="btn primary" id="pay">Record payment</button>` : ''}
-        ${edit ? html`<button class="btn primary" id="post">Post invoice</button>` : ''}</div>
+        ${canEditInvoice(inv) ? html`<button class="btn primary" id="post">Post invoice</button>` : ''}</div>
     </div>
     ${inv.status === 'Draft' && (inv.flagNote || inv.rows.some(r => r.flag)) ? html`<div class="note warn" style="margin-bottom:10px">Check before posting: ${inv.flagNote || 'lines marked not fully done on the Work Done form are flagged below.'}</div>` : ''}
     <div class="s3">

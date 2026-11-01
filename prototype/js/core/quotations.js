@@ -1,12 +1,15 @@
 // Sales quotations: created from the latest estimate revision (prices come only from the estimate), counter-checked
 // by the Approver before they can be sent, sent, accepted (which creates the job) or rejected, and revised as
-// Rev 2, 3… under the same number. A quotation expires by itself after its validity days.
+// Rev 2, 3… under the same number. A quotation expires by itself after its validity days. AMC quotations carry the
+// contract period, visits and billing plan; accepting one creates the AMC contract (General Servicing: a GS job).
 import * as store from './store.js';
 import * as auth from './auth.js';
 import { findSite, withCompany } from './lookups.js';
 import { estimateSummary, reviseEstimate, txDefaults, companyTax } from './estimates.js';
 import { startApproval, levelsFor, openLevel, closeTask, cancelTasksFor } from './workflow.js';
-import { createJobFromQuotation, openTermTask } from './jobs.js';
+import { createJobFromQuotation, createGsJob, openTermTask } from './jobs.js';
+import { createContractFromQuotation } from './contracts.js';
+import { amcChecks } from './amc-estimates.js';
 
 const isoDate = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 export const todayIso = () => isoDate(new Date());
@@ -15,9 +18,11 @@ export function addDays(dateStr, days) { const d = new Date(`${dateStr}T00:00`);
 export const EDITABLE = ['Draft', 'Returned'];
 export const OPEN = ['Draft', 'Submitted', 'Returned', 'Approved', 'Sent'];
 
-function quoteTerms() {
+// AMC quotations use the AMC terms; repair and General Servicing quotations the quotation terms.
+export const termsDocType = est => (est?.kind === 'AMC' && est.jobType === 'AMC' ? 'AMC' : 'Quotation');
+function quoteTerms(docType = 'Quotation') {
   const company = auth.company();
-  const terms = store.list('terms', t => t.docType === 'Quotation' && t.isDefault && t.status !== 'Inactive').sort((a, b) => a.order - b.order);
+  const terms = store.list('terms', t => t.docType === docType && t.isDefault && t.status !== 'Inactive').sort((a, b) => a.order - b.order);
   const validity = terms.find(t => t.validityDays)?.validityDays || txDefaults().quoteValidityDays;
   return { texts: terms.map(t => withCompany(t.text, company)), validity };
 }
@@ -45,11 +50,16 @@ export function createFromEstimate(estId) {
   if (prev && CLOSED.includes(prev.status)) return null;
   const customer = store.get('customers', est.customerId);
   const { site } = findSite(est.siteId);
-  const { texts, validity } = quoteTerms();
+  const { texts, validity } = quoteTerms(termsDocType(est));
   const { s, rows } = rowsFromEstimate(est);
+  const amc = est.kind === 'AMC' ? { jobType: est.jobType, periodMonths: est.periodMonths, billing: est.billing, plan: s.plan, perMonth: s.metrics.perMonth,
+    sites: est.sites.map((x, i) => ({ key: x.key, name: x.name, zoneId: x.zoneId, visits: x.visits, counts: x.counts, shutters: s.sites[i].shutters, teamHrs: s.sites[i].hrsVisit })) } : null;
   const date = todayIso();
   const prevEst = prev ? store.get('estimates', prev.estimateId) : null;
-  const sameLines = prevEst && prevEst.lines.map(l => l.key).join() === est.lines.map(l => l.key).join();
+  // Wording edited on the previous revision is kept when the lines did not change (AMC: when the estimate's
+  // description, which names the sites, shutters and visits, did not change).
+  const sameLines = prevEst && (est.kind === 'AMC' ? prevEst.header.description === est.header.description
+    : prevEst.lines.map(l => l.key).join() === est.lines.map(l => l.key).join());
   const no = prev?.no || store.nextNumber('QT');
   const rev = prev ? prev.rev + 1 : 1;
   const q = store.insert('quotations', {
@@ -58,7 +68,7 @@ export function createFromEstimate(estId) {
     date, validDays: validity, validUntil: addDays(date, validity), paymentTerm: prev?.paymentTerm || customer?.paymentTerm || 'IMMEDIATE',
     costingLevel: est.costingLevel, rows, subtotal: s.subtotal, taxLabel: est.taxLabel, taxRate: est.taxRate, tax: s.tax, total: s.total,
     description: sameLines && prev ? prev.description : est.header.description, findings: sameLines && prev ? prev.findings : est.header.findings,
-    terms: prev ? prev.terms : texts, preparedBy: store.currentActor(), prevId: prev?.id || '', termApproved: false, approvals: [], jobId: '',
+    terms: prev ? prev.terms : texts, preparedBy: store.currentActor(), prevId: prev?.id || '', termApproved: false, approvals: [], jobId: '', amc, type: enq.type,
   }, { status: 'Draft', note: `${no} Rev ${rev} from ${est.no} Rev ${est.rev}` });
   if (prev) supersede(prev, `Revised as Rev ${rev}`);
   store.update('estimates', est.id, { quotationId: q.id }, false);
@@ -162,10 +172,14 @@ export function accept(id, { method, poNo, poDate, contact, attachments = [], pa
   if (rejected.length && rejected.length < priced.length) {
     const est = reviseEstimate(q.estimateId, { without: rejected, note: `customer accepted ${priced.length - rejected.length} of ${priced.length} lines` });
     const next = createFromEstimate(est.id);
-    store.update('quotations', next.id, { partialFrom: `${q.no} Rev ${q.rev}`, paymentTerm: paymentTerm || q.paymentTerm }, `Partial acceptance of ${q.no} Rev ${q.rev}`);
+    // The customer's PO details are kept for the acceptance of the next revision (nothing typed twice).
+    store.update('quotations', next.id, { partialFrom: `${q.no} Rev ${q.rev}`, paymentTerm: paymentTerm || q.paymentTerm, pendingAcceptance: { method, poNo, poDate, contact, attachments } },
+      `Partial acceptance of ${q.no} Rev ${q.rev}`);
     return { partial: true, quotation: store.get('quotations', next.id) };
   }
-  const termChanged = paymentTerm && paymentTerm !== q.paymentTerm;
+  const enq = store.get('enquiries', q.enquiryId);
+  // An AMC keeps the payment term approved at the counter-check (activation is not gated by a second approval).
+  const termChanged = enq.type !== 'AMC' && paymentTerm && paymentTerm !== q.paymentTerm;
   store.update('quotations', id, {
     acceptance: { at: new Date().toISOString(), by: store.currentActor(), method, poNo, poDate, contact, attachments },
     ...(termChanged ? { paymentTerm, termApproved: false } : {}),
@@ -173,7 +187,12 @@ export function accept(id, { method, poNo, poDate, contact, attachments = [], pa
   store.setStatus('quotations', id, 'Accepted', poNo ? `PO ${poNo}` : method);
   store.update('enquiries', q.enquiryId, { stage: 'Won' }, false);
   store.setStatus('enquiries', q.enquiryId, 'Won', `${q.no} Rev ${q.rev} accepted`);
-  const job = createJobFromQuotation(store.get('quotations', id));
+  if (enq.type === 'AMC') {
+    const contract = createContractFromQuotation(store.get('quotations', id));
+    store.update('quotations', id, { contractId: contract.id }, false);
+    return { partial: false, quotation: store.get('quotations', id), contract };
+  }
+  const job = enq.type === 'GS' ? createGsJob(store.get('quotations', id)) : createJobFromQuotation(store.get('quotations', id));
   store.update('quotations', id, { jobId: job.id }, false);
   // A term changed at acceptance needs its own approval before scheduling (flow step 6).
   if (job.paymentTerm !== 'IMMEDIATE' && !job.termApproved) openTermTask(job);
@@ -202,20 +221,21 @@ export function autoChecks(q) {
   const rep = est?.reportId ? store.get('siteReports', est.reportId) : null;
   const out = [];
   const add = (ok, text) => out.push({ tone: ok ? 'ok' : 'warn', text });
-  add(q.customerId === enq.customerId && q.siteId === enq.siteId, `Customer, contact and site match ${enq.no}`);
-  if (rep) {
+  if (est.kind === 'AMC') amcChecks(q, est, add);
+  else add(q.customerId === enq.customerId && q.siteId === enq.siteId, `Customer, contact and site match ${enq.no}`);
+  if (est.kind !== 'AMC' && rep) {
     const tags = rep.shutters.map(s => s.tag).sort().join(', ');
     add(est.shutters.map(s => s.tag).sort().join(', ') === tags, `Shutters match the site report ${rep.no} (${tags || 'none'})`);
     const names = rep.s5.rows.filter(r => r.name).map(r => r.name.toLowerCase());
     const hit = est.materials.filter(m => names.includes(m.name.toLowerCase())).length;
     add(hit === names.length, `Materials match the site report (${hit} of ${names.length})`);
-  } else add(false, 'No site report: lines were taken from the enquiry');
+  } else if (est.kind !== 'AMC') add(!!enq.fromService, enq.fromService ? `Lines from the failed check-list items of ${enq.fromService.no}` : 'No site report: lines were taken from the enquiry');
   add(Math.abs(estimateSummary(est).subtotal - q.subtotal) < 0.005, `Prices match ${q.estimateNo}`);
   const tax = companyTax();
   add(q.taxRate === tax.taxRate, q.taxRate ? `${q.taxLabel} ${q.taxRate} % from the Tax master (${tax.taxCode})` : 'No tax charged (Company Setup)');
-  const termCount = store.list('terms', t => t.docType === 'Quotation' && t.isDefault && t.status !== 'Inactive').length;
-  add(q.terms.length >= termCount, `All ${termCount} quotation terms included`);
-  const ph = est.materials.filter(m => m.placeholder || m.noRate);
+  const termCount = store.list('terms', t => t.docType === termsDocType(est) && t.isDefault && t.status !== 'Inactive').length;
+  add(q.terms.length >= termCount, `All ${termCount} ${termsDocType(est) === 'AMC' ? 'AMC' : 'quotation'} terms included`);
+  const ph = (est.materials || []).filter(m => m.placeholder || m.noRate);
   if (ph.length) add(false, `${ph.length} placeholder rate${ph.length > 1 ? 's' : ''}: ${ph.map(m => `${m.name} (${Number(m.rate).toFixed(2)})`).join(', ')}`);
   add(q.paymentTerm === 'IMMEDIATE', q.paymentTerm === 'IMMEDIATE' ? 'Payment term Immediate: no extra approval needed' : 'Payment term is not immediate: approving also approves the term');
   return out;

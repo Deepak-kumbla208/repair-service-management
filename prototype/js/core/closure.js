@@ -1,7 +1,7 @@
 // Job closure: the review of every linked document (flow step 9 "Completed & documented") and the automatic
 // "Closed" once the invoice is fully paid (step 12) — whichever of the two comes last closes the job.
 import * as store from './store.js';
-import { labourRow, materialRow } from './costing.js';
+import { labourRow, materialRow, amcRows } from './costing.js';
 import { balanceOf, paymentsFor, invoiceForJob } from './billing.js';
 
 export const docInvoice = job => invoiceForJob(job.id) || (job.invoiceId ? store.get('invoices', job.invoiceId) : null);
@@ -23,7 +23,8 @@ export function checklist(job) {
     item('Estimate', est, est && `${est.no} Rev ${est.rev}`, est ? `estimates/${est.id}` : ''),
     item('Quotation accepted', q?.status === 'Accepted', q && `${q.no} Rev ${q.rev}${q.acceptance?.poNo ? ` · PO ${q.acceptance.poNo}` : ''}`, q ? `quotations/${q.id}` : ''),
     item('Job scheduled', job.start, job.no, `jobs/${job.id}`),
-    item('Work Done form signed by the customer', w.signedAt, w.signedAt ? 'Both signatures' : '', `jobs/${job.id}/workdone`),
+    job.type === 'GS' ? item('Inspection check list signed by the customer', w.signedAt, w.signedAt ? 'Both signatures' : '', `jobs/${job.id}/service`)
+      : item('Work Done form signed by the customer', w.signedAt, w.signedAt ? 'Both signatures' : '', `jobs/${job.id}/workdone`),
     item('Company stamp photo', w.cust?.stampId, '', `jobs/${job.id}`, true),
     item('Before and after photos', job.photosBefore?.length && job.photosAfter?.length, `${job.photosBefore?.length || 0} before · ${job.photosAfter?.length || 0} after`, `jobs/${job.id}`, true),
     item('Invoice posted', inv?.status === 'Posted', inv?.no, inv ? `invoices/${inv.id}` : ''),
@@ -33,11 +34,13 @@ export function checklist(job) {
 
 // Estimated vs actual: hours on site, labour, parts, and the margin left.
 export function estimatedVsActual(job) {
-  const est = store.get('estimates', job.estimateId);
+  const saved = store.get('estimates', job.estimateId);
   const q = store.get('quotations', job.quotationId);
-  if (!est) return null;
+  if (!saved) return null;
+  // A General Servicing estimate (AMC tabs) is read through the same rows as a repair estimate.
+  const est = saved.kind === 'AMC' ? { ...saved, ...amcRows(saved) } : saved;
   const persons = 2 + (job.crew?.extra || 0);
-  const teamRate = est.labour[0]?.rate || 0;
+  const teamRate = saved.kind === 'AMC' ? saved.matrix.team.rate : est.labour[0]?.rate || 0;
   const estHours = Number(job.workHours) || 0;
   const s = job.steps || {};
   const actHours = s.checkInAt && s.checkOutAt ? Math.max(0, (new Date(s.checkOutAt) - new Date(s.checkInAt)) / 3600000) : null;

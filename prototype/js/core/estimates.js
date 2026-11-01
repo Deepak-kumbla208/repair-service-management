@@ -1,10 +1,12 @@
-// Repair estimates: built pre-filled from the enquiry, its site report and the masters; edited in the team lead's
-// tabs; revised as Rev 2, 3… under the same number (prices change only here). Calculations live in costing.js.
+// Estimates: built pre-filled from the enquiry, its site report and the masters; edited in the team lead's tabs; revised
+// as Rev 2, 3… under the same number (prices change only here). Repair estimates are built here; AMC and General
+// Servicing estimates (kind "AMC") in amc-estimates.js. Calculations live in costing.js.
 import * as store from './store.js';
 import * as auth from './auth.js';
 import { findSite, zones, productName, withCompany } from './lookups.js';
-import { summarize, shutterLabour, hourlyRate, otRate, round2 } from './costing.js';
+import { summarize, summarizeAmc, shutterLabour, hourlyRate, otRate, round2 } from './costing.js';
 import { cancelTasksFor } from './workflow.js';
+import { amcPrefill, amcProblems, describe } from './amc-estimates.js';
 
 const rid = () => store.uid('r_');
 const pad = n => String(n).padStart(2, '0');
@@ -46,7 +48,9 @@ export function prefill(enq, rep) {
   const ot = !!(rep?.s3?.afterHours || rep?.s3?.weekend);
   const days = Number(rep?.s3?.days) || 1;
 
-  const shutters = (rep?.shutters || []).map(s => {
+  // A repair enquiry made from failed checklist items (AMC visit or GS job) brings its shutters and parts.
+  const fromFails = !rep && (enq.failures || []).length ? failedShutters(enq, site) : null;
+  const shutters = (fromFails?.shutters || rep?.shutters || []).map(s => {
     const product = store.get('products', s.productId);
     const size = sizes.find(z => z.code === s.sizeCode);
     return { key: s.key, tag: s.tag, location: s.location, productId: s.productId, typeName: productName(s.productId), width: s.width, height: s.height, unit: s.unit,
@@ -54,9 +58,9 @@ export function prefill(enq, rep) {
   });
 
   // With no report, each enquiry item line becomes a line; a line naming a material brings its material row.
-  const enqLines = rep ? [] : (enq.lines || []).map(l => ({ ...l, key: rid() }));
+  const enqLines = rep || fromFails ? [] : (enq.lines || []).map(l => ({ ...l, key: rid() }));
   // Materials: the site report's section 5 (or the enquiry item lines that name a material).
-  const srcRows = rep ? rep.s5.rows : enqLines.filter(l => l.itemRef?.startsWith('itm:')).map(l => ({ itemId: l.itemRef.slice(4), name: l.itemName, qty: l.qty, remarks: l.description, lineKey: l.key }));
+  const srcRows = fromFails ? fromFails.rows : rep ? rep.s5.rows : enqLines.filter(l => l.itemRef?.startsWith('itm:')).map(l => ({ itemId: l.itemRef.slice(4), name: l.itemName, qty: l.qty, remarks: l.description, lineKey: l.key }));
   const one = shutters.length === 1 ? shutters[0].key : '';
   const materials = srcRows.filter(r => r.name).map(r => {
     const it = findItem(r.itemId, r.name);
@@ -103,6 +107,25 @@ export function prefill(enq, rep) {
   };
 }
 
+// Failed items grouped by shutter: the register entry gives type and size; the notes become the fault; parts the
+// technician picked become material rows of that shutter.
+function failedShutters(enq, site) {
+  // A fault found again (later visit) is the same work: one entry per shutter and item.
+  const unique = [...enq.failures.reduce((m, f) => {
+    const k = `${f.shutterId}|${f.code}`, first = m.get(k);
+    return m.set(k, first ? { ...first, itemId: first.itemId || f.itemId, qty: first.itemId ? first.qty : f.qty } : f);
+  }, new Map()).values()];
+  const byShutter = new Map();
+  unique.forEach(f => { if (!byShutter.has(f.shutterId)) byShutter.set(f.shutterId, []); byShutter.get(f.shutterId).push(f); });
+  const shutters = [...byShutter.entries()].map(([id, fs]) => {
+    const r = (site?.shutters || []).find(x => x.id === id) || fs[0].shutter || {};
+    return { key: id, shutterId: id, tag: r.tag || fs[0].tag, location: r.location || fs[0].location, productId: r.productId, width: r.width, height: r.height, unit: r.unit, sizeCode: r.sizeCode,
+      finding: fs.map(f => `${f.label}${f.note ? `: ${f.note}` : ''}`).join('; ') };
+  });
+  const rows = unique.filter(f => f.itemId).map(f => ({ itemId: f.itemId, name: store.get('items', f.itemId)?.name || '', qty: f.qty || 1, shutterKey: f.shutterId }));
+  return { shutters, rows };
+}
+
 export const latestReport = enq => {
   const insp = enq.inspectionId ? store.get('inspections', enq.inspectionId) : null;
   const rep = insp?.reportId ? store.get('siteReports', insp.reportId) : null;
@@ -114,14 +137,17 @@ export const currentEstimate = enqId => store.list('estimates', e => e.enquiryId
 export const revisions = no => store.list('estimates', e => e.no === no).sort((a, b) => a.rev - b.rev);
 
 // "Create estimate" is offered on an inspected repair enquiry (or one waiting for an estimate) with none yet.
-export const canCreateFor = enq => enq.type === 'REPAIR' && ['Inspected', 'Waiting for estimate'].includes(enq.status) && !currentEstimate(enq.id) && auth.can('estimation', 'create');
+// AMC and General Servicing enquiries get it in BOQ study or after their (optional) site report.
+export const canCreateFor = enq => (enq.type === 'REPAIR' ? ['Inspected', 'Waiting for estimate'] : ['BOQ study', 'Inspected']).includes(enq.status)
+  && !currentEstimate(enq.id) && auth.can('estimation', 'create');
 
-export function createEstimate(enqId) {
+export function createEstimate(enqId, opts = {}) {
   const enq = store.get('enquiries', enqId);
   const existing = currentEstimate(enqId);
   if (existing) return existing;
   const no = store.nextNumber('EST');
-  const est = store.insert('estimates', { no, rev: 1, ...prefill(enq, latestReport(enq)), quotationId: '', prevId: '', returnNote: null },
+  const data = enq.type === 'REPAIR' ? prefill(enq, latestReport(enq)) : amcPrefill(enq, opts);
+  const est = store.insert('estimates', { no, rev: 1, ...data, quotationId: '', prevId: '', returnNote: null },
     { status: 'Draft', note: `${no} Rev 1 pre-filled from ${enq.no}` });
   store.setStatus('enquiries', enqId, 'Estimating', `${no} Rev 1`);
   return est;
@@ -130,7 +156,8 @@ export function createEstimate(enqId) {
 export const canEdit = est => est.status === 'Draft' && auth.can('estimation', 'edit');
 // Saves only the estimate's content, and only while it is a draft: a late autosave from the page can never undo
 // "Create quotation" (status, quotation link) or edit a quoted revision.
-const CONTENT = ['header', 'costingLevel', 'sharedCosts', 'sharedLabel', 'overheads', 'marginBasis', 'marginPct', 'shutters', 'lines', 'labour', 'transport', 'materials', 'equipment'];
+const CONTENT = ['header', 'costingLevel', 'sharedCosts', 'sharedLabel', 'overheads', 'marginBasis', 'marginPct', 'shutters', 'lines', 'labour', 'transport', 'materials', 'equipment',
+  'periodMonths', 'billing', 'matrix', 'sites'];
 export function saveEstimate(id, patch) {
   const cur = store.get('estimates', id);
   if (!cur || cur.status !== 'Draft') return cur;
@@ -146,7 +173,7 @@ export const canRevise = est => {
   const q = liveQuotation(est.enquiryId);
   return est.status === 'Quoted' && auth.can('estimation', 'edit') && !!q && !CLOSED_QUOTE.includes(q.status);
 };
-export const estimateSummary = est => summarize(est, zones());
+export const estimateSummary = est => (est.kind === 'AMC' ? summarizeAmc(est, zones()) : summarize(est, zones()));
 
 // Revise: Rev n+1 as a new draft; the old revision is kept (Superseded). without: line keys to drop
 // (partial acceptance), with their rows; shared costs are then spread over the remaining lines.
@@ -156,7 +183,14 @@ export function reviseEstimate(id, { without = [], note = '' } = {}) {
   if (live && CLOSED_QUOTE.includes(live.status)) return null;
   const copy = structuredClone(cur);
   ['id', 'tenantId', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'status', 'statusHistory'].forEach(k => delete copy[k]);
-  if (without.length) {
+  if (without.length && copy.kind === 'AMC') {
+    // AMC Line costing has one line per site: drop the sites the customer did not accept.
+    copy.sites = copy.sites.filter(x => !without.includes(x.key));
+    ['equipment', 'materials'].forEach(k => { copy[k] = copy[k].filter(r => !without.includes(r.siteKey)); });
+    copy.transport = copy.transport.filter(t => copy.sites.some(x => x.zoneId === t.zoneId));
+    const auto = cur.header.description === describe(cur);
+    copy.header = { ...copy.header, site: copy.sites.map(x => x.name).join(', '), description: auto ? describe(copy) : copy.header.description };
+  } else if (without.length) {
     const drop = r => without.includes(r.lineKey);
     copy.lines = copy.lines.filter(l => !without.includes(l.key));
     copy.shutters = copy.shutters.filter(s => !without.includes(s.key));
@@ -179,6 +213,7 @@ export function reviseEstimate(id, { without = [], note = '' } = {}) {
 
 // Problems that stop "Create quotation".
 export function estimateProblems(est) {
+  if (est.kind === 'AMC') return amcProblems(est);
   const s = estimateSummary(est);
   const p = [];
   if (!s.direct) p.push('The estimate has no cost yet.');

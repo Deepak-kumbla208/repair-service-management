@@ -28,7 +28,12 @@ import { renderInvoiceList, renderInvoice } from './web/invoices.js';
 import { renderPayments } from './web/payments.js';
 import { renderClosureList, renderClosure } from './web/closure.js';
 import { renderPrintDoc } from './web/print-docs.js';
+import { renderContractList, renderContract } from './web/contracts.js';
+import { renderAmcScheduling } from './web/amc-scheduling.js';
+import { renderVisitList, renderVisit } from './web/visits.js';
+import { refreshAmc } from './core/contracts.js';
 import { mRepairJob, mRepairStep } from './mobile/repair-job.js';
+import { mService, mServiceStep, mShutter } from './mobile/service.js';
 import { mTasks, mTask } from './mobile/tasks.js';
 import { mHome, mMore, mSoon } from './mobile/home.js';
 import { mJobs, mJob } from './mobile/jobs.js';
@@ -60,6 +65,11 @@ const WEB = [
   [/^payments$/, 'payment', renderPayments],
   [/^closure$/, 'closure', renderClosureList],
   [/^closure\/([^/]+)$/, 'closure', renderClosure],
+  [/^contracts$/, 'amcContract', renderContractList],
+  [/^contracts\/([^/]+)$/, 'amcContract', renderContract],
+  [/^amc-scheduling$/, 'amcScheduling', renderAmcScheduling],
+  [/^amc-visits$/, 'amcExecution', renderVisitList],
+  [/^amc-visits\/([^/]+)$/, 'amcExecution', renderVisit],
   [/^master\/([^/]+)\/new$/, m => m[1], (el, key) => renderMasterForm(el, key, null)],
   [/^master\/([^/]+)\/([^/]+)$/, m => m[1], renderMasterForm],
   [/^master\/([^/]+)$/, m => m[1], renderMasterList],
@@ -76,6 +86,9 @@ const MOBILE = [
   [/^m\/enquiry\/([^/]+)$/, mEnquiry],
   [/^m\/rjob\/([^/]+)$/, mRepairJob],
   [/^m\/rjob\/([^/]+)\/(\w+)$/, mRepairStep],
+  [/^m\/(visit|gjob)\/([^/]+)$/, mService],
+  [/^m\/(visit|gjob)\/([^/]+)\/sh\/([^/]+)$/, mShutter],
+  [/^m\/(visit|gjob)\/([^/]+)\/(\w+)$/, mServiceStep],
   [/^m\/tasks$/, mTasks],
   [/^m\/task\/([^/]+)$/, mTask],
   [/^m\/more$/, mMore],
@@ -86,7 +99,8 @@ const MOBILE = [
 function activeMenu(route) {
   const [a, b] = route.split('/');
   return { home: 'dashboard', tasks: 'dashboard', enquiries: 'enquiry', inspections: 'inspection', reports: 'inspection', estimates: 'estimation', quotations: 'quotation',
-    jobs: 'job', invoices: 'invoice', payments: 'payment', closure: 'closure', master: b, admin: b, soon: b }[a] || '';
+    jobs: 'job', invoices: 'invoice', payments: 'payment', closure: 'closure', contracts: 'amcContract', 'amc-scheduling': 'amcScheduling', 'amc-visits': 'amcExecution',
+    master: b, admin: b, soon: b }[a] || '';
 }
 
 // Keep the user on the same record when switching view, where the other view has that screen.
@@ -95,13 +109,15 @@ export function routeForView(route, view) {
   if (view === 'mobile') {
     if ((m = route.match(/^enquiries\/([^/]+)/)) && m[1] !== 'new') return `m/enquiry/${m[1]}`;
     if ((m = route.match(/^inspections\/([^/]+)/)) && auth.scope('inspection') === 'own') return `m/job/${m[1]}`;
-    if ((m = route.match(/^jobs\/([^/]+)$/)) && m[1] !== 'list') return `m/rjob/${m[1]}`;
+    if ((m = route.match(/^jobs\/([^/]+)$/)) && m[1] !== 'list') return store.get('jobs', m[1])?.type === 'GS' ? `m/gjob/${m[1]}` : `m/rjob/${m[1]}`;
+    if ((m = route.match(/^amc-visits\/([^/]+)$/)) && auth.can('amcExecution', 'view', 'mobile')) return `m/visit/${m[1]}`;
     if (route === 'tasks') return 'm/tasks';
     return route.startsWith('m/') ? route : 'm/home';
   }
   if ((m = route.match(/^m\/enquiry\/([^/]+)/))) return `enquiries/${m[1]}`;
   if ((m = route.match(/^m\/job\/([^/]+)/))) return `inspections/${m[1]}`;
-  if ((m = route.match(/^m\/rjob\/([^/]+)/))) return `jobs/${m[1]}`;
+  if ((m = route.match(/^m\/(rjob|gjob)\/([^/]+)/))) return `jobs/${m[2]}`;
+  if ((m = route.match(/^m\/visit\/([^/]+)/))) return `amc-visits/${m[1]}`;
   if (route === 'm/tasks' || route.startsWith('m/task/')) return 'tasks';
   return route.startsWith('m/') ? 'home' : route;
 }
@@ -117,6 +133,7 @@ export function render() {
   }
   const view = auth.view();
   if (!route || route === 'login') return replaceRoute(view === 'mobile' ? 'm/home' : 'home');
+  refreshAmc(); // the daily check: instalment invoices on their bill dates, renewal reminders, contract ends
   const wanted = routeForView(route, view);
   if (wanted !== route) return replaceRoute(wanted);
 
@@ -128,9 +145,10 @@ export function render() {
 
   const print = route.match(/^reports\/([^/]+)\/print$/);
   if (print) return auth.can('inspection', 'print', 'web') ? renderPrintSvr(app, print[1]) : renderWebShell(app, route, '', el => renderNoAccess(el));
-  const doc = route.match(/^(quotations|invoices)\/([^/]+)\/print$/) || route.match(/^(jobs)\/([^/]+)\/workdone$/);
+  const doc = route.match(/^(quotations|invoices|contracts|amc-visits)\/([^/]+)\/print$/) || route.match(/^(jobs)\/([^/]+)\/(workdone|service)$/);
   if (doc) {
-    const [kind, menu] = { quotations: ['quotation', 'quotation'], invoices: ['invoice', 'invoice'], jobs: ['workdone', 'job'] }[doc[1]];
+    const [kind, menu] = { quotations: ['quotation', 'quotation'], invoices: ['invoice', 'invoice'], contracts: ['contract', 'amcContract'], 'amc-visits': ['service', 'amcExecution'],
+      jobs: [doc[3] === 'service' ? 'gsservice' : 'workdone', 'job'] }[doc[1]];
     return auth.can(menu, 'view', 'web') ? renderPrintDoc(app, kind, doc[2]) : renderWebShell(app, route, '', el => renderNoAccess(el));
   }
 

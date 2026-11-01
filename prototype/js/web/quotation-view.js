@@ -42,7 +42,7 @@ export function renderQuotation(el, id) {
         ${mayEdit && q.status === 'Approved' ? html`<button class="btn" id="rev">Revise wording</button><button class="btn primary" id="send">Send to customer</button>` : ''}
         ${mayEdit && q.status === 'Sent' ? html`<button class="btn" id="rev">Revise wording</button><button class="btn danger" id="reject">Customer rejected</button><button class="btn" id="send">Send again</button><button class="btn primary" id="accept">Record acceptance</button>` : ''}
         ${mayEdit && q.status === 'Expired' ? html`<button class="btn primary" id="rev">Renew (new revision)</button>` : ''}
-        ${q.jobId ? html`<a class="btn primary" href="#/jobs/${q.jobId}">Open the job</a>` : ''}</div>
+        ${q.jobId ? html`<a class="btn primary" href="#/jobs/${q.jobId}">Open the job</a>` : ''}${q.contractId ? html`<a class="btn primary" href="#/contracts/${q.contractId}">Open the contract</a>` : ''}</div>
     </div>
     ${q.status === 'Superseded' ? (latest.id !== q.id ? html`<div class="note warn" style="margin-bottom:10px">Replaced by <a href="#/quotations/${latest.id}">Rev ${latest.rev}</a>.</div>`
       : html`<div class="note warn" style="margin-bottom:10px">Replaced: the estimate is being revised. ${newestEst ? html`<a href="#/estimates/${newestEst.id}">Open ${newestEst.no} Rev ${newestEst.rev}</a> and create the quotation revision there.` : ''}</div>`) : ''}
@@ -57,6 +57,7 @@ export function renderQuotation(el, id) {
         ${editable ? html`<div class="field"><label>Date</label><input type="date" name="date" value="${q.date}"></div>` : row('Date', fmtDate(q.date))}
         ${row('Valid until', html`<span id="vu">${fmtDate(q.validUntil)}</span> <span class="muted">(${q.validDays} days)</span>`)}
         <div class="field"><label>Payment Term</label>${chipGroup('paymentTerm', vsOptions('PAYMENT_TERMS'), q.paymentTerm, !editable)}</div>
+        ${q.amc && q.amc.jobType === 'AMC' ? row('Contract', `${q.amc.periodMonths} months · ${vsLabel('BILLING', q.amc.billing)} billing · ${q.amc.sites.reduce((t, x) => t + x.visits, 0)} visits a year`) : ''}
         <div class="form-sec">Customer</div>
         ${row('Customer Name', q.customer)}${row('Contact Person', [q.contact, q.phone].filter(Boolean).join(' · '))}${row('Site Location', q.site)}
         <div class="form-sec">Wording</div>
@@ -129,15 +130,18 @@ function sendDialog(el, q) {
 function acceptDialog(el, q) {
   const enq = store.get('enquiries', q.enquiryId);
   const priced = q.rows.filter(r => r.lineKey && !r.isShared);
+  const pre = q.pendingAcceptance || {};
   let files = [];
   openModal({
     title: `Customer accepts ${q.no} Rev ${q.rev}`, wide: true,
     body: html`<form class="form-lines" onsubmit="return false">
-      <div class="field"><label>Method</label>${chipGroup('method', vsOptions('ACCEPT_METHOD'), 'PO')}</div>
-      <div class="field"><label>PO number</label><input type="text" name="poNo" placeholder="Customer's purchase order no."></div>
-      <div class="field"><label>PO date</label><input type="date" name="poDate" value="${todayIso()}"></div>
-      <div class="field"><label>Accepted by</label><input type="text" name="contact" value="${enq.contactName}"></div>
-      <div class="field"><label>Payment Term</label>${chipGroup('paymentTerm', vsOptions('PAYMENT_TERMS'), q.paymentTerm)}<div class="sub">A change to a non-immediate term needs the Approver before scheduling.</div></div>
+      <div class="field"><label>Method</label>${chipGroup('method', vsOptions('ACCEPT_METHOD'), pre.method || 'PO')}</div>
+      <div class="field"><label>PO number</label><input type="text" name="poNo" value="${pre.poNo || ''}" placeholder="Customer's purchase order no."></div>
+      <div class="field"><label>PO date</label><input type="date" name="poDate" value="${pre.poDate || todayIso()}"></div>
+      <div class="field"><label>Accepted by</label><input type="text" name="contact" value="${pre.contact || enq.contactName}"></div>
+      ${(pre.attachments || []).length ? html`<div class="field"><label>Kept from ${q.partialFrom}</label><div class="ro">${pre.attachments.map(a => a.name).join(', ')}</div></div>` : ''}
+      ${q.type === 'AMC' ? html`<div class="field"><label>Payment Term</label><div class="ro">${vsLabel('PAYMENT_TERMS', q.paymentTerm)} (approved at the counter-check)</div></div>`
+        : html`<div class="field"><label>Payment Term</label>${chipGroup('paymentTerm', vsOptions('PAYMENT_TERMS'), q.paymentTerm)}<div class="sub">A change to a non-immediate term needs the Approver before scheduling.</div></div>`}
       <div class="field"><label>Attachment</label><input type="file" id="po" multiple></div>
       ${priced.length > 1 ? html`<div class="form-sec">Accepted lines</div>${priced.map(r => html`<label class="check" style="display:flex;margin:4px 0"><input type="checkbox" name="line_${r.lineKey}" checked> ${r.description} · ${m2(r.amount)}</label>`)}
         <div class="sub">Untick a line the customer does not want: the estimate is revised without it, shared costs are re-spread, and the next revision goes for the counter-check.</div>` : ''}
@@ -146,13 +150,14 @@ function acceptDialog(el, q) {
     actions: [{ label: 'Cancel' }, { label: 'Accept', kind: 'primary', onClick: async b => {
       const d = readForm(b);
       if (d.method === 'PO' && !markInvalid(b, d.poNo ? [] : ['poNo'], 'Enter the PO number')) return false;
-      const attachments = [];
+      const attachments = [...(pre.attachments || [])];
       for (const f of files) attachments.push(await saveBlob(f, { name: f.name, kind: 'po' }));
       const lineKeys = priced.length > 1 ? priced.filter(r => d[`line_${r.lineKey}`]).map(r => r.lineKey) : null;
       if (lineKeys && !lineKeys.length) { toast('Tick at least one line, or use "Customer rejected".', 'bad'); return false; }
       const r = accept(q.id, { method: d.method, poNo: d.poNo, poDate: d.poDate, contact: d.contact, attachments, paymentTerm: d.paymentTerm, lineKeys });
       if (r.error) { toast(r.error, 'bad'); return false; }
       if (r.partial) { toast(`Partial acceptance: ${r.quotation.no} Rev ${r.quotation.rev} made without the other lines`); go(`quotations/${r.quotation.id}`); return true; }
+      if (r.contract) { toast(`${q.no} accepted · ${r.contract.no} created: check the start date and activate`); go(`contracts/${r.contract.id}`); return true; }
       toast(`${q.no} accepted · ${r.job.no} is waiting to be scheduled`);
       go(`jobs/${r.job.id}`);
       return true;

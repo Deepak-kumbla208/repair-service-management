@@ -1,8 +1,9 @@
 // Records in localStorage (one key per collection). Every company-owned record carries tenantId,
 // and every read here is limited to the logged-in company, so screens cannot leak another company's data.
 // Bump the version when the sample data changes, so browsers re-seed (v2: no personal names; v3: enquiry item lines;
-// v4: Stretch 2 sample data, approval rules, helpers, invoice terms; v5: stage samples and three more customers).
-const PREFIX = 'rsm.v5.';
+// v4: Stretch 2 sample data, approval rules, helpers, invoice terms; v5: stage samples and three more customers;
+// v6: Stretch 3 Part A: AMC and General Servicing data, check list, AMC terms, three more customers, AMC stage samples).
+const PREFIX = 'rsm.v6.';
 const cache = new Map();
 let tenant = null;
 let actor = null;

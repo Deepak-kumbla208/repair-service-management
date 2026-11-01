@@ -1,4 +1,5 @@
-// Phone: My jobs (the technician's own site inspections and repair jobs), with search and tiles, and the inspection details.
+// Phone: My jobs (the technician's own site inspections, repair jobs, General Servicing jobs and AMC visits), with search
+// and tiles, and the inspection details.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, on, go, debounce, tiles, pill, fmtDate, fmtTime, toast } from '../core/ui.js';
@@ -8,18 +9,22 @@ import { startReport } from '../core/inspections.js';
 import { getUrl } from '../core/media.js';
 import { seesJob } from '../core/jobs.js';
 import { repairCard } from './repair-job.js';
+import { serviceCard } from './service.js';
 
 const DONE = 'Report submitted';
 
-// My work: site inspections and scheduled repair jobs assigned to me, by visit time.
+// My work: site inspections, scheduled jobs and AMC visits assigned to me, by visit time.
 export function myWork() {
   const insp = store.list('inspections', i => i.status !== 'Cancelled' && auth.seesInspection(i) && i.technicianId)
     .map(i => ({ i, e: store.get('enquiries', i.enquiryId), r: i.reportId ? store.get('siteReports', i.reportId) : null }))
     .filter(x => x.e)
     .map(x => ({ at: x.i.visitAt, done: x.i.status === DONE, text: [x.e.no, x.e.customerName, x.e.siteName, x.r?.no, 'site inspection'], card: () => jobCard(x) }));
   const jobs = !auth.can('job', 'view', 'mobile') ? [] : store.list('jobs', j => seesJob(j) && j.technicianId && j.start && j.status !== 'Cancelled')
-    .map(j => ({ at: j.start, done: !!j.steps?.checkOutAt || ['Completed & documented', 'Closed'].includes(j.status), text: [j.no, j.customer, j.site, j.quotationNo, 'repair job'], card: () => repairCard(j) }));
-  return [...insp, ...jobs].sort((a, b) => (a.at || '').localeCompare(b.at || ''));
+    .map(j => ({ at: j.start, done: !!j.steps?.checkOutAt || ['Completed & documented', 'Closed'].includes(j.status), text: [j.no, j.customer, j.site, j.quotationNo, j.type === 'GS' ? 'general servicing' : 'repair job'],
+      card: () => (j.type === 'GS' ? serviceCard('gjob', j) : repairCard(j)) }));
+  const visits = !auth.can('amcExecution', 'view', 'mobile') ? [] : store.list('amcVisits', v => v.technicianId && v.technicianId === auth.user()?.employeeId && v.start && v.status !== 'Cancelled')
+    .map(v => ({ at: v.start, done: !!v.steps?.checkOutAt || v.status === 'Checked & filed', text: [v.contractNo, v.customer, v.site, v.reportNo, 'amc visit'], card: () => serviceCard('visit', v) }));
+  return [...insp, ...jobs, ...visits].sort((a, b) => (a.at || '').localeCompare(b.at || ''));
 }
 
 function when(iso) {

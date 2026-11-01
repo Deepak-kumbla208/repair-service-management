@@ -23,7 +23,7 @@ function jobCard(j, sug) {
   const blocked = !j.termApproved;
   const on = state.sel === j.id;
   return html`<div class="jobc ${zc(j.zoneId)} ${on ? 'on' : ''}" data-pick="${j.id}" style="${on ? 'outline:2px solid var(--blue-500)' : ''}">
-    <div class="row"><b>${j.no}</b><span class="zone-chip">${zoneCode(j.zoneId)}</span><span class="grow"></span>${blocked ? (j.termNote ? html`<span class="pill red">Term returned</span>` : html`<span class="pill amber">Waiting for Approver</span>`) : html`<span class="pill blue">To schedule</span>`}</div>
+    <div class="row"><b>${j.no}</b><span class="zone-chip">${zoneCode(j.zoneId)}</span>${j.type === 'GS' ? html`<span class="pill purple">General servicing</span>` : ''}<span class="grow"></span>${blocked ? (j.termNote ? html`<span class="pill red">Term returned</span>` : html`<span class="pill amber">Waiting for Approver</span>`) : html`<span class="pill blue">To schedule</span>`}</div>
     <div class="strong" style="margin-top:3px">${j.customer} · ${j.site}</div>
     <div class="l"><span class="k">Work</span><span>${j.tags.join(', ') || j.lines.length + ' line(s)'} · ${j.workHours} h + ${j.travelHours} h travel</span></div>
     <div class="l"><span class="k">Crew</span><span>${j.crew.label}</span></div>
@@ -48,8 +48,8 @@ function calendar(days, sel, sug) {
         const free = sel && freeStart(t.id, ds, jobDuration(sel), sel.id) != null && ds >= earliestDate(sel) && ds >= today;
         const isSug = sug && sug.technicianId === t.id && sug.date === ds;
         return html`<div class="day ${free ? 'free' : ''}" ${free ? html`data-slot="${t.id}|${ds}" title="Place ${sel.no} here"` : ''}>
-          ${items.map(b => html`<a class="blk ${zc(b.zoneId)}" href="#/${b.kind === 'job' ? `jobs/${b.id}` : `inspections/${b.id}`}" style="top:${(b.from - DAY0) * PX}px;height:${Math.max(28, (b.to - b.from) * PX - 2)}px">
-            <b>${fmtHour(b.from)}–${fmtHour(b.to)}</b><br>${b.kind === 'job' ? b.no : 'Site inspection'} · ${b.title}</a>`)}
+          ${items.map(b => html`<a class="blk ${zc(b.zoneId)} ${b.kind === 'amc' ? 'amc' : ''}" href="#/${{ job: 'jobs', amc: 'amc-visits', inspection: 'inspections' }[b.kind]}/${b.id}" style="top:${(b.from - DAY0) * PX}px;height:${Math.max(28, (b.to - b.from) * PX - 2)}px">
+            <b>${fmtHour(b.from)}–${fmtHour(b.to)}</b><br>${b.kind === 'job' ? b.no : b.kind === 'amc' ? `AMC · ${b.no}` : 'Site inspection'} · ${b.title}</a>`)}
           ${isSug ? html`<div class="blk ${zc(sel.zoneId)} sug" data-slot="${t.id}|${ds}" style="top:${(sug.start - DAY0) * PX}px;height:${jobDuration(sel) * PX - 2}px"><b>${fmtHour(sug.start)}–${fmtHour(sug.end)}</b><br>${sel.no} · suggested</div>` : ''}
         </div>`;
       })}`)}

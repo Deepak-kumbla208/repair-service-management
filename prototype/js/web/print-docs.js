@@ -6,6 +6,7 @@ import * as auth from '../core/auth.js';
 import { html, $ } from '../core/ui.js';
 import { vsLabel } from '../core/lookups.js';
 import { hydrateImages } from '../core/media.js';
+import { amcQuoteBlock, contractSheet, serviceSheet } from './print-amc.js';
 
 const money = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dmy = s => (s ? s.slice(0, 10).split('-').reverse().join(' / ') : 'DD / MM / YYYY');
@@ -48,6 +49,7 @@ export function quotationSheet(q, company) {
       <tr><td class="lbl">SITE Location</td><td colspan="3">${q.site}</td></tr>
     </table>
     ${priceTable(q, company.currency)}
+    ${amcQuoteBlock(q)}
     <table style="margin-top:8px"><tr><td class="lbl">Findings</td><td>${q.findings}</td></tr></table>
     <div style="margin-top:10px;font-weight:700">Terms &amp; Conditions</div>
     <ol style="margin:4px 0 0;padding-left:18px;font-size:9.5pt">${q.terms.map(t => html`<li>${t}</li>`)}</ol>
@@ -114,13 +116,17 @@ export function workDoneSheet(job, company) {
   </div>`;
 }
 
-// Print page outside the web shell: #/quotations/:id/print, #/invoices/:id/print, #/jobs/:id/workdone
+// Print page outside the web shell: #/quotations/:id/print, #/invoices/:id/print, #/jobs/:id/workdone, #/contracts/:id/print,
+// #/amc-visits/:id/print and #/jobs/:id/service (General Servicing)
 export function renderPrintDoc(app, kind, id) {
   const company = auth.company();
   const def = {
     quotation: { coll: 'quotations', back: `quotations/${id}`, title: d => `${d.no} Rev ${d.rev}`, sheet: d => quotationSheet(d, company) },
     invoice: { coll: 'invoices', back: `invoices/${id}`, title: d => d.no || 'Draft invoice', sheet: d => invoiceSheet(d, company) },
     workdone: { coll: 'jobs', back: `jobs/${id}`, title: d => `${d.no} · Work Done form`, sheet: d => workDoneSheet(d, company) },
+    contract: { coll: 'contracts', back: `contracts/${id}`, title: d => d.no, sheet: d => contractSheet(d, company) },
+    service: { coll: 'amcVisits', back: `amc-visits/${id}`, title: d => `${d.reportNo} · service report`, sheet: d => serviceSheet(d, 'amcVisits', company) },
+    gsservice: { coll: 'jobs', back: `jobs/${id}`, title: d => `${d.no} · service report`, sheet: d => serviceSheet(d, 'jobs', company) },
   }[kind];
   const doc = store.get(def.coll, id);
   if (!doc) { app.innerHTML = '<div class="page"><div class="empty">Document not found.</div></div>'; return; }

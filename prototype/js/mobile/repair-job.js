@@ -40,6 +40,7 @@ export function repairCard(j) {
 
 export function mRepairJob(page, id) {
   const j = store.get('jobs', id);
+  if (j?.type === 'GS') { go(`m/gjob/${id}`); return; }
   page.setTitle(j ? j.no : 'Job', 'm/jobs');
   if (!j || !seesJob(j)) { page.body.innerHTML = '<div class="empty">Job not found.</div>'; return; }
   const inv = invoiceForJob(j.id);

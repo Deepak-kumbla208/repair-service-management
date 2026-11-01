@@ -1,14 +1,17 @@
 // Repair jobs: created when the customer accepts the quotation; scheduled on the board (flow step 7: parts,
 // manpower, date; the invoice is raised at scheduling when payment is immediate); done on the phone (step 8:
-// photos, Work Done & Customer Feedback form, payment, the office's OK before leaving the site).
+// photos, Work Done & Customer Feedback form, payment, the office's OK before leaving the site). General Servicing jobs
+// (type "GS", one-off servicing without a contract) use the same board and invoice rules; on the phone they follow
+// the AMC visit steps (core/visits.js). AMC visits are part of every technician's bookings.
 import * as store from './store.js';
 import * as auth from './auth.js';
 import { findSite, technicians, empName } from './lookups.js';
 import { openTask, closeTask, cancelTasksFor } from './workflow.js';
 import { createInvoice, invoiceForJob, paymentsFor, syncDueDate } from './billing.js';
-import { round2 } from './costing.js';
+import { round2, amcSiteRow } from './costing.js';
+import { snapshot, registerCounts } from './contracts.js';
 
-const DAY_START = 8.5, DAY_END = 17.5;          // working day 08:30–17:30
+export const DAY_START = 8.5, DAY_END = 17.5;   // working day 08:30–17:30
 export const INSPECTION_HOURS = 2;               // a site inspection blocks 2 hours on the board
 export const OPEN_JOB = ['To schedule', 'Scheduled', 'On the way', 'On site'];
 const pad = n => String(n).padStart(2, '0');
@@ -46,6 +49,32 @@ export function createJobFromQuotation(q) {
   return job;
 }
 
+// A General Servicing job from its accepted quotation: the covered shutters, their AMC servicing hours, crew and travel
+// from the estimate (one site, one visit, no contract).
+export function createGsJob(q) {
+  const est = store.get('estimates', q.estimateId);
+  const enq = store.get('enquiries', q.enquiryId);
+  const s = est.sites[0];
+  const { site } = findSite(s.siteId);
+  const zone = store.get('zones', s.zoneId || enq.zoneId);
+  const r = amcSiteRow(s, est.matrix);
+  // Typed counts (no shutter register yet) are added to the register now, so the check list has its shutters.
+  const shutters = snapshot(s.siteId, s.typed ? registerCounts(q.customerId, s.siteId, s.counts, `general servicing ${q.no}`) : s.shutterIds || []);
+  const extra = Math.max(0, ...est.matrix.sizes.filter(z => Number(s.counts?.[z.code]) > 0).map(z => Number(z.extraWorkers) || 0));
+  const lines = q.costingLevel === 'LINE' ? q.rows.filter(x => !x.isShared).map(x => ({ key: x.lineKey, description: x.description })) : [{ key: 'gs', description: q.description }];
+  const no = store.nextNumber('JOB');
+  return store.insert('jobs', {
+    no, type: 'GS', enquiryId: q.enquiryId, enquiryNo: q.enquiryNo, quotationId: q.id, quotationNo: `${q.no} Rev ${q.rev}`, estimateId: est.id,
+    customerId: q.customerId, customer: q.customer, contact: q.contact, phone: q.phone, siteId: s.siteId, site: s.name, address: [site?.address, site?.blockUnit].filter(Boolean).join(', '), zoneId: zone?.id || '',
+    tags: shutters.map(x => x.tag), subject: q.description, lines, shutters, checklist: {}, safeIsolation: false,
+    crew: { team: 1, extra, label: `Team 1+1${extra ? ` + ${extra} extra worker${extra > 1 ? 's' : ''}` : ''}` },
+    workHours: round2(r.hrsVisit), travelHours: Number(zone?.roundTripHours) || 0,
+    parts: (est.materials || []).map(m => ({ key: m.key, itemId: m.itemId, name: m.name, qty: m.qty, unit: m.unit, leadDays: m.leadDays || 0, ready: !m.leadDays })),
+    paymentTerm: q.paymentTerm, termApproved: q.paymentTerm === 'IMMEDIATE' || !!q.termApproved, total: q.total,
+    technicianId: '', helperIds: [], start: null, end: null, invoiceId: '', steps: {}, photosBefore: [], photosAfter: [], workDone: null, leaveSite: null,
+  }, { status: 'To schedule', note: `${no} (general servicing) created from ${q.no} Rev ${q.rev}` });
+}
+
 // ---------- Parts and the earliest date (flow step 7: confirm spare parts availability) ----------
 export function setPartReady(jobId, key, ready) {
   const j = store.get('jobs', jobId);
@@ -68,7 +97,9 @@ export function bookings(techId, ds, exceptJobId = '') {
     .map(j => ({ kind: 'job', id: j.id, no: j.no, title: j.customer, zoneId: j.zoneId, from: hoursOf(j.start), to: hoursOf(j.end), status: j.status }));
   const insp = store.list('inspections', i => i.technicianId === techId && i.visitAt && sameDay(i.visitAt, ds) && i.status !== 'Cancelled')
     .map(i => { const e = store.get('enquiries', i.enquiryId); return { kind: 'inspection', id: i.id, no: e?.no || '', title: e?.customerName || '', zoneId: i.zoneId, from: hoursOf(i.visitAt), to: hoursOf(i.visitAt) + INSPECTION_HOURS, status: i.status }; });
-  return [...jobs, ...insp].sort((a, b) => a.from - b.from);
+  const amc = store.list('amcVisits', v => v.technicianId === techId && v.id !== exceptJobId && v.status !== 'Cancelled' && (v.blocks || []).some(b => b.date === ds))
+    .flatMap(v => v.blocks.filter(b => b.date === ds).map(b => ({ kind: 'amc', id: v.id, no: `${v.contractNo} visit ${v.n}`, title: v.customer, zoneId: v.zoneId, from: b.from, to: b.to, status: v.status })));
+  return [...jobs, ...insp, ...amc].sort((a, b) => a.from - b.from);
 }
 // First free start time on a day for a block of `hours`, or null. Today starts no earlier than now.
 const earliestStart = ds => Math.max(DAY_START + 0.5, ds === dstr(new Date()) ? ceilHalf(hoursOf(new Date().toISOString())) : 0);

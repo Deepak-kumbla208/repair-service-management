@@ -14,8 +14,9 @@ import { openTaskFor } from '../core/workflow.js';
 import { setPartReady, earliestDate, freeStart, jobDuration, nextWorkday, scheduleJob, defaultHelper, onMyWay, checkIn, saveJob, completeWorkDone, requestLeave, confirmLeave, checkOut } from '../core/jobs.js';
 import { invoiceForJob, postInvoice, recordPayment, addFollowUp } from '../core/billing.js';
 import { markDocumented } from '../core/closure.js';
+import { buildAmcSamples } from './seed-demo-flow-amc.js';
 
-const COLLS = ['enquiries', 'inspections', 'siteReports', 'estimates', 'quotations', 'jobs', 'invoices', 'payments', 'followUps', 'tasks', 'audit', 'customers'];
+const COLLS = ['enquiries', 'inspections', 'siteReports', 'estimates', 'quotations', 'jobs', 'invoices', 'payments', 'followUps', 'tasks', 'audit', 'customers', 'contracts', 'amcVisits'];
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/, DAY = /^\d{4}-\d{2}-\d{2}$/;
 const pad = n => String(n).padStart(2, '0');
 const dstr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -69,17 +70,17 @@ async function picture(w, h, draw, type, kind) {
   const blob = await new Promise(r => c.toBlob(r, type, 0.8));
   return (await saveBlob(blob, { name: `${kind}.${type === 'image/png' ? 'png' : 'jpg'}`, kind })).id;
 }
-const signature = n => picture(300, 90, g => {
+export const signature = n => picture(300, 90, g => {
   g.strokeStyle = '#042C53'; g.lineWidth = 3; g.lineCap = 'round'; g.beginPath(); g.moveTo(14, 62);
   for (let i = 0; i < 6; i++) g.quadraticCurveTo(36 + i * 44, i % 2 ? 14 + n * 4 : 80 - n * 3, 58 + i * 44, 52);
   g.stroke();
 }, 'image/png', 'signature');
-const stamp = name => picture(200, 200, g => {
+export const stamp = name => picture(200, 200, g => {
   g.fillStyle = '#fff'; g.fillRect(0, 0, 200, 200); g.strokeStyle = '#2B5BA8'; g.lineWidth = 6; g.beginPath(); g.arc(100, 100, 88, 0, Math.PI * 2); g.stroke();
   g.fillStyle = '#2B5BA8'; g.font = 'bold 17px sans-serif'; g.textAlign = 'center';
   name.toUpperCase().replace(' PTE LTD', '').split(' ').slice(0, 3).forEach((w, i) => g.fillText(w, 100, 84 + i * 22));
 }, 'image/jpeg', 'photo');
-const photo = (label, color) => picture(480, 360, g => { g.fillStyle = color; g.fillRect(0, 0, 480, 360); g.fillStyle = 'rgba(255,255,255,.9)'; g.font = 'bold 30px sans-serif'; g.fillText(label, 30, 190); }, 'image/jpeg', 'photo');
+export const photo = (label, color) => picture(480, 360, g => { g.fillStyle = color; g.fillRect(0, 0, 480, 360); g.fillStyle = 'rgba(255,255,255,.9)'; g.font = 'bold 30px sans-serif'; g.fillText(label, 30, 190); }, 'image/jpeg', 'photo');
 
 // ---------- Story steps (each runs the real rules) ----------
 let T = '';
@@ -317,6 +318,7 @@ export async function buildDemoFlow() {
     await demoShutters();
     auth.login('usr_co_gdd_gadmin', 'web');
     await gulf();
+    await buildAmcSamples();
   } finally {
     auth.logout();
     store.holdWrites(false);

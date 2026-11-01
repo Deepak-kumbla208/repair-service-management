@@ -13,7 +13,7 @@ export function renderEstimateList(el) {
   const waiting = store.list('enquiries', canCreateFor);
   renderDocList(el, {
     key: 'rsmEstList', crumb: 'Transactions › Estimation', title: 'Estimates',
-    sub: waiting.length ? html`${waiting.length} inspected enquir${waiting.length > 1 ? 'ies are' : 'y is'} waiting for an estimate: ${waiting.map((e, i) => html`${i ? ', ' : ''}<a href="#/enquiries/${e.id}">${e.no}</a>`)}` : 'Repair estimates with the team lead\'s tabs; revisions keep the same number.',
+    sub: waiting.length ? html`${waiting.length} enquir${waiting.length > 1 ? 'ies are' : 'y is'} waiting for an estimate: ${waiting.map((e, i) => html`${i ? ', ' : ''}<a href="#/enquiries/${e.id}">${e.no}</a>`)}` : 'Repair and AMC estimates with the team lead\'s tabs; revisions keep the same number.',
     placeholder: 'Search estimates: no, customer, site, enquiry',
     rows: () => store.list('estimates', e => e.status !== 'Superseded').sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     tiles: [
@@ -21,8 +21,8 @@ export function renderEstimateList(el) {
       { key: 'ret', label: 'Returned by the Approver', test: e => !!e.returnNote && e.status === 'Draft', tone: 'bad' },
       { key: 'quoted', label: 'Quoted', test: e => e.status === 'Quoted' },
     ],
-    columns: [['Estimate No', e => `${e.no} Rev ${e.rev}`], ['Date', e => fmtDate(e.header.date)], ['Customer', e => e.header.customer], ['Site', e => e.header.site],
-      ['Costing', e => `${vsLabel('COSTING_LEVEL', e.costingLevel)}${e.costingLevel === 'LINE' ? ` · ${e.lines.length} lines` : ''}`],
+    columns: [['Estimate No', e => `${e.no} Rev ${e.rev}`], ['Type', e => vsLabel('ENQ_TYPE', e.kind === 'AMC' ? e.jobType : 'REPAIR')], ['Date', e => fmtDate(e.header.date)], ['Customer', e => e.header.customer], ['Site', e => e.header.site],
+      ['Costing', e => `${vsLabel('COSTING_LEVEL', e.costingLevel)}${e.costingLevel === 'LINE' ? ` · ${(e.kind === 'AMC' ? e.sites : e.lines).length} lines` : ''}`],
       [`Selling price (${auth.company().currency})`, e => m2(estimateSummary(e).subtotal), 'num'], ['Markup', e => `${estimateSummary(e).markupPct.toFixed(1)} %`, 'num'], ['Status', e => pill(e.status)]],
     search: e => [e.no, e.header.customer, e.header.site, store.get('enquiries', e.enquiryId)?.no], route: e => `estimates/${e.id}`,
     empty: 'No estimates yet. Open an inspected enquiry and click "Create estimate".',

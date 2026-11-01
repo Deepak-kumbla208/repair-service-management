@@ -4,7 +4,7 @@
 // payment (GS with immediate payment only) and check-out. kind: 'visit' (amcVisits) or 'gjob' (a GS job in jobs).
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, $$, go, toast, openModal, fmtDate, fmtTime, chipGroup, readForm, pill } from '../core/ui.js';
+import { html, $, $$, go, toast, openModal, fmtDate, fmtTime, chipGroup, readForm, pill, MIC } from '../core/ui.js';
 import { zoneLabel, vsLabel, vsOptions, items } from '../core/lookups.js';
 import { hydrateImages, removeBlob } from '../core/media.js';
 import { savePhotos, signaturePad, bindMics } from '../core/capture.js';
@@ -114,7 +114,7 @@ export function mShutter(page, kind, id, shutterId) {
     ${on.map(i => html`<div class="ck"><div class="t"><b>${i.label}${i.hint ? html`<small>${i.hint}</small>` : ''}</b><span class="pf">${[['P', 'Pass', 'p'], ['F', 'Fail', 'f'], ['NA', 'N/A', 'na']].map(([r, label, cls]) => html`<button type="button" class="${i.r === r ? cls : ''}" data-r="${i.code}|${r}" ${locked ? 'disabled' : ''}>${label}</button>`)}</span></div>
       ${i.r === 'F' ? html`<div class="failbox"><div class="row" style="gap:8px;align-items:flex-start">
           ${i.photoId ? html`<div class="photo" style="width:56px;height:56px"><img data-media="${i.photoId}" alt="Photo"></div>` : html`<label class="add-dashed" style="width:70px;font-size:11px;padding:6px">📷 Photo<input type="file" accept="image/*" capture="environment" hidden data-fphoto="${i.code}"></label>`}
-          <div class="grow"><div class="with-mic"><input type="text" data-fnote="${i.code}" name="n_${i.code}" value="${i.note || ''}" placeholder="What is wrong (needed)" ${locked ? 'disabled' : ''}><button type="button" class="mic" data-mic="n_${i.code}">🎤</button></div>
+          <div class="grow"><div class="with-mic"><input type="text" data-fnote="${i.code}" name="n_${i.code}" value="${i.note || ''}" placeholder="What is wrong (needed)" ${locked ? 'disabled' : ''}><button type="button" class="mic" data-mic="n_${i.code}">${MIC}</button></div>
             <div class="row small" style="margin-top:4px">Part <select data-fpart="${i.code}" ${locked ? 'disabled' : ''}>${parts.map(p => html`<option value="${p.value}" ${p.value === (i.itemId || '') ? 'selected' : ''}>${p.label}</option>`)}</select>
               ${i.itemId ? html`× <input type="number" data-fqty="${i.code}" value="${i.qty || 1}" style="width:48px" ${locked ? 'disabled' : ''}>` : ''}</div></div></div>
         ${openFault(d, sh.shutterId, i.code) ? html`<div class="small" style="margin-top:6px;color:var(--red-ink)">Already open in ${openFault(d, sh.shutterId, i.code).no} (${openFault(d, sh.shutterId, i.code).status}): this will be added to it.</div>` : ''}</div>` : ''}</div>`)}

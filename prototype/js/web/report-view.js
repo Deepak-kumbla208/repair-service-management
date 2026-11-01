@@ -1,20 +1,24 @@
-// Site Viewing Report on the web ("S3"): the 7 sections on the left (the same sections the technician fills on the
-// phone, in line style), a live A4 print preview on the right that highlights the field being edited.
-// Users who may only view (Approver, Management) get the read-only page instead.
+// Site Viewing Report on the web: the 7 sections one below another, full width (the same sections the technician
+// fills on the phone, in line style). Section 1 (General details) is the header and folds to one summary line.
+// No document preview beside the form (team lead, 1 Nov 2026): Print shows it.
+// Users who may only view (Approver, Management) get the same sections read-only.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, $$, go, fmtDateTime, pill, fmtNum, openModal, toast, debounce } from '../core/ui.js';
-import { empName, productName } from '../core/lookups.js';
+import { html, $, go, fmtDateTime, pill, openModal, toast, debounce, foldHeader } from '../core/ui.js';
+import { empName } from '../core/lookups.js';
 import { hydrateImages } from '../core/media.js';
 import { bindMics } from '../core/capture.js';
 import { saveReport, submitReport } from '../core/inspections.js';
 import { STEPS } from '../mobile/site-report.js';
 import { pageHead } from './shell.js';
-import { svrSheetHtml } from './print-svr.js';
 import { canCreateFor, createEstimate, currentEstimate } from '../core/estimates.js';
 import { trailHtml } from './doc-trail.js';
 
 const OPEN_KEY = 'rsmSvrSection';
+const dmy = iso => (iso ? iso.split('-').reverse().join('/') : '');
+// Section 1 folded: "Kosmic M&E · IMM Building · Facilities Manager · 9876 5432 · 01/11/2026 · Technician A · 15:29–15:30".
+const s1Summary = rep => [rep.s1.customer, rep.s1.site, rep.s1.contactPerson, rep.s1.contactNo, dmy(rep.s1.viewDate), rep.s1.viewedBy,
+  rep.s1.timeIn ? `${rep.s1.timeIn}–${rep.s1.timeOut || '…'}` : ''].filter(Boolean).join(' · ');
 
 export function renderReport(el, id) {
   const rep = store.get('siteReports', id);
@@ -26,10 +30,8 @@ export function renderReport(el, id) {
 
 function renderEditor(el, rep, insp) {
   const e = store.get('enquiries', rep.enquiryId);
-  const company = auth.company();
   let open = Number(sessionStorage.getItem(OPEN_KEY)) || 0;
   if (open > 6) open = 0;
-  let focusKey = '';
 
   el.innerHTML = String(html`<div class="page" style="max-width:1500px">
     <div class="page-head"><div class="grow">
@@ -42,17 +44,14 @@ function renderEditor(el, rep, insp) {
         ${canCreateFor(e) ? html`<button class="btn primary" id="mkEst">Create estimate</button>` : currentEstimate(e.id) ? html`<a class="btn primary" href="#/estimates/${currentEstimate(e.id).id}">Open the estimate</a>` : ''}</div>
     </div>
     ${trailHtml(e.id, rep.id)}
-    <div class="s3">
-      <div class="card form-lines" id="acc"></div>
-      <div class="preview"><div class="preview-bar"><span>Live print preview · A4</span><span>updates as you type</span></div><div id="pv"></div></div>
-    </div>
+    <div class="card form-lines" id="acc"></div>
   </div>`);
 
-  const acc = $('#acc', el), pv = $('#pv', el);
+  const acc = $('#acc', el);
   const step = () => STEPS[open];
   const form = () => $('#secForm', acc);
   const ctx = {
-    save(patch) { Object.assign(rep, patch); saveReport(rep.id, patch); paintPreview(); },
+    save(patch) { Object.assign(rep, patch); saveReport(rep.id, patch); },
     repaint() { paintAccordion(); },
   };
   const flush = async () => {
@@ -61,17 +60,9 @@ function renderEditor(el, rep, insp) {
     if (step().leave) ctx.save(await step().leave(form(), rep));
   };
 
-  function paintPreview() {
-    pv.innerHTML = String(svrSheetHtml(rep, company));
-    hydrateImages(pv);
-    if (focusKey) {
-      const cell = pv.querySelector(`[data-f~="${focusKey}"]`);
-      if (cell) { cell.classList.add('hi'); cell.scrollIntoView({ block: 'nearest' }); }
-    }
-  }
-
   function paintAccordion() {
-    acc.innerHTML = String(html`${STEPS.map((s, i) => html`<button type="button" class="acc-head" data-sec="${i}">${i + 1}. ${s.title}<span class="grow"></span>${i === open ? '▾' : '▸'}</button>
+    acc.innerHTML = String(html`${STEPS.map((s, i) => html`<button type="button" class="acc-head" data-sec="${i}"><span class="tw">${i === open ? '▾' : '▸'}</span>${i + 1}. ${s.title}
+      ${i === 0 && open !== 0 ? html`<span class="fold-s">${s1Summary(rep)}</span>` : html`<span class="grow"></span>`}</button>
       ${i === open ? html`<form class="acc-body" id="secForm" onsubmit="return false">${s.render(rep)}</form>` : ''}`)}`);
     const f = form();
     step().bind?.(f, rep, ctx);
@@ -80,13 +71,6 @@ function renderEditor(el, rep, insp) {
     const autosave = debounce(() => ctx.save(step().read(f, rep)), 300);
     f.addEventListener('input', autosave);
     f.addEventListener('change', () => ctx.save(step().read(f, rep)));
-    // Highlight the printed cell of the field in focus: input "s1_customer" → cell data-f "s1.customer".
-    f.addEventListener('focusin', ev => {
-      const m = (ev.target.name || '').match(/^(s\d)_(.+)$/);
-      focusKey = m ? `${m[1]}.${m[2]}` : '';
-      pv.querySelectorAll('.hi').forEach(c => c.classList.remove('hi'));
-      paintPreview();
-    });
   }
 
   acc.addEventListener('click', async ev => {
@@ -95,9 +79,7 @@ function renderEditor(el, rep, insp) {
     await flush();
     open = +head.dataset.sec;
     sessionStorage.setItem(OPEN_KEY, String(open));
-    focusKey = '';
     paintAccordion();
-    paintPreview();
   });
 
   $('#saveBtn', el).onclick = async () => { await flush(); toast(`${rep.no} saved`); };
@@ -115,32 +97,23 @@ function renderEditor(el, rep, insp) {
   });
 
   paintAccordion();
-  paintPreview();
 }
 
-// Read-only page for roles that may view but not edit: screen helpers, then the form as it prints.
+// Read-only page for roles that may view but not edit: the same 7 sections, one below another, with the fields
+// locked; section 1 folded to its summary line. Print shows the form as it prints.
 function renderReadOnly(el, rep, insp) {
   const e = store.get('enquiries', rep.enquiryId);
-  el.innerHTML = String(html`<div class="page" style="max-width:1100px">
+  el.innerHTML = String(html`<div class="page stack" style="max-width:1400px">
     ${pageHead({
       crumb: html`<a href="#/inspections">Site Inspection</a> › <a href="#/inspections/${insp.id}">${e.no}</a> › ${rep.no}`,
       title: html`${rep.no} · Site viewing report ${pill(rep.status)}`,
       sub: `${e.customerName} · ${e.siteName} · by ${empName(rep.technicianId)}${rep.submittedAt ? ` · submitted ${fmtDateTime(rep.submittedAt)}` : ''}`,
       actions: html`<div class="row"><a class="btn" href="#/enquiries/${e.id}">Open ${e.no}</a>
-        ${auth.can('inspection', 'print') ? html`<a class="btn primary" href="#/reports/${rep.id}/print">⎙ Print preview</a>` : ''}</div>`,
+        ${auth.can('inspection', 'print') ? html`<a class="btn primary" href="#/reports/${rep.id}/print">⎙ Print</a>` : ''}</div>`,
     })}
-    <div class="cols2">
-      <div class="card"><div class="card-head"><h2>Shutters picked</h2><span class="tag info">screen only · become the estimate lines</span></div>
-        ${rep.shutters.length ? html`<div class="tbl-wrap" style="max-height:none"><table class="tbl"><thead><tr><th>Tag</th><th>Location</th><th>Type</th><th>Size (W × H)</th><th>Class</th><th>Fault found</th></tr></thead><tbody>
-          ${rep.shutters.map(s => html`<tr><td class="lnk">${s.tag}</td><td>${s.location}</td><td>${productName(s.productId)}</td><td>${fmtNum(s.width)} × ${fmtNum(s.height)} ${s.unit}</td><td>${s.sizeCode}</td><td class="wrap">${s.finding}</td></tr>`)}
-        </tbody></table></div>` : html`<div class="muted">No shutters picked.</div>`}
-      </div>
-      <div class="card"><div class="card-head"><h2>Photos</h2><span class="muted small">${rep.photos.length} photo(s)</span></div>
-        ${rep.photos.length ? html`<div class="photos">${rep.photos.map(p => html`<a class="photo" href="#" data-full="${p}"><img data-media="${p}" alt="Site photo"></a>`)}</div>` : html`<div class="muted">No photos.</div>`}
-      </div>
-    </div>
-    <div class="card" style="margin-top:10px;background:#CFCDC5;overflow:auto"><div style="zoom:.8">${svrSheetHtml(rep, auth.company())}</div></div>
+    ${trailHtml(e.id, rep.id)}
+    ${STEPS.map((s, i) => foldHeader({ id: i ? '' : `svr-${rep.id}`, title: `${i + 1}. ${s.title}`, summary: i ? '' : s1Summary(rep), open: i > 0,
+      body: html`<fieldset class="acc-body form-lines ro-sec" disabled>${s.render(rep)}</fieldset>` }))}
   </div>`);
   hydrateImages(el);
-  $$('[data-full]', el).forEach(a => a.addEventListener('click', ev => { ev.preventDefault(); const img = a.querySelector('img'); if (img.src) window.open(img.src, '_blank'); }));
 }

@@ -1,9 +1,9 @@
 // My tasks (web): the task bell opens this page. Approvers see quotation counter-checks (with the system's
-// automatic checks, the cost and margin summary and the quotation as the customer will see it) and payment-term
+// automatic checks, the cost and margin summary, and a link to the quotation's print preview) and payment-term
 // approvals; the Operations Executive sees technicians' leave-site requests.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, go, fmtDate, fmtDateTime, fmtDuration, toast, tiles, pill } from '../core/ui.js';
+import { html, $, go, fmtDate, fmtDateTime, fmtDuration, toast, tiles, pill, MIC } from '../core/ui.js';
 import { vsLabel } from '../core/lookups.js';
 import { myTasks, cannotDecide } from '../core/workflow.js';
 import { decideQuotation, autoChecks } from '../core/quotations.js';
@@ -12,7 +12,6 @@ import { approveJobTerm, confirmLeave } from '../core/jobs.js';
 import { renewContract, declineRenewal, contractProgress } from '../core/contracts.js';
 import { invoiceForJob, balanceOf } from '../core/billing.js';
 import { bindMics } from '../core/capture.js';
-import { quotationSheet } from './print-docs.js';
 import { pageHead } from './shell.js';
 import { render } from '../app.js';
 
@@ -76,7 +75,7 @@ export function taskDetail(t, { compact = false } = {}) {
 }
 
 // The decision buttons; off for the person who submitted the document (nobody approves their own document).
-const decision = (compact = false, t = null) => cannotDecide(t) ? html`<div class="note warn small" style="margin-top:10px">${cannotDecide(t)}</div>` : html`<div class="apr-foot" style="${compact ? 'flex-direction:column;align-items:stretch' : ''}"><div class="with-mic grow"><textarea name="comment" placeholder="Comment (needed to return)" style="min-height:58px"></textarea><button type="button" class="mic" data-mic="comment" title="Voice input">🎤</button></div>
+const decision = (compact = false, t = null) => cannotDecide(t) ? html`<div class="note warn small" style="margin-top:10px">${cannotDecide(t)}</div>` : html`<div class="apr-foot" style="${compact ? 'flex-direction:column;align-items:stretch' : ''}"><div class="with-mic grow"><textarea name="comment" placeholder="Comment (needed to return)" style="min-height:58px"></textarea><button type="button" class="mic" data-mic="comment" title="Voice input">${MIC}</button></div>
   <div style="display:flex;flex-direction:column;gap:6px"><button class="btn primary" data-do="approve">✓ Approve</button><button class="btn danger" data-do="return">↩ Return</button></div></div>`;
 
 // Carry out a decision; returns an error text or ''.
@@ -107,9 +106,8 @@ export function renderTasks(el, openId) {
     ${list.length ? html`<div class="apr">
       <div>${list.map(x => html`<div class="task ${x.id === sel.id ? 'on' : ''}" data-task="${x.id}"><div class="row"><b>${x.docNo}</b><span class="grow"></span><span class="small muted">${fmtDuration(Date.now() - new Date(x.createdAt))} ago</span></div>
         <div>${x.customer}</div><div class="row small"><span class="pill ${x.kind === 'leaveSite' ? 'amber' : x.kind === 'renewal' ? 'purple' : 'blue'}">${taskLabel(x)}</span>${x.rules?.some(r => r.code === 'PAY_TERM') && x.docType === 'quotation' ? pill('Payment term', 'purple') : ''}<span class="grow"></span>${x.amount != null ? html`<b>${auth.company().currency} ${m2(x.amount)}</b>` : ''}</div></div>`)}</div>
-      <div id="detail">${taskDetail(t)}</div>
-      ${t.docType === 'quotation' ? html`<div class="preview" style="padding:8px;overflow:hidden"><div class="preview-bar"><span>Quotation as the customer will see it</span><a href="#/quotations/${t.docId}">open</a></div>
-        <div style="zoom:.55">${quotationSheet(store.get('quotations', t.docId), auth.company())}</div></div>` : html`<div></div>`}
+      <div id="detail">${t.docType === 'quotation' ? html`<div class="row" style="justify-content:flex-end;gap:6px;margin-bottom:8px"><a class="btn small" href="#/quotations/${t.docId}">Open the quotation</a>
+        <a class="btn small" href="#/quotations/${t.docId}/print" target="_blank">⎙ Open print preview</a></div>` : ''}${taskDetail(t)}</div>
     </div>` : html`<div class="card"><div class="empty">Nothing is waiting for you.</div></div>`}
   </div>`);
   bindMics(el);

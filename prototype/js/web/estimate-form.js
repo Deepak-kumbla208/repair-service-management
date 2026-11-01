@@ -1,10 +1,10 @@
-// Repair estimate page ("E2" layout): the header on the left in line style (customer, estimate, Costing Level, Shared
-// Costs, margin), the team lead's tabs on the right. Pre-filled from the site report and the masters; changes save
-// as you type. "Create quotation" makes the quotation (or its next revision) from this revision. AMC and General
+// Repair estimate page, stacked: customer and estimate details in a header that folds to one line, then Costing
+// (Costing Level, Shared Costs, margin), the cost sheet in the team lead's tabs, and the revisions. Pre-filled from
+// the site report and the masters; changes save as you type. "Create quotation" makes the quotation (or its next revision) from this revision. AMC and General
 // Servicing estimates open the AMC page (amc-estimate.js).
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, $$, go, on, debounce, fmtNum, pill, toast, openModal, chipGroup } from '../core/ui.js';
+import { html, $, $$, go, on, debounce, fmtNum, pill, toast, openModal, chipGroup, foldHeader } from '../core/ui.js';
 import { vsOptions, zoneLabel } from '../core/lookups.js';
 import { estimateSummary, canEdit, saveEstimate, reviseEstimate, estimateProblems, revisions, canRevise as mayRevise } from '../core/estimates.js';
 import { createFromEstimate } from '../core/quotations.js';
@@ -78,34 +78,38 @@ export function renderEstimate(el, id) {
       <span class="grow"><b>Returned by ${auth.userName(est.returnNote.by)}</b> (quotation Rev ${est.returnNote.rev}): ${est.returnNote.comment}</span>
       ${canRevise ? html`<button class="btn small" id="revise2">Revise estimate</button>` : est.status === 'Draft' ? html`<span class="small">Change the prices below, then create the quotation revision.</span>` : ''}</div>` : ''}
     ${trailHtml(enq.id, est.id)}
-    <div class="e2">
-      <div class="props form-lines" id="props"></div>
-      <div class="e2-main"><div class="card">
+    <div class="stack">
+      ${foldHeader({ id: `est-${est.id}`, title: 'Customer & estimate details', open: ctx.editable,
+        summary: [est.header.customer, est.header.contact, est.header.phone, est.header.site, `${est.no} Rev ${est.rev}`, est.header.date].filter(Boolean).join(' · '),
+        body: html`<div class="fold-cols form-lines">
+          <div><div class="form-sec">Customer</div>
+          ${row('Customer Name', est.header.customer)}${row('Contact Person', est.header.contact)}${row('Phone No', est.header.phone)}
+          ${row('Site Location', html`${est.header.site}${enq.zoneId ? html` · <span class="zone-chip">${zoneLabel(enq.zoneId).split(' ')[0]}</span>` : ''}`)}</div>
+          <div><div class="form-sec">Estimate</div>
+          ${row('Quotation Ref No', `${est.no} · Rev ${est.rev}`)}
+          ${ctx.editable ? html`<div class="field"><label>Date</label><input type="date" data-h="date" value="${est.header.date}"></div>
+            <div class="field"><label>Findings</label><input type="text" data-h="findings" value="${est.header.findings}"></div>` : html`${row('Date', est.header.date)}${row('Findings', est.header.findings)}`}</div>
+        </div>` })}
+      <div class="card"><div class="card-head"><h2>Costing</h2></div><div class="form-lines fcols" id="props"></div></div>
+      <div class="card"><div class="card-head"><h2>Cost sheet</h2></div>
         <div id="kpi"></div>
         <div class="etabs" id="tabs">${TABS.map(([k, label]) => html`<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${label}${k === 'shutters' || k === 'materials' ? ` (${est[k].length})` : ''}</button>`)}</div>
         <div id="tab"></div>
-      </div></div>
+      </div>
+      <div class="card"><div class="card-head"><h2>Revisions</h2></div><div class="form-lines fcols">
+        ${revs.map(r => { const rq = r.quotationId ? store.get('quotations', r.quotationId) : null; return row(`Rev ${r.rev}`, html`${r.id === est.id ? html`<b>this one</b>` : html`<a href="#/estimates/${r.id}">open</a>`} · ${r.status}${rq ? ` · ${rq.no} Rev ${rq.rev} ${rq.status}` : ''}${r.returnNote && r.rev === r.returnNote.rev ? ` · returned: ${r.returnNote.comment}` : ''}`); })}</div></div>
     </div>
   </div>`);
 
+  // Costing: repainted when Costing Level changes (Shared Costs shows only for Line costing).
   const paintProps = () => {
     $('#props', el).innerHTML = String(html`
-      <div class="form-sec">Customer</div>
-      ${row('Customer Name', est.header.customer)}${row('Contact Person', est.header.contact)}${row('Phone No', est.header.phone)}
-      ${row('Site Location', html`${est.header.site}${enq.zoneId ? html` · <span class="zone-chip">${zoneLabel(enq.zoneId).split(' ')[0]}</span>` : ''}`)}
-      <div class="form-sec">Estimate</div>
-      ${row('Quotation Ref No', `${est.no} · Rev ${est.rev}`)}
-      ${ctx.editable ? html`<div class="field"><label>Date</label><input type="date" data-h="date" value="${est.header.date}"></div>
-        <div class="field"><label>Findings</label><input type="text" data-h="findings" value="${est.header.findings}"></div>` : html`${row('Date', est.header.date)}${row('Findings', est.header.findings)}`}
-      <div class="form-sec">Costing</div>
       <div class="field"><label>Costing Level</label>${chipGroup('costingLevel', vsOptions('COSTING_LEVEL'), est.costingLevel, !ctx.editable)}</div>
       ${est.costingLevel === 'LINE' ? html`<div class="field"><label>Shared Costs</label>${chipGroup('sharedCosts', vsOptions('SHARED_COSTS'), est.sharedCosts, !ctx.editable)}</div>` : ''}
       ${row('Overheads', est.overheads.map(o => (o.basis === 'FIXED' ? `${m2(o.value)} fixed` : `${fmtNum(o.value)} % of direct cost`)).join(' + '))}
       <div class="field"><label>Margin basis</label>${chipGroup('marginBasis', vsOptions('MARGIN_BASIS'), est.marginBasis, !ctx.editable)}</div>
       ${ctx.editable ? html`<div class="field"><label>Margin %</label><input type="number" step="any" data-h="marginPct" value="${est.marginPct}"></div>` : row('Margin %', `${fmtNum(est.marginPct)} %`)}
-      ${row('Tax', est.taxCode ? `${est.taxCode} · ${est.taxLabel} ${fmtNum(est.taxRate)} %` : 'No tax charged')}
-      <div class="form-sec">Revisions</div>
-      ${revs.map(r => { const rq = r.quotationId ? store.get('quotations', r.quotationId) : null; return row(`Rev ${r.rev}`, html`${r.id === est.id ? html`<b>this one</b>` : html`<a href="#/estimates/${r.id}">open</a>`} · ${r.status}${rq ? ` · ${rq.no} Rev ${rq.rev} ${rq.status}` : ''}${r.returnNote && r.rev === r.returnNote.rev ? ` · returned: ${r.returnNote.comment}` : ''}`); })}`);
+      ${row('Tax', est.taxCode ? `${est.taxCode} · ${est.taxLabel} ${fmtNum(est.taxRate)} %` : 'No tax charged')}`);
   };
 
   const paint = () => {

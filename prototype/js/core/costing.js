@@ -5,6 +5,12 @@
 
 export const FT_TO_M = 0.3048;
 export const round2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+// Qty and rate of a priced row: the row's own quantity when the amount splits into whole cents (2 × 116.50 = 233.00),
+// otherwise one, so Qty × Rate always equals the Amount.
+export function qtyRate(amount, qty) {
+  const q = Number(qty) || 1;
+  return q > 1 && Math.round(round2(amount) * 100) % q === 0 ? { qty: q, rate: round2(amount / q) } : { qty: 1, rate: round2(amount) };
+}
 const num = v => Number(v) || 0;
 const sum = (rows, f) => rows.reduce((t, r) => t + f(r), 0);
 

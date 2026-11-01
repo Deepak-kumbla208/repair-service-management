@@ -12,6 +12,7 @@ import { round2, amcSiteRow } from './costing.js';
 import { snapshot, registerCounts } from './contracts.js';
 import { workWeek, isWorkday, nextWorkday } from './setup.js';
 import { fmtDate } from './ui.js';
+import { rowText } from './enquiries.js';
 
 // The working day comes from Company Setup (default 08:30–17:30, Monday–Saturday).
 export const dayStart = () => workWeek().start;
@@ -38,7 +39,8 @@ export function createJobFromQuotation(q) {
   const zone = store.get('zones', site?.zoneId || enq.zoneId);
   const teamRows = est.labour.filter(r => r.team === 1 && !/additional/i.test(r.trade));
   const extra = Math.max(0, ...est.labour.filter(r => /additional/i.test(r.trade)).map(r => Number(r.team) || 0));
-  const lines = q.costingLevel === 'LINE' ? q.rows.filter(r => !r.isShared).map(r => ({ key: r.lineKey, description: r.description }))
+  // The quotation's wording; a row that shows its own qty ("Tension spring: worn · 2 Nos") gets the count back.
+  const lines = q.costingLevel === 'LINE' ? q.rows.filter(r => !r.isShared).map(r => ({ key: r.lineKey, description: rowText(r) }))
     : est.lines.map(l => ({ key: l.key, description: l.description }));
   const no = store.nextNumber('JOB');
   const job = store.insert('jobs', {

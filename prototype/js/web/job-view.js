@@ -1,9 +1,9 @@
-// A job on the web: properties on the left (customer, site, crew, schedule, payment, invoice), and on the right the
-// lines, the parts check, the technician's progress on the phone, the leave-site request, the Work Done form and
-// photos. Also the list of all jobs.
+// A job on the web, stacked: customer, work and money in a header that folds to one line, then the lines, the parts
+// check, the technician's progress on the phone, the leave-site request, the Work Done form and photos.
+// Also the list of all jobs.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, go, fmtDate, fmtDateTime, pill, toast, openModal, readForm, dateInput } from '../core/ui.js';
+import { html, $, go, fmtDate, fmtDateTime, pill, toast, openModal, readForm, dateInput, foldHeader } from '../core/ui.js';
 import { zoneLabel, empName, vsLabel } from '../core/lookups.js';
 import { hydrateImages } from '../core/media.js';
 import { earliestDate, setPartReady, cancelJob, confirmLeave, seesJob, fmtHour, suggestSlot, workCompletion, canConfirmLeave, changeJobTerm } from '../core/jobs.js';
@@ -73,19 +73,20 @@ export function renderJob(el, id) {
     ${!termTask && !j.termApproved && j.termNote ? html`<div class="note bad" style="margin-bottom:10px;display:flex;gap:10px;align-items:center"><span class="grow"><b>The Approver returned the payment term ${vsLabel('PAYMENT_TERMS', j.paymentTerm)}:</b> ${j.termNote}</span>
       ${edit ? html`<button class="btn small" id="termNow">Change to Immediate</button><button class="btn small" id="termAgain">Ask the Approver again</button>` : ''}</div>` : ''}
     ${trailHtml(enq.id, j.id)}
-    <div class="e2">
-      <div class="props form-lines">
+    <div class="stack">
+      ${foldHeader({ id: `job-${j.id}`, title: 'Customer, work & money',
+        summary: [j.customer, j.contact, j.phone, j.site, j.crew.label, j.technicianId ? empName(j.technicianId) : '', when(j), vsLabel('PAYMENT_TERMS', j.paymentTerm)].filter(Boolean).join(' · '),
+        body: html`<div class="fold-cols form-lines"><div>
         <div class="form-sec">Customer</div>
         ${row('Customer', j.customer)}${row('Contact', [j.contact, j.phone].filter(Boolean).join(' · '))}${row('Site', html`${j.site}<br><span class="small muted">${j.address}</span>`)}${row('Zone', zoneLabel(j.zoneId))}
-        <div class="form-sec">Work</div>
+        </div><div><div class="form-sec">Work</div>
         ${row('Crew', j.crew.label)}${row('Hours', `${j.workHours} h work + ${j.travelHours} h travel`)}
         ${row('Technician', j.technicianId ? `${empName(j.technicianId)}${j.helperIds?.length ? ` + ${j.helperIds.map(empName).join(', ')}` : ''}` : '')}${row('Scheduled', when(j))}
-        <div class="form-sec">Money</div>
+        </div><div><div class="form-sec">Money</div>
         ${row('Quotation', html`<a href="#/quotations/${j.quotationId}">${j.quotationNo}</a> · ${auth.company().currency} ${m2(j.total)}`)}
         ${row('Payment term', `${vsLabel('PAYMENT_TERMS', j.paymentTerm)}${j.paymentTerm !== 'IMMEDIATE' ? (j.termApproved ? ' · approved' : ' · waiting for the Approver') : ''}`)}
         ${row('Invoice', inv ? html`<a href="#/invoices/${inv.id}">${inv.no || 'Draft'}</a> · ${inv.status}${inv.status === 'Posted' ? ` · balance ${m2(balanceOf(inv))}` : ''}` : j.paymentTerm === 'IMMEDIATE' ? 'Raised when the job is scheduled' : 'Drafted when the Work Done form is signed')}
-      </div>
-      <div class="e2-main">
+      </div></div>` })}
         ${gs ? gsChecklistCard(j) : ''}
         <div class="card"><div class="card-head"><h2>Lines to do</h2></div><table class="lines"><tbody>${j.lines.map((l, i) => html`<tr><td style="width:26px">${i + 1}</td><td>${l.description}</td>
           <td style="width:120px">${w ? pill(vsLabel('WORK_DONE', w.rows.find(r => r.key === l.key)?.status), w.rows.find(r => r.key === l.key)?.status === 'DONE' ? 'green' : 'amber') : ''}</td></tr>`)}</tbody></table></div>
@@ -101,7 +102,6 @@ export function renderJob(el, id) {
         ${(j.photosBefore || []).length || (j.photosAfter || []).length || w?.cust?.stampId ? html`<div class="card"><div class="card-head"><h2>Photos</h2></div>
           ${[['Before', j.photosBefore], ['After', j.photosAfter], ['Company stamp', w?.cust?.stampId ? [w.cust.stampId] : []]].filter(([, l]) => l?.length).map(([label, l]) => html`<div class="small muted" style="margin:4px 0">${label}</div><div class="photos">${l.map(p => html`<div class="photo"><img data-media="${p}" alt="${label} photo"></div>`)}</div>`)}</div>` : ''}
         <div class="card"><div class="card-head"><h2>Activity</h2></div>${activityHtml(j, 'jobs')}</div>
-      </div>
     </div>
   </div>`);
   hydrateImages(el);

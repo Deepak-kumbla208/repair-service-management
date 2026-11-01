@@ -2,7 +2,7 @@
 // Step 1 holds section 1 (pre-filled from the enquiry) and the screen-only shutter picker.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, $$, go, debounce, field, readForm, markInvalid, openModal, toast, fmtDateTime, fmtNum } from '../core/ui.js';
+import { html, $, $$, go, debounce, field, readForm, markInvalid, openModal, toast, fmtDateTime, fmtNum, MIC } from '../core/ui.js';
 import { findSite, products, productName, sizes } from '../core/lookups.js';
 import { nextShutterTag } from '../core/customers.js';
 import { classifySize, toMetres } from '../core/costing.js';
@@ -22,7 +22,7 @@ const step1 = {
   render(rep) {
     const { site } = findSite(rep.siteId);
     const picked = new Map(rep.shutters.filter(s => s.shutterId).map(s => [s.shutterId, s]));
-    const finding = s => html`<div class="find with-mic"><input type="text" name="find_${s.key}" data-find="${s.key}" placeholder="Fault found on ${s.tag}" value="${s.finding || ''}"><button type="button" class="mic" data-mic="find_${s.key}">🎤</button></div>`;
+    const finding = s => html`<div class="find with-mic"><input type="text" name="find_${s.key}" data-find="${s.key}" placeholder="Fault found on ${s.tag}" value="${s.finding || ''}"><button type="button" class="mic" data-mic="find_${s.key}">${MIC}</button></div>`;
     return html`
       <div class="grid g2">${S1.map(([k, label, type]) => field({ name: `s1_${k}`, label, type: type || 'text', value: rep.s1[k], cls: ['address', 'customer'].includes(k) ? 'spanall' : '' }))}
         ${field({ name: 'refNo', label: 'Report / Ref. No.', value: rep.no, readonly: true })}</div>

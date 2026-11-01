@@ -131,7 +131,7 @@ function equipmentTab(est, ctx) {
 function materialsTab(est, ctx) {
   const opts = [{ value: '', label: '— pick from the master —' }, ...items().map(it => ({ value: it.id, label: it.name }))];
   const row = r => materialRow({ ...r, qty: num(r.qty) * visitsOf(est, r.siteKey) });
-  return html`${est.materials.length ? html`<table class="tbl edit"><thead><tr><th>Sl</th><th>Item</th><th>For site</th><th>Unit</th><th class="num">Qty per Visit</th><th class="num">Wastage %</th><th class="num">Visits</th><th class="num">Total Qty</th><th class="num">Rate per Unit</th><th class="num">Amount</th>${delHead(ctx)}</tr></thead><tbody>
+  return html`${est.materials.length ? html`<table class="tbl edit"><thead><tr><th>Sl</th><th>Product</th><th>For site</th><th>Unit</th><th class="num">Qty per Visit</th><th class="num">Wastage %</th><th class="num">Visits</th><th class="num">Total Qty</th><th class="num">Rate per Unit</th><th class="num">Amount</th>${delHead(ctx)}</tr></thead><tbody>
       ${est.materials.map((r, i) => html`<tr><td>${i + 1}</td><td>${sel(ctx, `materials.${i}.itemId`, r.itemId, opts)}</td><td>${sel(ctx, `materials.${i}.siteKey`, r.siteKey, siteOptions(est))}</td><td>${r.unit}</td>
         <td class="num">${inp(ctx, `materials.${i}.qty`, r.qty, { w: 50 })}</td><td class="num">${inp(ctx, `materials.${i}.wastage`, r.wastage, { w: 46 })}</td><td class="num">${visitsOf(est, r.siteKey)}</td>
         <td class="num">${fmtNum(row(r).totalQty)}</td><td class="num">${inp(ctx, `materials.${i}.rate`, r.rate, { w: 64 })}</td><td class="num">${m2(row(r).amount)}</td>${del(ctx, 'materials', i)}</tr>`)}

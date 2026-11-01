@@ -1,9 +1,10 @@
-// New / edit enquiry in the "E2" layout: properties panel on the left (line-style fields), and on the right
-// "What the customer needs" (item lines = the Enquiry Description), attachments and activity.
+// New / edit enquiry, stacked (team lead, 1 Nov 2026): Customer · Site · Enquiry in one full-width header that folds
+// to a summary line, then "What the customer needs" (product lines = the Enquiry Description), attachments,
+// Next step last, and the activity of a saved enquiry.
 // Keeps paste-an-email intake, customer type-ahead + quick-create + duplicate check, voice input.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, $$, go, field, chipGroup, readForm, markInvalid, openModal, confirmBox, toast, dateInput, timeInput, joinDateTime } from '../core/ui.js';
+import { html, $, $$, go, field, chipGroup, readForm, markInvalid, openModal, confirmBox, toast, dateInput, timeInput, joinDateTime, foldHeader } from '../core/ui.js';
 import { vsOptions, vsLabel, zones, zoneLabel } from '../core/lookups.js';
 import { findDuplicates, primaryContact } from '../core/customers.js';
 import { saveNewEnquiry, saveEnquiryChanges } from '../core/enquiries.js';
@@ -42,30 +43,29 @@ export function renderEnquiryForm(el, id) {
         <a class="btn" href="#/${enq ? `enquiries/${enq.id}` : 'enquiries'}">Cancel</a><button class="btn primary" id="save">Save</button></div>
     </div>
     <div id="emailNote"></div>
-    <form id="f" class="e2" autocomplete="off" onsubmit="return false">
-      <div class="props form-lines">
-        <div class="form-sec">Customer</div><div id="customerBox"></div>
-        <div class="form-sec">Site</div><div id="siteBox"></div>
-        <div class="form-sec">Enquiry</div>
+    <form id="f" class="stack" autocomplete="off" onsubmit="return false">
+      ${foldHeader({ title: 'Customer & enquiry details', open: true, body: html`<div class="fold-cols form-lines">
+        <div><div class="form-sec">Customer</div><div id="customerBox"></div></div>
+        <div><div class="form-sec">Site</div><div id="siteBox"></div></div>
+        <div><div class="form-sec">Enquiry</div>
         <div class="field"><label>Enquiry Date / Time <span class="req">*</span></label>
           <div class="row"><input type="date" name="date" value="${dateInput(when)}"><input type="time" name="time" value="${timeInput(when)}" style="width:110px"></div></div>
         ${field({ name: 'type', label: 'Type', type: 'select', options: vsOptions('ENQ_TYPE'), value: enq?.type || 'REPAIR', required: true, blank: false })}
         ${field({ name: 'channel', label: 'Enquiry Channel', type: 'select', options: vsOptions('ENQ_CHANNEL'), value: enq?.channel || 'CALL', blank: false })}
         <div class="field" id="otherRow"><label for="f-channelOther">Specify channel</label><input type="text" name="channelOther" id="f-channelOther" value="${enq?.channelOther || ''}" placeholder="e.g. Walk-in at the office"></div>
         ${field({ name: 'enquiryStatus', label: 'Enquiry Status', type: 'chips', options: vsOptions('ENQ_STATUS'), value: enq?.enquiryStatus || 'WARM' })}
-        ${field({ name: 'priority', label: 'Priority', type: 'chips', options: vsOptions('PRIORITY'), value: enq?.priority || 'MEDIUM' })}
-        <div class="form-sec">Next step</div>
+        ${field({ name: 'priority', label: 'Priority', type: 'chips', options: vsOptions('PRIORITY'), value: enq?.priority || 'MEDIUM' })}</div>
+      </div>` })}
+      <div class="card"><div class="card-head"><h2>What the customer needs</h2><span class="muted small">this is the Enquiry Description</span></div>
+        <div id="linesBox"></div>
+        <div class="form-lines" id="remarksBox" style="margin-top:10px;max-width:720px">${field({ name: 'remarks', label: 'Remarks', value: enq?.remarks || '', placeholder: 'Internal note (optional)', mic: true })}</div></div>
+      <div class="card"><div class="card-head"><h2>Attachments</h2><label class="btn small">+ Attach files<input type="file" id="files" multiple hidden></label></div>
+        <div id="fileList"></div><div class="sub">For example a BOQ, photos from the customer or the original email. Up to 10 MB each; kept in this browser.</div></div>
+      <div class="card"><div class="card-head"><h2>Next step</h2></div>
+        <div class="form-lines fcols">
         ${field({ name: 'siteInspection', label: 'Site Inspection', type: 'chips', options: vsOptions('YES_NO'), value: enq?.siteInspection || 'YES' })}
-        <div id="inspBox"></div>
-      </div>
-      <div class="e2-main">
-        <div class="card"><div class="card-head"><h2>What the customer needs</h2><span class="muted small">this is the Enquiry Description</span></div>
-          <div id="linesBox"></div>
-          <div class="form-lines" id="remarksBox" style="margin-top:10px">${field({ name: 'remarks', label: 'Remarks', value: enq?.remarks || '', placeholder: 'Internal note (optional)', mic: true })}</div></div>
-        <div class="card"><div class="card-head"><h2>Attachments</h2><label class="btn small">+ Attach files<input type="file" id="files" multiple hidden></label></div>
-          <div id="fileList"></div><div class="sub">For example a BOQ, photos from the customer or the original email. Up to 10 MB each; kept in this browser.</div></div>
-        <div class="card"><div class="card-head"><h2>Activity</h2></div>${enq ? activityHtml(enq) : html`<div class="muted small">Status changes, notes and emails show here after saving.</div>`}</div>
-      </div>
+        <div id="inspBox" style="display:contents"></div></div></div>
+      ${enq ? html`<div class="card"><div class="card-head"><h2>Activity</h2></div>${activityHtml(enq)}</div>` : ''}
     </form>
   </div>`);
 
@@ -74,6 +74,17 @@ export function renderEnquiryForm(el, id) {
   const radio = name => $(`[name="${name}"]:checked`, form)?.value || '';
   const setRadio = (name, value) => { const r = $(`[name="${name}"][value="${value}"]`, form); if (r) r.checked = true; };
   const lines = linesEditor($('#linesBox', el), enq?.lines || []);
+
+  // Folding the header shows one summary line of what is filled in.
+  const fold = $('details.fold', form);
+  fold.addEventListener('toggle', () => {
+    if (fold.open) return;
+    const shown = n => v(n)?.selectedOptions?.[0]?.text || '';
+    const chip = n => $(`[name="${n}"]:checked`, form)?.nextElementSibling?.textContent || '';
+    const cust = st.customerId ? store.get('customers', st.customerId)?.name : v('newName')?.value;
+    $('.fold-s', fold).textContent = [cust, v('contactName')?.value, v('mobile')?.value, shown('siteId') || v('siteName')?.value,
+      shown('type'), shown('channel'), chip('enquiryStatus'), chip('priority')].filter(Boolean).join(' · ');
+  });
 
   // ---------- Recorded by (logged-in user by default; small arrow to change) ----------
   const paintRb = () => { $('#rbBox', el).innerHTML = String(recordedByButton(st.recordedBy)); bindRecordedBy($('#rbBox', el), () => st.recordedBy, uid => { st.recordedBy = uid; paintRb(); }); };
@@ -99,7 +110,7 @@ export function renderEnquiryForm(el, id) {
     $('#customerBox', el).innerHTML = String(html`${top}
       ${field({ name: 'contactName', label: 'Contact Person', value: vals.contactName, required: true, list: 'contactList' })}
       <datalist id="contactList">${(c?.contacts || []).map(p => html`<option value="${p.name}">`)}</datalist>
-      ${field({ name: 'mobile', label: 'Mobile', type: 'tel', value: vals.mobile })}
+      ${field({ name: 'mobile', label: 'Mobile', type: 'tel', value: vals.mobile, required: true })}
       ${field({ name: 'email', label: 'Email', type: 'email', value: vals.email })}
       <div id="dupBox"></div>`);
     bindCustomer();
@@ -192,7 +203,7 @@ export function renderEnquiryForm(el, id) {
     const type = v('type').value;
     const nextText = yes ? 'Goes to Site Inspection (target: within 2 hours of the call).'
       : type === 'REPAIR' ? 'No site inspection: goes straight to estimation.' : `BOQ study for ${vsLabel('ENQ_TYPE', type)}.`;
-    if (!yes) { box.innerHTML = String(html`<div class="sub" style="margin:-2px 0 0 138px">${nextText}</div>`); return; }
+    if (!yes) { box.innerHTML = String(html`<div class="sub" style="grid-column:1/-1;margin:0">${nextText}</div>`); return; }
     if (inspLocked) {
       box.innerHTML = String(row('Technician', `${store.get('employees', insp.technicianId)?.name || '—'} · ${insp.status}`, 'Change it from the site inspection page.'));
       return;
@@ -207,7 +218,7 @@ export function renderEnquiryForm(el, id) {
       ${field({ name: 'technicianId', label: 'Technician', type: 'select', options: opts, value: techId, blankLabel: 'Assign later' })}
       <div class="field"><label>Visit date / time</label><div class="row"><input type="date" name="visitDate" value="${date}"><input type="time" name="visitTime" value="${time}" style="width:110px"></div></div>
       ${field({ name: 'confirmedBy', label: 'Confirmed by', type: 'select', options: CONFIRM_BY, value: keep('confirmedBy', insp?.confirmedBy || 'Call'), blank: false })}
-      <div class="sub" style="margin:0 0 0 138px">${nextText} Optional: leave the technician empty to assign later.</div>`);
+      <div class="sub" style="grid-column:1/-1;margin:0">${nextText} Optional: leave the technician empty to assign later.</div>`);
     v('visitDate').addEventListener('change', paintInspection);
   }
   $$('[name="siteInspection"]', form).forEach(r => r.addEventListener('change', () => { st.siteTouched = true; paintInspection(); }));
@@ -278,13 +289,13 @@ export function renderEnquiryForm(el, id) {
     const d = readForm(form);
     const missing = ['date', 'time', 'type', 'contactName'].filter(n => !d[n]);
     if (st.mode === 'new' && !d.newName) missing.push('newName');
-    if (st.mode === 'existing' && !st.customerId) { toast('Choose the customer, or use “+ New customer”.', 'bad'); $('#custQ', el)?.focus(); return; }
+    if (st.mode === 'existing' && !st.customerId) { toast('Choose the customer, or use “+ New customer”.', 'bad'); fold.open = true; $('#custQ', el)?.focus(); return; }
     if (st.siteMode === 'new') { if (!d.siteName) missing.push('siteName'); } else if (!d.siteId) missing.push('siteId');
     if (d.channel === 'OTHER' && !d.channelOther) missing.push('channelOther');
+    if (!d.mobile) missing.push('mobile');
     if (!markInvalid(form, missing)) { toast('Fill in the required fields', 'bad'); return; }
-    if (!d.mobile && !d.email) { markInvalid(form, ['mobile'], 'Enter a mobile or an email'); return; }
     const itemLines = lines.read();
-    if (!itemLines.some(l => l.itemRef || l.description)) { toast('Add at least one line: an item or a description of what the customer needs', 'bad'); return; }
+    if (!itemLines.some(l => l.itemRef || l.description)) { toast('Add at least one line: a product or a description of what the customer needs', 'bad'); return; }
     if (st.mode === 'new' && st.dupsSeen && !(await confirmBox('Possible duplicate', 'A customer with the same mobile, email or name already exists. Create a new customer anyway?', 'Create new'))) return;
 
     const data = {

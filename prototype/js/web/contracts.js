@@ -1,8 +1,9 @@
-// AMC contracts on the web: the list, and the contract page ("E2": contract, customer and money on the left; the visit
-// plan, billing plan, sites and history on the right). A draft shows both plans as a preview; "Activate" creates them.
+// AMC contracts on the web: the list, and the contract page, stacked: contract, customer and money in a header that
+// folds to one line, then the progress, the visit plan, billing plan, sites and history one below another. A draft
+// shows both plans before "Activate" creates them.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, go, on, fmtDate, pill, toast, openModal, readForm, confirmBox, popMenu, fmtNum } from '../core/ui.js';
+import { html, $, go, on, fmtDate, pill, toast, openModal, readForm, confirmBox, popMenu, fmtNum, foldHeader } from '../core/ui.js';
 import { vsLabel, zoneLabel, empName } from '../core/lookups.js';
 import { saveBlob, getUrl } from '../core/media.js';
 import { canEditContract, saveContract, activateContract, activateProblems, cancelContract, renewContract, visitsOf, contractProgress, daysLeft, plannedDates, billingLines,
@@ -16,7 +17,6 @@ import { render } from '../app.js';
 
 const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const row = (label, value) => html`<div class="field"><div class="field-label">${label}</div><div class="ro">${value || html`<span class="muted">—</span>`}</div></div>`;
-const TAB_KEY = 'rsmContractTab';
 export const contractPill = c => pill(c.status, { Draft: 'amber', Active: 'green', Renewed: 'green', Closed: 'green', Expired: 'red', Terminated: 'red', Cancelled: 'red' }[c.status]);
 const visitPill = v => (isOverdue(v) ? pill(`Overdue · ${v.status}`, 'red') : pill(v.status, { Planned: '', Confirmed: 'amber', Scheduled: 'blue', 'On the way': 'blue', 'On site': 'blue', Done: 'green', 'Checked & filed': 'green', Cancelled: 'red' }[v.status]));
 
@@ -56,7 +56,6 @@ export function renderContract(el, id) {
   const canRenew = mayEdit && !c.renewal?.renewedById && ['Active', 'Expired'].includes(c.status);
   const left = draft ? 0 : daysLeft(c);
   const total = Math.round((new Date(`${c.end}T00:00`) - new Date(`${c.start}T00:00`)) / 86400000) + 1;
-  let tab = sessionStorage.getItem(TAB_KEY) || 'visits';
 
   el.innerHTML = String(html`<div class="page" style="max-width:1500px">
     <div class="page-head"><div class="grow">
@@ -71,8 +70,10 @@ export function renderContract(el, id) {
     </div>
     ${draft ? html`<div class="note" style="margin-bottom:10px">Draft from the accepted quotation. Check the start date; a signed copy is optional (flow step 6). "Activate" creates the ${c.sites.reduce((t, s) => t + s.visits, 0)} visits and the ${c.plan.length} billing line${c.plan.length > 1 ? 's' : ''} below.</div>` : ''}
     ${trailHtml(c.enquiryId, c.id)}
-    <div class="e2">
-      <div class="props form-lines">
+    <div class="stack">
+      ${foldHeader({ id: `ctr-${c.id}`, title: 'Contract, customer & money', open: edit,
+        summary: [c.no, `${fmtDate(c.start)} – ${fmtDate(c.end)}`, c.customer, c.contact, c.phone, `${vsLabel('BILLING', c.billing)} billing`, `total ${m2(c.total)}`].filter(Boolean).join(' · '),
+        body: html`<div class="fold-cols form-lines"><div>
         <div class="form-sec">Contract</div>
         ${row('Contract No', c.no)}
         ${edit ? html`<div class="field"><label>Start date</label><input type="date" id="start" value="${c.start}"></div>` : row('Start date', fmtDate(c.start))}
@@ -81,23 +82,23 @@ export function renderContract(el, id) {
         ${row('Customer PO', c.po?.no ? html`${c.po.no}${c.po.date ? ` · ${fmtDate(c.po.date)}` : ''}${(c.po.attachments || []).map(a => html` · <a href="#" data-open="${a.id}">${a.name}</a>`)}` : vsLabel('ACCEPT_METHOD', c.po?.method))}
         ${row('Signed contract', c.signedDoc ? html`<a href="#" data-open="${c.signedDoc.id}">${c.signedDoc.name}</a>` : html`<span class="muted">Optional</span>${mayEdit && ['Draft', 'Active'].includes(c.status) ? html` · <label class="btn link small" style="padding:0">Upload<input type="file" id="signed" hidden></label>` : ''}`)}
         ${draft ? '' : row('Renewal reminder', c.renewal?.renewedById ? `Renewed by ${c.renewal.renewedByNo}` : renewal ? html`Renewal started: <a href="#/enquiries/${renewal.id}">${renewal.no}</a>` : `${fmtDate(c.renewal?.reminderDate)} (60 days before the end)`)}
-        <div class="form-sec">Customer</div>
+        </div><div><div class="form-sec">Customer</div>
         ${row('Customer Name', c.customer)}${row('Contact Person', [c.contact, c.phone].filter(Boolean).join(' · '))}${row('Billing Address', c.billingAddress)}
-        <div class="form-sec">Money</div>
+        </div><div><div class="form-sec">Money</div>
         ${row('Contract value', m2(c.value))}${row(`${c.taxLabel} ${c.taxRate} %`, m2(c.tax))}${row('Total', html`<b>${m2(c.total)}</b>`)}
         ${row('Billing', `${vsLabel('BILLING', c.billing)}, in advance · ${c.plan.length} invoice${c.plan.length > 1 ? 's' : ''}`)}
         ${row('Payment Term', `${vsLabel('PAYMENT_TERMS', c.paymentTerm)}${c.paymentTerm !== 'IMMEDIATE' ? ' (approved at the counter-check)' : ''}`)}
-      </div>
-      <div class="e2-main"><div class="card">
-        <div class="kpi k4">
+      </div></div>` })}
+      <div class="card"><div class="card-head"><h2>Progress</h2></div>
+        <div class="kpi k4" style="margin-bottom:0">
           <div><b>${draft ? '—' : `${p.done} of ${p.visits}`}</b><span>Visits done${p.next && !draft ? ` · next ${fmtDate(visitDate(p.next))}` : ''}</span></div>
           <div><b>${draft ? '—' : `${p.posted} of ${p.lines}`}</b><span>Instalments posted${drafts.length ? ` · ${drafts.length} to post` : ''}</span></div>
           <div><b>${m2(p.paid)}</b><span>Paid${p.balance > 0.004 ? ` · balance ${m2(p.balance)}` : ''}</span></div>
-          <div><b>${draft ? '—' : left >= 0 ? `${left} days` : 'Ended'}</b><span>${draft ? 'Starts after activation' : `Ends ${fmtDate(c.end)}`}</span></div></div>
-        <div class="etabs" id="ctabs">${[['visits', `Visit plan (${draft ? c.sites.reduce((t, s) => t + s.visits, 0) : visits.length})`], ['billing', `Billing plan (${c.plan.length})`], ['sites', `Sites & shutters (${c.sites.length})`], ['history', 'History']]
-          .map(([k, label]) => html`<button data-ct="${k}" class="${k === tab ? 'on' : ''}">${label}</button>`)}</div>
-        <div id="ctab"></div>
-      </div></div>
+          <div><b>${draft ? '—' : left >= 0 ? `${left} days` : 'Ended'}</b><span>${draft ? 'Starts after activation' : `Ends ${fmtDate(c.end)}`}</span></div></div></div>
+      <div class="card"><div class="card-head"><h2>Visit plan (${draft ? c.sites.reduce((t, s) => t + s.visits, 0) : visits.length})</h2></div><div id="ctVisits"></div></div>
+      <div class="card"><div class="card-head"><h2>Billing plan (${c.plan.length})</h2></div><div id="ctBilling"></div></div>
+      <div class="card"><div class="card-head"><h2>Sites &amp; shutters (${c.sites.length})</h2></div><div id="ctSites"></div></div>
+      <div class="card"><div class="card-head"><h2>History</h2></div>${activityHtml(c, 'contracts')}</div>
     </div>
   </div>`);
 
@@ -134,9 +135,9 @@ export function renderContract(el, id) {
         const fails = st ? Object.entries(st.items || {}).filter(([, x]) => x.r === 'F').length : 0;
         return html`<tr><td><b>${sh.tag}</b></td><td>${sh.location}</td><td>${sh.typeName}</td><td>${sh.sizeCode}</td><td>${sh.fireRated ? 'Yes' : 'No'}</td>
           <td>${last ? html`${fails ? pill(`${fails} fail`, 'red') : pill('Pass', 'green')} <span class="muted small">visit ${last.n}</span>` : html`<span class="muted">—</span>`}</td></tr>`; })}</tbody></table>`}`)}`;
-  const paintTab = () => { $('#ctab', el).innerHTML = String(tab === 'billing' ? billingTab() : tab === 'sites' ? sitesTab() : tab === 'history' ? activityHtml(c, 'contracts') : visitTab()); };
+  // The plans follow the start date of a draft, so both are repainted when it changes.
+  const paintTab = () => { $('#ctVisits', el).innerHTML = String(visitTab()); $('#ctBilling', el).innerHTML = String(billingTab()); $('#ctSites', el).innerHTML = String(sitesTab()); };
 
-  on(el, 'click', '[data-ct]', (e, b) => { tab = b.dataset.ct; sessionStorage.setItem(TAB_KEY, tab); el.querySelectorAll('[data-ct]').forEach(x => x.classList.toggle('on', x === b)); paintTab(); });
   on(el, 'click', '[data-go]', (e, tr) => go(tr.dataset.go));
   on(el, 'click', '[data-post]', (e, b) => { const inv = postInvoice(b.dataset.post); toast(`Posted as ${inv.no}`); render(); });
   on(el, 'click', '[data-open]', async (e, a) => { e.preventDefault(); const u = await getUrl(a.dataset.open); if (u) window.open(u, '_blank'); });

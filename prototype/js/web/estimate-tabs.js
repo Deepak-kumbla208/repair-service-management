@@ -1,6 +1,7 @@
 // The estimate's Excel tabs as editable tables (same columns and formulas as the team lead's Repair estimator):
 // Shutters to repair, Labour, Transport, Materials, Equipment, Overhead & Margin. Every pre-filled value stays
 // editable. "For" (which line a row belongs to) shows only with Line costing; a row with no line is a shared cost.
+import { syncPartLine } from '../core/estimates.js';
 import * as store from '../core/store.js';
 import { html, fmtNum } from '../core/ui.js';
 import { zones, items, vsOptions } from '../core/lookups.js';
@@ -61,7 +62,7 @@ function transportTab(est, ctx) {
 
 function materialsTab(est, ctx) {
   const opts = [{ value: '', label: '— pick from the master —' }, ...items().map(it => ({ value: it.id, label: it.name }))];
-  return html`<table class="tbl edit"><thead><tr><th>Sl</th><th>Item</th>${forHead(est)}<th>Specification / Grade</th><th>Unit</th><th class="num">Quantity</th><th class="num">Wastage %</th><th class="num">Total Qty</th><th class="num">Rate per Unit</th><th class="num">Amount</th><th>Lead Time Spares</th>${delHead(ctx)}</tr></thead><tbody>
+  return html`<table class="tbl edit"><thead><tr><th>Sl</th><th>Product</th>${forHead(est)}<th>Specification / Grade</th><th>Unit</th><th class="num">Quantity</th><th class="num">Wastage %</th><th class="num">Total Qty</th><th class="num">Rate per Unit</th><th class="num">Amount</th><th>Lead Time Spares</th>${delHead(ctx)}</tr></thead><tbody>
     ${est.materials.map((r, i) => { const x = materialRow(r); return html`<tr><td>${i + 1}</td><td>${sel(ctx, 'materials', i, 'itemId', r.itemId, opts, r.name)}${!r.itemId ? html` <span class="tag">${r.name || 'new item'}</span>` : ''}</td>${forCell(ctx, est, 'materials', i, r)}
       <td>${r.spec}</td><td>${r.unit}</td><td class="num">${inp(ctx, 'materials', i, 'qty', r.qty, { w: 56 })}</td><td class="num">${inp(ctx, 'materials', i, 'wastage', r.wastage, { w: 50 })}</td><td class="num">${fmtNum(x.totalQty)}</td>
       <td class="num">${inp(ctx, 'materials', i, 'rate', r.rate, { w: 76 })}${r.placeholder ? html` <span class="tag">placeholder</span>` : ''}</td><td class="num">${m2(x.amount)}</td><td>${r.leadDays ? `${r.leadDays} days` : 'in stock'}</td>${del(ctx, 'materials', i)}</tr>`; })}
@@ -136,6 +137,7 @@ export function applyChange(est, t, i, f) {
     const it = store.get('items', r.itemId);
     if (it) Object.assign(r, { name: it.name, spec: it.spec || '', unit: it.unit, rate: Number(it.rate) || 0, wastage: Number(it.wastage) || 0, leadDays: Number(it.leadDays) || 0, placeholder: !!it.placeholders?.includes('rate'), noRate: false });
   }
+  if (t === 'materials' && ['itemId', 'qty', 'unit'].includes(f)) syncPartLine(est, r.key);
   if (t === 'equipment' && f === 'equipmentId') {
     const e = store.get('equipment', r.equipmentId);
     if (e) Object.assign(r, { name: e.name, ownership: e.ownership, basis: e.basis, rate: Number(e.rate) || 0 });

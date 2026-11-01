@@ -3,7 +3,7 @@
 // signatures and the company stamp photo (section 4), payment (immediate term), and the office's OK to leave.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, $$, go, toast, openModal, fmtDate, fmtTime, chipGroup, readForm } from '../core/ui.js';
+import { html, $, $$, go, toast, openModal, fmtDate, fmtTime, chipGroup, readForm, MIC } from '../core/ui.js';
 import { zoneLabel, vsLabel, vsOptions } from '../core/lookups.js';
 import { hydrateImages, removeBlob } from '../core/media.js';
 import { savePhotos, signaturePad, bindMics } from '../core/capture.js';
@@ -97,7 +97,7 @@ const RENDER = {
         <span class="k">Date</span><span>${s1.date.split('-').reverse().join(' / ')}</span><span class="k">Time In / Out</span><span>${s1.timeIn || '—'} / ${s1.timeOut || html`<span class="muted">at check-out</span>`}</span><span class="k">Subject</span><span>${s1.subject}</span></div>
       ${sec(2, 'DESCRIPTION OF WORKS DONE')}
       ${w.rows.map((r, i) => html`<div class="wl"><div><b>${i + 1}.</b> ${r.description}</div><div style="margin-top:5px">${chipGroup(`st_${i}`, vsOptions('WORK_DONE'), r.status)}</div>
-        <div class="with-mic" style="margin-top:5px"><input type="text" name="rm_${i}" value="${r.remark}" placeholder="Remark (optional)"><button type="button" class="mic" data-mic="rm_${i}">🎤</button></div></div>`)}
+        <div class="with-mic" style="margin-top:5px"><input type="text" name="rm_${i}" value="${r.remark}" placeholder="Remark (optional)"><button type="button" class="mic" data-mic="rm_${i}">${MIC}</button></div></div>`)}
       ${w.partsUsed.length ? html`<div class="m-section">Parts used <span class="muted small">(from the estimate; change if different)</span></div>
         ${w.partsUsed.map((p, i) => html`<div class="row" style="margin:3px 0"><label class="check grow"><input type="checkbox" name="pu_${i}" ${p.used ? 'checked' : ''}> ${p.name}</label><input type="number" name="pq_${i}" value="${p.qty}" style="width:64px"> <span class="small">${p.unit}</span></div>`)}` : ''}
       ${photosBlock(j, 'photosAfter', 'After photos')}`;
@@ -106,7 +106,7 @@ const RENDER = {
     const w = j.workDone;
     return html`${sec(3, 'CUSTOMER FEEDBACK RATING')}<div class="small muted">Hand the phone to the customer. 5 Excellent · 4 Good · 3 Satisfactory · 2 Poor · 1 Very poor</div>
       ${RATINGS.map(([k, label]) => html`<div class="rate"><span>${label}</span>${[5, 4, 3, 2, 1].map(n => html`<button type="button" class="dot ${w.ratings[k] === n ? 'on' : ''}" data-rate="${k}|${n}" aria-label="${label}: ${n}">${n}</button>`)}</div>`)}
-      <div class="with-mic" style="margin-top:8px"><textarea name="comments" placeholder="Customer comments / recommendations" style="min-height:52px">${w.comments}</textarea><button type="button" class="mic" data-mic="comments">🎤</button></div>`;
+      <div class="with-mic" style="margin-top:8px"><textarea name="comments" placeholder="Customer comments / recommendations" style="min-height:52px">${w.comments}</textarea><button type="button" class="mic" data-mic="comments">${MIC}</button></div>`;
   },
   signoff: j => {
     const w = j.workDone;

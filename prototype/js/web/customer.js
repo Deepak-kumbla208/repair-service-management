@@ -80,7 +80,7 @@ export function renderCustomerForm(el, id) {
     });
   }
   function paintContacts() {
-    $('#contacts', el).innerHTML = String(html`<div class="tbl-wrap" style="max-height:none"><table class="tbl edit"><thead><tr><th>Name</th><th>Designation</th><th>Mobile</th><th>Email</th><th>Primary</th>${editable ? html`<th></th>` : ''}</tr></thead><tbody>
+    $('#contacts', el).innerHTML = String(html`<div class="tbl-wrap" style="max-height:none"><table class="tbl edit"><thead><tr><th>Name <span class="req">*</span></th><th>Designation</th><th>Mobile <span class="req">*</span></th><th>Email</th><th>Primary</th>${editable ? html`<th></th>` : ''}</tr></thead><tbody>
       ${draft.contacts.map((c, i) => html`<tr data-i="${i}">${['name', 'designation', 'mobile', 'email'].map(k => html`<td><input data-f="${k}" value="${c[k]}" ${ro}></td>`)}
         <td><input type="radio" name="primary" data-f="primary" ${c.primary ? 'checked' : ''} ${editable ? '' : 'disabled'}></td>
         ${editable ? html`<td>${draft.contacts.length > 1 ? html`<button type="button" class="btn link small" data-rmc="${i}">Remove</button>` : ''}</td>` : ''}</tr>`)}
@@ -159,7 +159,7 @@ export function renderCustomerForm(el, id) {
     syncContacts(); syncSites();
     if (!markInvalid($('#head', el), ['code', 'name'].filter(n => !head[n]))) { toast('Fill in the required fields', 'bad'); return; }
     if (store.list('customers').some(c => c.id !== rec?.id && c.code.toLowerCase() === head.code.toLowerCase())) { markInvalid($('#head', el), ['code'], 'This code is already used'); return; }
-    if (draft.contacts.some(c => !c.name)) { toast('Every contact needs a name', 'bad'); return; }
+    if (draft.contacts.some(c => !c.name || !c.mobile)) { toast('Every contact needs a name and a mobile', 'bad'); return; }
     if (draft.sites.some(s => !s.name || !s.zoneId)) { toast('Every site needs a name and a zone', 'bad'); return; }
     const dups = [head, ...draft.contacts].flatMap(p => findDuplicates({ mobile: p.phone || p.mobile, email: p.email }, rec?.id));
     $('#dup', el).innerHTML = String(dups.length ? html`<div class="note warn" style="margin-bottom:10px">Saved, but please check: ${[...new Set(dups.map(d => `${d.customer.name} (${d.customer.code}, ${d.reason})`))].join('; ')}</div>` : '');

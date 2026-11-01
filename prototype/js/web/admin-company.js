@@ -1,9 +1,10 @@
-// Company Setup (Admin Setup): the company profile in the E2 layout. Left: the profile in line style. Right: the logo,
-// "Setup to finish", the letterhead of new documents (updates as you type) and the changes from the audit log.
+// Company Setup (Admin Setup), stacked: company, registration and contact in a full-width header, then payment
+// details, working week, data protection, the logo, "Setup to finish", the letterhead of new documents (a setup
+// sample that updates as you type, not a document preview) and the changes from the audit log.
 // Sent quotations, posted invoices and activated contracts keep the letterhead they were issued with (core/setup.js).
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, $$, toast, placeholderTag, fmtDateTime } from '../core/ui.js';
+import { html, $, $$, toast, placeholderTag, fmtDateTime, foldHeader } from '../core/ui.js';
 import { shrinkImage } from '../core/media.js';
 import { saveCompany, saveLogo, removeLogo, logoSrc, setupToFinish, hasPostedInvoices, LOCKED_ONCE_POSTED, DAY_NAMES, fmtHours } from '../core/setup.js';
 import { pageHead } from './shell.js';
@@ -43,35 +44,34 @@ export function renderCompanySetup(el) {
   el.innerHTML = String(html`<div class="page">
     ${pageHead({ crumb: 'Admin Setup', title: 'Company Setup', sub: `${c.name} · changes apply to new documents`,
       actions: edit ? html`<button class="btn primary" id="save">Save</button>` : '' })}
-    <div class="e2">
-      <form class="props form-lines" id="cf" onsubmit="return false">
+    <form class="stack" id="cf" onsubmit="return false">
+      ${foldHeader({ title: 'Company, registration & contact', open: true, body: html`<div class="fold-cols form-lines"><div>
         <div class="form-sec">Company</div>
         ${line('name', 'Company name')}
         <div class="field"><label>Code</label><input type="text" value="${c.code}" readonly><div class="hint">Fixed for the company</div></div>
         ${line('country', 'Country', { lock: locked, hint: locked ? 'Locked: this company has posted invoices' : '' })}
         ${line('currency', 'Currency', { lock: locked })}
-        <div class="form-sec">Registration and tax</div>
+        </div><div><div class="form-sec">Registration and tax</div>
         ${line('regLabel', 'Registration label')}${line('regNo', 'Registration no.', { tag: ph('regNo') })}
         <div class="field"><label>Charges tax</label><span class="chips">${[['true', 'Yes'], ['false', 'No']].map(([v, l]) => html`<label class="chip"><input type="radio" name="chargesTax" value="${v}" ${String(!!c.chargesTax) === v ? 'checked' : ''} ${edit ? '' : 'disabled'}><span>${l}</span></label>`)}</span>
           <div class="hint">New estimates take the change; drafts keep their tax</div></div>
         ${line('taxLabel', 'Tax label')}${line('taxRegLabel', 'Tax number label')}${line('taxRegNo', 'Tax number', { tag: ph('taxRegNo') })}
         <div class="field"><label for="c-tax">Default tax code</label><select id="c-tax" name="defaultTaxCode" ${edit ? '' : 'disabled'}>${taxes.map(t => html`<option value="${t.code}" ${t.code === c.defaultTaxCode ? 'selected' : ''}>${t.code} · ${t.name}</option>`)}</select><div class="hint">From the Tax master</div></div>
-        <div class="form-sec">Contact</div>
-        ${line('address', 'Address')}${line('tel', 'Tel')}${line('mobile', 'Mobile')}${line('email', 'Email')}
-        <div class="form-sec">Payment details (on invoices)</div>
-        ${line('bank', 'Bank', { tag: ph('bank') })}${line('payNow', 'PayNow', { tag: ph('payNow') })}
-        <div class="form-sec">Working week</div>
+        </div><div><div class="form-sec">Contact</div>
+        ${line('address', 'Address')}${line('tel', 'Tel')}${line('mobile', 'Mobile')}${line('email', 'Email')}</div>
+      </div>` })}
+      <div class="card"><div class="card-head"><h2>Payment details (on invoices)</h2></div><div class="form-lines fcols">
+        ${line('bank', 'Bank', { tag: ph('bank') })}${line('payNow', 'PayNow', { tag: ph('payNow') })}</div></div>
+      <div class="card"><div class="card-head"><h2>Working week</h2></div><div class="form-lines fcols">
         <div class="field"><label>Working days</label><span class="chips">${[1, 2, 3, 4, 5, 6, 0].map(d => html`<label class="chip"><input type="checkbox" name="wd${d}" ${ww.days.includes(d) ? 'checked' : ''} ${edit ? '' : 'disabled'}><span>${DAY_NAMES[d]}</span></label>`)}</span></div>
         <div class="field"><label>Working hours</label><div class="ro"><input type="time" name="workStart" value="${fmtHours(ww.start)}" ${ro} style="width:100px"> to <input type="time" name="workEnd" value="${fmtHours(ww.end)}" ${ro} style="width:100px"></div>
-          <div class="hint">Scheduling suggestions and visit plans stay inside these days and hours</div></div>
-        <div class="form-sec">Data protection</div>
-        ${line('dpo', 'DPO contact', { hint: 'Data protection officer (PDPA)' })}
-      </form>
-      <div class="e2-main">
+          <div class="hint">Scheduling suggestions and visit plans stay inside these days and hours</div></div></div></div>
+      <div class="card"><div class="card-head"><h2>Data protection</h2></div><div class="form-lines fcols">
+        ${line('dpo', 'DPO contact', { hint: 'Data protection officer (PDPA)' })}</div></div>
         <div class="split" style="grid-template-columns:220px minmax(0,1fr)">
           <div class="card"><div class="card-head"><h2>Logo</h2></div>
             <div class="logo-box">${logoSrc(c) ? html`<img src="${logoSrc(c)}" alt="Logo">` : html`<span class="muted small">No logo: prints show an empty box</span>`}</div>
-            ${edit ? html`<div class="row" style="margin-top:8px"><label class="btn small">${c.logoId ? 'Replace' : 'Upload'}<input type="file" id="logo" accept="image/*" hidden></label>${c.logoId ? html`<button class="btn small link" id="noLogo">Remove</button>` : ''}</div>` : ''}</div>
+            ${edit ? html`<div class="row" style="margin-top:8px"><label class="btn small">${c.logoId ? 'Replace' : 'Upload'}<input type="file" id="logo" accept="image/*" hidden></label>${c.logoId ? html`<button type="button" class="btn small link" id="noLogo">Remove</button>` : ''}</div>` : ''}</div>
           <div class="card"><div class="card-head"><h2>Setup to finish</h2><span class="muted small">${todo.length ? 'dummy values still in use' : 'all set'}</span></div>
             <ul class="chk">${todo.length ? todo.map(t => html`<li><span class="wn">!</span><span>${t.text} <span class="muted">· ${t.where}</span></span></li>`) : html`<li><span class="ok">✓</span><span>No dummy values left</span></li>`}</ul></div>
         </div>
@@ -79,8 +79,7 @@ export function renderCompanySetup(el) {
           <div id="lh">${letterheadPreview(c)}</div>
           <div class="note small" style="margin-top:8px">Sent quotations, posted invoices and activated contracts keep the letterhead they were issued with.</div></div>
         ${changesCard(store.auditFor('companies', c.id).filter(a => a.action === 'update').reverse())}
-      </div>
-    </div></div>`);
+    </form></div>`);
 
   const form = $('#cf', el);
   const read = () => {

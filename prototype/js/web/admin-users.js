@@ -18,7 +18,7 @@ function userForm(u, edit) {
   const emps = store.list('employees', e => e.status !== 'Inactive');
   const roleId = u?.roleId || roles.find(r => r.code === 'TECH')?.id || roles[0]?.id;
   const ro = !edit || (u && isAdminRole(store.get('roles', u.roleId)) && u.id === auth.user().id);
-  return html`<form class="props form-lines" id="uf" onsubmit="return false">
+  return html`<form class="card form-lines fcols" id="uf" onsubmit="return false">
     <div class="form-sec">${u ? `User · ${u.name}` : 'New user'}</div>
     <div class="field"><label for="u-name">Name <span class="req">*</span></label><input type="text" id="u-name" name="name" value="${u?.name || ''}" ${!edit ? 'readonly' : ''}></div>
     <div class="field"><label for="u-role">Role <span class="req">*</span></label><select id="u-role" name="roleId" ${ro ? 'disabled' : ''}>${roles.map(r => html`<option value="${r.id}" ${r.id === roleId ? 'selected' : ''}>${r.name}</option>`)}</select>
@@ -45,7 +45,7 @@ function movingCard(m) {
 function roleForm(r, edit) {
   const roles = store.list('roles');
   const locked = isAdminRole(r);
-  return html`<form class="props form-lines" id="rf" onsubmit="return false">
+  return html`<form class="card form-lines fcols" id="rf" onsubmit="return false">
     <div class="form-sec">${r ? `Role · ${r.name}` : 'New role'}</div>
     <div class="field"><label for="r-code">Code <span class="req">*</span></label><input type="text" id="r-code" name="code" value="${r?.code || ''}" ${!edit || locked ? 'readonly' : ''}></div>
     <div class="field"><label for="r-name">Role <span class="req">*</span></label><input type="text" id="r-name" name="name" value="${r?.name || ''}" ${!edit ? 'readonly' : ''}></div>
@@ -69,9 +69,7 @@ export function renderUserRole(el) {
   el.innerHTML = String(html`<div class="page">
     ${pageHead({ crumb: 'Admin Setup', title: 'User Role', sub: `${auth.company().name} · ${users.length} users · ${roles.length} roles` })}
     <div class="etabs"><button data-tab="users" class="${tab === 'users' ? 'on' : ''}">Users (${users.length})</button><button data-tab="roles" class="${tab === 'roles' ? 'on' : ''}">Roles (${roles.length})</button></div>
-    <div class="e2">
-      ${tab === 'users' ? userForm(u, edit) : roleForm(r, edit)}
-      <div class="e2-main">
+    <div class="stack">
         ${tab === 'users' ? html`${state.moving ? movingCard(state.moving) : ''}
           <div class="card"><table class="tbl"><thead><tr><th>User</th><th>Role</th><th>Employee</th><th>Works on</th><th>Status</th></tr></thead><tbody>
             ${users.map(x => { const e = x.employeeId ? store.get('employees', x.employeeId) : null; return html`<tr class="click ${x.id === state.userId ? 'sel' : ''}" data-user="${x.id}">
@@ -81,8 +79,8 @@ export function renderUserRole(el) {
             ${roles.map(x => html`<tr class="click ${x.id === state.roleId ? 'sel' : ''}" data-role="${x.id}"><td>${x.code}</td><td>${x.name}${isAdminRole(x) ? ' 🔒' : ''}</td><td class="wrap">${x.description}</td>
               <td>${DASHBOARDS.find(d => d.value === x.dashboard)?.label || '—'}</td><td class="num">${users.filter(y => y.roleId === x.id && y.status !== 'Inactive').length}</td><td>${pill(x.status || 'Active', x.status === 'Inactive' ? '' : 'green')}</td></tr>`)}
           </tbody></table><p class="mini-note">"+ New role" copies the menu access of a role you pick; a role in use can be made inactive only when no active user has it.</p></div>`}
+        ${tab === 'users' ? userForm(u, edit) : roleForm(r, edit)}
         ${changesCard(audit)}
-      </div>
     </div></div>`);
 
   const hints = () => {

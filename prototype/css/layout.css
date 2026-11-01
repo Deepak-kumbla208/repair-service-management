@@ -113,3 +113,18 @@ kbd {
 .sidebar.collapsed .side-item .ic { width: auto; font-size: 15px; }
 .sidebar.collapsed .lbl, .sidebar.collapsed .soon, .sidebar.collapsed .side-head { display: none; }
 .sidebar.collapsed .side-group { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(181, 212, 244, .2); }
+
+/* ---------- Entry pages (team lead, 1 Nov 2026): a full-width header that folds to one line, then the sections
+   one below another, Next step last. No document preview beside the form: Print shows it. ---------- */
+.stack > .card, .stack > details.card { margin: 0 0 10px; }
+details.fold > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary::before { content: '▸'; color: var(--blue-600); width: 10px; flex: none; }
+details.fold[open] > summary::before { content: '▾'; }
+.fold-t { font-weight: 600; color: var(--navy-900); font-size: 14px; white-space: nowrap; }
+.fold-s { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+details.fold[open] .fold-s { display: none; }
+.fold-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0 30px; margin-top: 4px; }
+.fcols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0 30px; }
+.fcols > .form-sec, .fcols > .card-head, .fcols > .row, .fcols > p { grid-column: 1 / -1; }
+.stack > div:not(.split) > .card + .card { margin-top: 10px; }

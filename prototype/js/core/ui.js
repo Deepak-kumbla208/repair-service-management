@@ -107,6 +107,30 @@ export function tiles(list, activeKey, cls = 'tiles') {
 
 // ---------- Form fields ----------
 // f: {name, label, type, value, options, required, readonly, hint, cls, placeholder, mic, list, step}
+// The header of an entry page: customer, site and document details in one full-width card that folds to a summary
+// line (the sections follow one below another). Forms open it; a saved record shows it folded. With an id, the
+// reader's choice is kept for that record while browsing.
+export function foldHeader({ id = '', title, summary = '', body, open = false }) {
+  let kept = null;
+  try { kept = id ? sessionStorage.getItem(`rsmFold.${id}`) : null; } catch { /* storage blocked */ }
+  const isOpen = kept === null ? open : kept === '1';
+  return html`<details class="card fold" ${id ? raw(`data-fold="${esc(id)}" data-fold-default="${open ? '1' : '0'}"`) : ''} ${isOpen ? raw('open') : ''}><summary><span class="fold-t">${title}</span><span class="fold-s">${summary}</span></summary>${body}</details>`;
+}
+// Browsers also fire "toggle" when a header is drawn open, so only a state other than the default is kept.
+if (typeof document !== 'undefined') {
+  document.addEventListener('toggle', e => {
+    const d = e.target?.dataset;
+    if (!d?.fold) return;
+    try {
+      if (e.target.open === (d.foldDefault === '1')) sessionStorage.removeItem(`rsmFold.${d.fold}`);
+      else sessionStorage.setItem(`rsmFold.${d.fold}`, e.target.open ? '1' : '0');
+    } catch { /* storage blocked */ }
+  }, true);
+}
+
+// Voice input button icon: a plain microphone, the same on every device (the emoji is drawn differently by each).
+export const MIC = raw('<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>');
+
 export function field(f) {
   const v = f.value ?? '';
   const common = html`name="${f.name}" id="f-${f.name}" ${f.readonly ? raw('readonly') : ''} ${f.required ? raw('required') : ''} ${f.placeholder ? raw(`placeholder="${esc(f.placeholder)}"`) : ''}`;
@@ -131,7 +155,7 @@ export function field(f) {
     default:
       input = html`<input type="${f.type || 'text'}" ${common} value="${v}" ${f.step ? raw(`step="${f.step}"`) : ''} ${f.list ? raw(`list="${esc(f.list)}"`) : ''}>`;
   }
-  if (f.mic) input = html`<div class="with-mic">${input}<button type="button" class="mic" data-mic="${f.name}" title="Voice input">🎤</button></div>`;
+  if (f.mic) input = html`<div class="with-mic">${input}<button type="button" class="mic" data-mic="${f.name}" title="Voice input">${MIC}</button></div>`;
   return html`<div class="field ${f.cls || ''}">
     ${f.label ? html`<label for="f-${f.name}">${f.label}${f.required ? html` <span class="req">*</span>` : ''}${f.tag ? html` ${f.tag}` : ''}</label>` : ''}
     ${input}
@@ -163,6 +187,7 @@ export function markInvalid(root, names, msg = 'Required') {
   names.forEach(n => {
     const box = $(`[name="${n}"]`, root)?.closest('.field');
     if (!box) return;
+    box.closest('details:not([open])')?.setAttribute('open', '');
     box.classList.add('invalid');
     box.insertAdjacentHTML('beforeend', `<div class="err">${esc(msg)}</div>`);
   });

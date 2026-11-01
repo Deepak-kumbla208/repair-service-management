@@ -1,13 +1,12 @@
-// Invoices on the web: the list, and the invoice page (properties and payments on the left, the tax-invoice print on
-// the right). A draft gets its number when posted; flagged lines (not done on site) can be removed before posting.
+// Invoices on the web: the list, and the invoice page, stacked: invoice, customer and money in a header that folds to
+// one line, then the lines, payments and follow-ups (Print shows the tax invoice). A draft gets its number when posted; flagged lines (not done on site) can be removed before posting.
 // The "Record payment" dialog is shared with the Payment Collection page.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, fmtDate, pill, toast, openModal, readForm, chipGroup, confirmBox, dateInput } from '../core/ui.js';
+import { html, $, fmtDate, pill, toast, openModal, readForm, chipGroup, confirmBox, dateInput, foldHeader, fmtNum } from '../core/ui.js';
 import { vsLabel, vsOptions } from '../core/lookups.js';
 import { saveBlob } from '../core/media.js';
 import { canEditInvoice, canEditRows, postInvoice, removeRow, cancelInvoice, setRowAmount, balanceOf, paidAmount, paymentStatus, paymentsFor, recordPayment, followUpsFor, addFollowUp } from '../core/billing.js';
-import { invoiceSheet } from './print-docs.js';
 import { trailHtml } from './doc-trail.js';
 import { renderDocList } from './doc-list.js';
 import { render } from '../app.js';
@@ -91,22 +90,30 @@ export function renderInvoice(el, id) {
     </div>
     ${inv.status === 'Draft' && (inv.flagNote || inv.rows.some(r => r.flag)) ? html`<div class="note warn" style="margin-bottom:10px">Check before posting: ${inv.flagNote || 'lines marked not fully done on the Work Done form are flagged below.'}</div>` : ''}
     ${trailHtml(inv.enquiryId, inv.id)}
-    <div class="s3">
-      <div>
-        <div class="card form-lines">
-          <div class="form-sec">Invoice</div>
-          ${row('Invoice No.', inv.no || 'Given when posted (no gaps in the series)')}${row('Date', fmtDate(inv.date))}${row('Due date', fmtDate(inv.dueDate))}
+    <div class="stack">
+      ${foldHeader({ id: `inv-${inv.id}`, title: 'Invoice & customer details',
+        summary: [inv.no || 'Draft', fmtDate(inv.date), `due ${fmtDate(inv.dueDate)}`, inv.customer, inv.contact, inv.phone, inv.site].filter(Boolean).join(' · '),
+        body: html`<div class="fold-cols form-lines">
+          <div><div class="form-sec">Invoice</div>
+          ${row('Invoice No.', inv.no || 'Given when posted (no gaps in the series)')}${row('Date', fmtDate(inv.date))}${row('Due date', fmtDate(inv.dueDate))}${row('Payment Term', vsLabel('PAYMENT_TERMS', inv.paymentTerm))}</div>
+          <div><div class="form-sec">Customer</div>
+          ${row('Customer', inv.customer)}${row('Contact', [inv.contact, inv.phone].filter(Boolean).join(' · '))}${row('Billing Address', inv.billingAddress)}${inv.site ? row('Site', inv.site) : ''}</div>
+          <div><div class="form-sec">Money</div>
           ${row('Total', `${company.currency} ${m2(inv.total)}${inv.tax ? ` incl. ${inv.taxLabel} ${m2(inv.tax)}` : ''}`)}
-          ${inv.status === 'Posted' ? html`${row('Paid', m2(paidAmount(inv)))}${row('Balance', html`<b>${m2(balanceOf(inv))}</b>`)}` : ''}
-          <div class="form-sec">Lines</div>
-          ${inv.rows.map((r, i) => html`<div class="field"><div class="field-label">Line ${i + 1}</div><div class="ro">${r.description} · <b>${m2(r.amount)}</b>
+          ${inv.status === 'Posted' ? html`${row('Paid', m2(paidAmount(inv)))}${row('Balance', html`<b>${m2(balanceOf(inv))}</b>`)}` : ''}</div>
+        </div>` })}
+      <div class="card"><div class="card-head"><h2>Lines</h2></div>
+        <table class="tbl"><thead><tr><th style="width:30px">#</th><th>Description</th><th class="num" style="width:60px">Qty</th><th style="width:60px">Unit</th><th class="num" style="width:110px">Rate (${company.currency})</th><th class="num" style="width:120px">Amount (${company.currency})</th></tr></thead><tbody>
+          ${inv.rows.map((r, i) => html`<tr><td>${i + 1}</td><td class="wrap">${r.description}
             ${r.flag ? html`<br><span class="tag">${r.flag}</span>${edit && inv.rows.length > 1 ? html` <button class="btn link small" data-rm="${i}">Remove this line</button>` : ''}` : ''}
-            ${edit && (r.flag || inv.flagNote) ? html` <button class="btn link small" data-amt="${i}">Change amount</button>` : ''}${r.note ? html`<br><span class="small muted">Changed: ${r.note}</span>` : ''}</div></div>`)}
-          ${pays.length ? html`<div class="form-sec">Payments</div>${pays.map(p => row(p.no, `${fmtDate(p.date)} · ${vsLabel('PAYMENT_METHOD', p.method)} · ${m2(p.amount)}${p.reference ? ` · ${p.reference}` : ''}${p.via === 'phone' ? ' · collected on site' : ''}`))}` : ''}
-          ${fus.length ? html`<div class="form-sec">Follow-ups</div>${fus.map(f => row(fmtDate(f.at), `${f.method} · ${f.note}${f.nextDate ? ` · next ${fmtDate(f.nextDate)}` : ''} · ${auth.userName(f.by)}`))}` : ''}
-        </div>
-      </div>
-      <div class="preview"><div class="preview-bar"><span>Print preview · A4</span></div>${invoiceSheet(inv, company)}</div>
+            ${edit && (r.flag || inv.flagNote) ? html` <button class="btn link small" data-amt="${i}">Change amount</button>` : ''}${r.note ? html`<br><span class="small muted">Changed: ${r.note}</span>` : ''}</td>
+            <td class="num">${fmtNum(r.qty)}</td><td>${r.unit}</td><td class="num">${m2(r.rate)}</td><td class="num">${m2(r.amount)}</td></tr>`)}
+          <tr class="sum"><td colspan="5" class="num">Total</td><td class="num">${m2(inv.subtotal)}</td></tr>
+          ${inv.taxRate || inv.tax ? html`<tr><td colspan="5" class="num">${inv.taxLabel} ${fmtNum(inv.taxRate)} %</td><td class="num">${m2(inv.tax)}</td></tr>` : ''}
+          <tr class="sum"><td colspan="5" class="num"><b>Total incl. ${inv.taxLabel || 'tax'}</b></td><td class="num"><b>${m2(inv.total)}</b></td></tr>
+        </tbody></table></div>
+      ${pays.length ? html`<div class="card form-lines"><div class="card-head"><h2>Payments</h2></div>${pays.map(p => row(p.no, `${fmtDate(p.date)} · ${vsLabel('PAYMENT_METHOD', p.method)} · ${m2(p.amount)}${p.reference ? ` · ${p.reference}` : ''}${p.via === 'phone' ? ' · collected on site' : ''}`))}</div>` : ''}
+      ${fus.length ? html`<div class="card form-lines"><div class="card-head"><h2>Follow-ups</h2></div>${fus.map(f => row(fmtDate(f.at), `${f.method} · ${f.note}${f.nextDate ? ` · next ${fmtDate(f.nextDate)}` : ''} · ${auth.userName(f.by)}`))}</div>` : ''}
     </div>
   </div>`);
   $('#post', el)?.addEventListener('click', async () => {

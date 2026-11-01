@@ -5,9 +5,10 @@
 import * as store from './store.js';
 import * as auth from './auth.js';
 import { termTexts, letterhead } from './setup.js';
-import { taxTotals, termDays, round2, ageBucket } from './costing.js';
+import { taxTotals, termDays, round2, ageBucket, qtyRate } from './costing.js';
 import { maybeClose } from './closure.js';
 import { maybeCloseContract } from './contracts.js';
+import { rowText } from './enquiries.js';
 
 const pad = n => String(n).padStart(2, '0');
 const dstr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -129,7 +130,13 @@ export function setRowAmount(invId, index, amount, reason) {
   const inv = store.get('invoices', invId);
   if (inv.status !== 'Draft') return;
   const old = inv.rows[index];
-  const rows = inv.rows.map((r, i) => (i === index ? { ...r, rate: round2(amount), amount: round2(amount), note: reason } : r));
+  // Qty × Rate stays equal to the amount; a row that can no longer split keeps its count in the text ("2 × …").
+  const rows = inv.rows.map((r, i) => {
+    if (i !== index) return r;
+    const split = qtyRate(amount, r.qty);
+    const description = split.qty === 1 && r.qty > 1 ? rowText(r) : r.description;
+    return { ...r, ...split, unit: split.qty === 1 && r.qty > 1 ? 'Lot' : r.unit, description, amount: round2(amount), note: reason };
+  });
   store.update('invoices', invId, { rows, ...taxTotals(rows.reduce((t, r) => t + r.amount, 0), inv.taxRate) }, `Line "${old.description.slice(0, 40)}" changed from ${old.amount.toFixed(2)} to ${round2(amount).toFixed(2)}: ${reason}`);
 }
 

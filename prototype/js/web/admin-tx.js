@@ -106,14 +106,12 @@ export function renderTxSetup(el) {
   el.innerHTML = String(html`<div class="page">
     ${pageHead({ crumb: 'Admin Setup › Transaction Setup', title: type.label, sub: `${c.name} · applies to the next document${type.note ? ` · ${type.note}` : ''}`, actions: ro ? '' : html`<button class="btn primary" id="save">Save</button>` })}
     <div class="etabs">${TYPES.map(t => html`<button data-tab="${t.key}" class="${t.key === key ? 'on' : ''}">${t.label}</button>`)}</div>
-    <div class="e2">
-      <form class="props form-lines" id="tf" onsubmit="return false">${seriesFields(type, ro)}${defaultsFields(type, ro)}
+    <div class="stack">
+      <form class="card form-lines" id="tf" onsubmit="return false"><div class="card-head"><h2>Settings</h2></div><div class="fcols"><div>${seriesFields(type, ro)}</div><div>${defaultsFields(type, ro)}</div></div>
         ${!type.series && !defaultsFields(type, ro) ? html`<div class="muted small" style="padding:10px 0">Nothing to set here.</div>` : ''}</form>
-      <div class="e2-main">
-        <div id="terms">${Object.entries(terms).map(([d, codes]) => termsCard(d, codes, ro))}</div>
-        ${type.rules ? rulesCard(type.rules) : ''}
-        ${changesCard(audit)}
-      </div>
+      <div id="terms">${Object.entries(terms).map(([d, codes]) => termsCard(d, codes, ro))}</div>
+      ${type.rules ? rulesCard(type.rules) : ''}
+      ${changesCard(audit)}
     </div></div>`);
 
   const form = $('#tf', el);

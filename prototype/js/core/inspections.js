@@ -3,7 +3,7 @@
 import * as store from './store.js';
 import { technicians, empName, findSite } from './lookups.js';
 import { makeShutter, addShutters } from './customers.js';
-import { cleanLines } from './enquiries.js';
+import { cleanLines, lineText } from './enquiries.js';
 
 const sameDay = (a, b) => !!a && !!b && new Date(a).toDateString() === new Date(b).toDateString();
 const pad = n => String(n).padStart(2, '0');
@@ -30,15 +30,13 @@ export function assignTechnician(inspId, { technicianId, visitAt, confirmedBy, n
   if (['Waiting for inspection', 'Inspection assigned'].includes(enq.status)) store.setStatus('enquiries', enq.id, 'Inspection assigned', name);
 }
 
-// Item lines that name a material become rows of section 5 (Materials / spare parts).
+// Product lines that name a part or material become rows of section 5 (Materials / spare parts).
 function materialRows(enq) {
-  return (enq.lines || []).filter(l => l.itemRef?.startsWith('itm:')).map(l => {
+  return cleanLines(enq.lines).filter(l => l.itemRef.startsWith('itm:')).map(l => {
     const it = store.get('items', l.itemRef.slice(4));
-    return { name: l.itemName, spec: it?.spec || '', qty: l.qty || 1, unit: it?.unit || '', remarks: l.description || '', itemId: it?.id || null, shutterKey: '' };
+    return { name: l.itemName, spec: it?.spec || '', qty: l.qty || 1, unit: l.unit || it?.unit || '', remarks: l.description || '', itemId: it?.id || null, shutterKey: '' };
   });
 }
-// Each enquiry line as text, e.g. "2 × Rolling shutter: RS-1 and RS-2 very noisy".
-const lineText = l => [l.itemName ? `${l.qty || 1} × ${l.itemName}` : '', l.description].filter(Boolean).join(': ');
 // Customer Complaint / Findings: one line per enquiry line, numbered when there are several.
 function findingsFrom(enq) {
   const lines = cleanLines(enq.lines).map(lineText);
@@ -72,7 +70,7 @@ function markOnSite(insp, rep) {
   store.setStatus('enquiries', insp.enquiryId, 'Report in progress', rep.no);
 }
 
-// Start (or reopen) the report, pre-filled from the enquiry, its item lines, the customer, the site and the
+// Start (or reopen) the report, pre-filled from the enquiry, its product lines, the customer, the site and the
 // assignment. fromOffice: opened on the web before the visit, so statuses and Time In are left alone.
 export function startReport(inspId, { fromOffice = false } = {}) {
   const insp = store.get('inspections', inspId);

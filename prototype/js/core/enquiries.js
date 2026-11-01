@@ -5,6 +5,7 @@ import * as store from './store.js';
 import { quickCreate, addSite } from './customers.js';
 import { assignTechnician } from './inspections.js';
 import { contractFor, contractProgress, invoicesOf } from './contracts.js';
+import { unitOf } from './lookups.js';
 
 export const ENQ_STATUSES = ['Waiting for inspection', 'Inspection assigned', 'Report in progress', 'Inspected', 'BOQ study', 'Waiting for estimate',
   'Estimating', 'Quotation in check', 'Quotation approved', 'Quoted', 'Won', 'Contract active', 'Completed', 'Closed', 'Lost', 'Cancelled'];
@@ -16,17 +17,22 @@ function firstStatus(type, needsInspection) {
   return type === 'REPAIR' ? 'Waiting for estimate' : 'BOQ study';
 }
 
-// Item lines are the Enquiry Description: "2 × Tension spring: RS-2 jammed; Check the back door".
-// lines: [{ itemRef, itemName, qty, description }]; a line may have no item.
+// Product lines are the Enquiry Description: "2 × Tension spring: RS-2 jammed; Check the back door".
+// lines: [{ itemRef, itemName, qty, unit, description }]; a line may have no product. The unit comes from the
+// product's master unless it was changed on the line.
 export const cleanLines = lines => (lines || []).filter(l => l.itemRef || (l.description || '').trim())
-  .map(l => ({ itemRef: l.itemRef || '', itemName: l.itemName || '', qty: l.itemRef ? (Number(l.qty) || 1) : null, description: (l.description || '').trim() }));
+  .map(l => ({ itemRef: l.itemRef || '', itemName: l.itemName || '', qty: l.itemRef ? (Number(l.qty) || 1) : null,
+    unit: l.itemRef ? (l.unit || unitOf(l.itemRef) || 'Nos') : '', description: (l.description || '').trim() }));
 
-export function composeDescription(lines) {
-  return cleanLines(lines).map(l => {
-    const item = l.itemName ? `${l.qty || 1} × ${l.itemName}` : '';
-    return [item, l.description].filter(Boolean).join(': ');
-  }).join('; ');
+// One line as text: "2 × Tension spring: Springs look worn"; a unit other than Nos is written out ("3 m Guide rail").
+export function lineText(l) {
+  const qty = l.qty || 1;
+  const item = l.itemName ? (l.unit && l.unit !== 'Nos' ? `${qty} ${l.unit} ${l.itemName}` : `${qty} × ${l.itemName}`) : '';
+  return [item, l.description].filter(Boolean).join(': ');
 }
+export const composeDescription = lines => cleanLines(lines).map(lineText).join('; ');
+// A priced row as one text: the count is put back when the row shows its own quantity ("2 × Tension spring: worn").
+export const rowText = r => (Number(r.qty) > 1 ? lineText({ itemName: r.description, qty: r.qty, unit: r.unit }) : r.description);
 
 function openInspection(enq) {
   const insp = store.insert('inspections', { enquiryId: enq.id, zoneId: enq.zoneId, technicianId: '', visitAt: null, confirmedBy: '', notes: '' },

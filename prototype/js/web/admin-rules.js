@@ -31,7 +31,7 @@ function valueInput(c) {
 
 function editor(d, edit) {
   const roles = approverRoles(d.docType);
-  return html`<form class="props form-lines" id="rf" onsubmit="return false">
+  return html`<form class="card form-lines fcols" id="rf" onsubmit="return false">
     <div class="form-sec">${d.id ? `Rule · ${d.code}` : 'New rule'}</div>
     <div class="field"><label for="r-code">Code <span class="req">*</span></label><input type="text" id="r-code" name="code" value="${d.code}" ${edit ? '' : 'readonly'}></div>
     <div class="field"><label>Applies to</label>${chipGroup('docType', Object.entries(DOC_TYPES).map(([value, x]) => ({ value, label: x.label })), d.docType, !edit || !!d.id)}
@@ -65,7 +65,7 @@ function testCard(d) {
   return html`<div class="card"><div class="card-head"><h2>Test a document</h2><select id="testDoc">${docs.map(x => html`<option value="${x.id}" ${x.id === doc.id ? 'selected' : ''}>${label(x)}</option>`)}</select></div>
     ${levels.length ? html`<div class="lvl">${levels.map((l, i) => html`${i ? html`<span class="arrow">→</span>` : ''}<div class="s"><span class="muted small">Level ${l.level}</span><b>${roleName(l.roleCode)}</b><span class="small">${l.rules.map(r => r.code).join(' + ')}</span></div>`)}</div>`
       : html`<div class="muted">No approval needed: no active rule matches.</div>`}
-    <p class="mini-note">With the rule on the left as it stands now: ${draftHits ? 'it applies to this document' : 'it does not apply to this document'}${facts.marginPct != null ? ` (margin on price ${facts.marginPct} %)` : ''}. Saving changes the next submissions only.</p></div>`;
+    <p class="mini-note">With the rule above as it stands now: ${draftHits ? 'it applies to this document' : 'it does not apply to this document'}${facts.marginPct != null ? ` (margin on price ${facts.marginPct} %)` : ''}. Saving changes the next submissions only.</p></div>`;
 }
 
 export function renderRules(el) {
@@ -83,16 +83,14 @@ export function renderRules(el) {
     ${pageHead({ crumb: 'Admin Setup', title: 'Authorization Workflow Master', sub: 'Approval rules · levels 1, 2, 3 and more · the same rules show on each Transaction Setup page',
       actions: edit ? html`<button class="btn primary" id="add">+ New rule</button>` : '' })}
     <div class="etabs"><button data-tab="all" class="${state.tab === 'all' ? 'on' : ''}">All (${rules.length})</button>${Object.entries(DOC_TYPES).map(([k, x]) => html`<button data-tab="${k}" class="${state.tab === k ? 'on' : ''}">${x.label} (${rules.filter(r => r.docType === k).length})</button>`)}</div>
-    <div class="e2">
-      ${editor(d, edit)}
-      <div class="e2-main">
+    <div class="stack">
         <div class="card"><table class="tbl"><thead><tr><th>Active</th><th>Code</th><th>Rule</th><th>Applies to</th><th class="num">Level</th><th>Approver</th></tr></thead><tbody>
           ${shown.map(r => html`<tr class="click ${r.id === d.id ? 'sel' : ''}" data-rule="${r.id}"><td>${r.active ? '✓' : html`<span class="muted">off</span>`}</td><td>${r.code}</td><td>${describeRule(r)}</td><td>${DOC_TYPES[r.docType]?.label || r.docType}</td><td class="num">${r.level}</td><td>${roleName(r.roleCode)}</td></tr>`)}
         </tbody></table><p class="mini-note">Rules on the same level become one task for that level's role. Nobody decides a task for a document they submitted.</p></div>
+        ${editor(d, edit)}
         ${warn.length ? html`<div class="note warn">${warn.map(r => html`<div>${r.code}: no active user has the role ${roleName(r.roleCode)}; its tasks wait for the Admin, who cannot decide documents they submitted. Add a user with this role in User Role.</div>`)}</div>` : ''}
         <div id="test">${testCard(d)}</div>
         ${changesCard(audit)}
-      </div>
     </div></div>`);
 
   const form = $('#rf', el);

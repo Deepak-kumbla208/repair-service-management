@@ -7,6 +7,7 @@ import { findSite, zones, productName, withCompany } from './lookups.js';
 import { summarize, summarizeAmc, shutterLabour, hourlyRate, otRate, round2 } from './costing.js';
 import { cancelTasksFor } from './workflow.js';
 import { amcPrefill, amcProblems, describe } from './amc-estimates.js';
+import { cleanLines, lineText as enquiryLineText } from './enquiries.js';
 
 const rid = () => store.uid('r_');
 const pad = n => String(n).padStart(2, '0');
@@ -59,22 +60,28 @@ export function prefill(enq, rep) {
       qty: 1, fault: s.finding || '', sizeCode: s.sizeCode, factor: Number(product?.factor) || 1, ...shutterLabour(size, product?.factor, 1) };
   });
 
-  // With no report, each enquiry item line becomes a line; a line naming a material brings its material row.
-  const enqLines = rep || fromFails ? [] : (enq.lines || []).map(l => ({ ...l, key: rid() }));
-  // Materials: the site report's section 5 (or the enquiry item lines that name a material).
-  const srcRows = fromFails ? fromFails.rows : rep ? rep.s5.rows : enqLines.filter(l => l.itemRef?.startsWith('itm:')).map(l => ({ itemId: l.itemRef.slice(4), name: l.itemName, qty: l.qty, remarks: l.description, lineKey: l.key }));
+  // With no report, each enquiry product line becomes a line; a line naming a part or material brings its row.
+  const enqLines = rep || fromFails ? [] : cleanLines(enq.lines).map(l => ({ ...l, key: rid() }));
+  // Materials: the site report's section 5 (or the enquiry lines that name a part or material).
+  const srcRows = fromFails ? fromFails.rows : rep ? rep.s5.rows : enqLines.filter(l => l.itemRef.startsWith('itm:')).map(l => ({ itemId: l.itemRef.slice(4), name: l.itemName, qty: l.qty, unit: l.unit, remarks: l.description, lineKey: l.key }));
   const one = shutters.length === 1 ? shutters[0].key : '';
   const materials = srcRows.filter(r => r.name).map(r => {
     const it = findItem(r.itemId, r.name);
     return { key: rid(), itemId: it?.id || '', name: it?.name || r.name, spec: r.spec || it?.spec || '', unit: r.unit || it?.unit || '', qty: Number(r.qty) || 1,
       wastage: Number(it?.wastage) || 0, rate: Number(it?.rate) || 0, leadDays: Number(it?.leadDays) || 0, placeholder: !!it?.placeholders?.includes('rate'), noRate: !it,
-      lineKey: r.lineKey || (shutters.some(s => s.key === r.shutterKey) ? r.shutterKey : one) };
+      lineKey: r.lineKey || (shutters.some(s => s.key === r.shutterKey) ? r.shutterKey : one), remarks: r.remarks || '' };
   });
 
-  // Lines: one per shutter (with no report, one per enquiry item line).
-  const lines = shutters.length
-    ? shutters.map(s => ({ key: s.key, tag: s.tag, description: lineText(s, materials.filter(m => m.lineKey === s.key)) }))
-    : enqLines.map(l => ({ key: l.key, tag: '', description: [l.itemName && `${l.qty || 1} × ${l.itemName}`, l.description].filter(Boolean).join(': ') }));
+  // Lines: one per shutter, plus one per part not fitted to a single shutter ("2 × Tension spring: worn"), so a part
+  // is never counted as a shared cost. With no report: one per enquiry product line. qty / unit show on the quotation.
+  // partKey: the material a part line is about, so a change to its qty or unit in the Materials tab follows it.
+  const partLines = shutters.length || rep || fromFails ? materials.filter(m => !m.lineKey).map(m => {
+    m.lineKey = m.key;
+    return { key: m.key, tag: '', qty: m.qty, unit: m.unit || 'Nos', partKey: m.key, description: enquiryLineText({ itemName: m.name, qty: m.qty, unit: m.unit, description: m.remarks }) };
+  }) : [];
+  const lines = shutters.length || partLines.length
+    ? [...shutters.map(s => ({ key: s.key, tag: s.tag, qty: 1, unit: 'Nos', description: lineText(s, materials.filter(m => m.lineKey === s.key)) })), ...partLines]
+    : enqLines.map(l => ({ key: l.key, tag: '', qty: l.qty || 1, unit: l.unit || 'Nos', partKey: materials.find(m => m.lineKey === l.key)?.key || '', description: enquiryLineText(l) }));
 
   // Labour: one row per shutter for the team, plus one for extra workers (L / XL). After hours → OT column.
   const labour = [];
@@ -126,6 +133,20 @@ function failedShutters(enq, site) {
   });
   const rows = unique.filter(f => f.itemId).map(f => ({ itemId: f.itemId, name: store.get('items', f.itemId)?.name || '', qty: f.qty || 1, shutterKey: f.shutterId }));
   return { shutters, rows };
+}
+
+// A part line ("2 × Tension spring: worn") follows its material when the Materials tab changes its qty, unit or item:
+// the line's qty and unit, and the count at the start of its text.
+export function syncPartLine(est, materialKey) {
+  const m = est.materials.find(x => x.key === materialKey);
+  const l = m && est.lines.find(x => x.partKey === m.key);
+  if (!l) return;
+  const count = (q, u) => (u && u !== 'Nos' ? `${q} ${u} ` : `${q} × `);
+  const was = count(l.qty || 1, l.unit);
+  // Text rewritten by hand (no count at the start) is left alone; the quotation then shows it as one lot.
+  const rest = l.description.startsWith(was) ? l.description.slice(was.length) : null;
+  Object.assign(l, { qty: Number(m.qty) || 1, unit: m.unit || 'Nos' });
+  if (rest !== null) l.description = `${count(l.qty, l.unit)}${m.name}${rest.includes(':') ? rest.slice(rest.indexOf(':')) : ''}`;
 }
 
 export const latestReport = enq => {

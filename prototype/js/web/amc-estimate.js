@@ -1,9 +1,9 @@
-// AMC / General Servicing estimate page ("E2" layout): customer, contract and costing on the left in line style, the
-// AMC Excel's tabs on the right. Pre-filled from each site's shutter register and the masters; changes save as you
+// AMC / General Servicing estimate page, stacked: customer and sites in a header that folds to one line, then the
+// contract and costing settings, the AMC Excel's tabs, and the revisions. Pre-filled from each site's shutter register and the masters; changes save as you
 // type. "Create quotation" makes the quotation (or its next revision) from this revision.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, $$, go, on, debounce, fmtNum, pill, toast, openModal, chipGroup, readForm } from '../core/ui.js';
+import { html, $, $$, go, on, debounce, fmtNum, pill, toast, openModal, chipGroup, readForm, foldHeader } from '../core/ui.js';
 import { vsOptions, zoneLabel, productName, findSite } from '../core/lookups.js';
 import { estimateSummary, canEdit, saveEstimate, reviseEstimate, estimateProblems, revisions, canRevise as mayRevise } from '../core/estimates.js';
 import { describe, addSiteTo, removeSiteFrom, setCovered, otherSites, isRenewal } from '../core/amc-estimates.js';
@@ -54,35 +54,39 @@ export function renderAmcEstimate(el, id) {
       <span class="grow"><b>Returned by ${auth.userName(est.returnNote.by)}</b> (quotation Rev ${est.returnNote.rev}): ${est.returnNote.comment}</span>
       ${canRevise ? html`<button class="btn small" id="revise2">Revise estimate</button>` : ''}</div>` : ''}
     ${trailHtml(enq.id, est.id)}
-    <div class="e2">
-      <div class="props form-lines" id="props"></div>
-      <div class="e2-main"><div class="card"><div id="kpi"></div>
+    <div class="stack">
+      ${foldHeader({ id: `est-${est.id}`, title: 'Customer & sites', open: ctx.editable,
+        summary: [est.header.customer, est.header.contact, est.header.phone, `${est.sites.length} site(s)`, `${est.no} Rev ${est.rev}`].filter(Boolean).join(' · '),
+        body: html`<div class="fold-cols form-lines">
+          <div><div class="form-sec">Customer</div>${row('Customer Name', est.header.customer)}${row('Contact Person', [est.header.contact, est.header.phone].filter(Boolean).join(' · '))}</div>
+          <div><div class="form-sec">Sites</div><div id="sitesBox"></div></div>
+        </div>` })}
+      <div class="card"><div class="card-head"><h2>${gs ? 'Servicing' : 'Contract'} and costing</h2></div><div class="form-lines fcols" id="props"></div></div>
+      <div class="card"><div class="card-head"><h2>Cost sheet</h2></div><div id="kpi"></div>
         <div class="etabs" id="tabs">${AMC_TABS.map(([k, label]) => html`<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${label}</button>`)}</div>
-        <div id="tab"></div></div></div>
+        <div id="tab"></div></div>
+      <div class="card"><div class="card-head"><h2>Revisions</h2></div><div class="form-lines fcols">
+        ${revs.map(r => { const rq = r.quotationId ? store.get('quotations', r.quotationId) : null; return row(`Rev ${r.rev}`, html`${r.id === est.id ? html`<b>this one</b>` : html`<a href="#/estimates/${r.id}">open</a>`} · ${r.status}${rq ? ` · ${rq.no} Rev ${rq.rev} ${rq.status}` : ''}`); })}</div></div>
     </div>
   </div>`);
 
   const sameVisits = () => { const v = [...new Set(est.sites.map(s => Number(s.visits)))]; return v.length === 1 ? v[0] : ''; };
   const paintProps = () => {
-    $('#props', el).innerHTML = String(html`
-      <div class="form-sec">Customer</div>
-      ${row('Customer Name', est.header.customer)}${row('Contact Person', [est.header.contact, est.header.phone].filter(Boolean).join(' · '))}
+    // Sites change from the Shutters tab (add, remove, covered shutters), so the header's list is repainted too.
+    $('#sitesBox', el).innerHTML = String(html`${est.sites.map((x, i) => row(`Site ${i + 1}`, html`${x.name} · <span class="zone-chip">${zoneLabel(x.zoneId).split(' ')[0] || '—'}</span> · ${x.typed ? 'typed counts' : `${x.shutterIds.length} shutters`}`))}`);
+    $('#props', el).innerHTML = String(html`<div>
       <div class="form-sec">${gs ? 'Servicing' : 'Contract'}</div>
       ${row('Type', `${gs ? 'General Servicing' : 'AMC'} (from the enquiry)`)}
       ${gs ? row('Visits', 'One visit, no contract') : html`
         ${ctx.editable ? html`<div class="field"><label>Period (months)</label><input type="number" step="1" data-h="periodMonths" value="${est.periodMonths}"></div>` : row('Period', `${est.periodMonths} months`)}
         <div class="field"><label>Visits per year</label>${chipGroup('visitsAll', VISITS, sameVisits(), !ctx.editable)}${sameVisits() === '' ? html`<div class="sub">Different per site (Shutters tab)</div>` : ''}</div>
-        <div class="field"><label>Billing</label>${chipGroup('billing', vsOptions('BILLING'), est.billing, !ctx.editable)}</div>`}
-      <div class="form-sec">Sites</div>
-      ${est.sites.map((x, i) => row(`Site ${i + 1}`, html`${x.name} · <span class="zone-chip">${zoneLabel(x.zoneId).split(' ')[0] || '—'}</span> · ${x.typed ? 'typed counts' : `${x.shutterIds.length} shutters`}`))}
-      <div class="form-sec">Costing</div>
+        <div class="field"><label>Billing</label>${chipGroup('billing', vsOptions('BILLING'), est.billing, !ctx.editable)}</div>`}</div>
+      <div><div class="form-sec">Costing</div>
       <div class="field"><label>Costing Level</label>${chipGroup('costingLevel', vsOptions('COSTING_LEVEL').map(o => (o.value === 'LINE' ? { ...o, label: 'Line (per site)' } : o)), est.costingLevel, !ctx.editable)}</div>
       ${row('Overheads', est.overheads.map(o => (o.basis === 'FIXED' ? `${m2(o.value)} fixed` : `${fmtNum(o.value)} % of direct cost`)).join(' + '))}
       <div class="field"><label>Margin basis</label>${chipGroup('marginBasis', vsOptions('MARGIN_BASIS'), est.marginBasis, !ctx.editable)}</div>
       ${ctx.editable ? html`<div class="field"><label>Margin %</label><input type="number" step="any" data-h="marginPct" value="${est.marginPct}"></div>` : row('Margin %', `${fmtNum(est.marginPct)} %`)}
-      ${row('Tax', est.taxCode ? `${est.taxCode} · ${est.taxLabel} ${fmtNum(est.taxRate)} %` : 'No tax charged')}
-      <div class="form-sec">Revisions</div>
-      ${revs.map(r => { const rq = r.quotationId ? store.get('quotations', r.quotationId) : null; return row(`Rev ${r.rev}`, html`${r.id === est.id ? html`<b>this one</b>` : html`<a href="#/estimates/${r.id}">open</a>`} · ${r.status}${rq ? ` · ${rq.no} Rev ${rq.rev} ${rq.status}` : ''}`); })}`);
+      ${row('Tax', est.taxCode ? `${est.taxCode} · ${est.taxLabel} ${fmtNum(est.taxRate)} %` : 'No tax charged')}</div>`);
   };
   const paintKpi = () => { $('#kpi', el).innerHTML = String(kpiHtml(est, estimateSummary(est), cur)); };
   const paint = () => {

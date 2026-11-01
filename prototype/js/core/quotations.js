@@ -11,6 +11,7 @@ import { createJobFromQuotation, createGsJob, openTermTask } from './jobs.js';
 import { createContractFromQuotation } from './contracts.js';
 import { amcChecks } from './amc-estimates.js';
 import { letterhead, termsFor, termTexts } from './setup.js';
+import { qtyRate } from './costing.js';
 
 const isoDate = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 export const todayIso = () => isoDate(new Date());
@@ -27,10 +28,20 @@ function quoteTerms(docType = 'Quotation') {
   return { texts: termTexts(docType, { validity }), validity };
 }
 
+// A priced line: a line with a quantity ("2 × Tension spring: worn") shows that quantity and the rate of one when its
+// price splits into whole cents; otherwise one lot with the count kept in the text, so Qty × Rate = Amount.
+function lineRow(l, line) {
+  const q = Number(line?.qty) || 1, unit = line?.unit || 'Nos';
+  const pre = unit !== 'Nos' ? `${q} ${unit} ` : `${q} × `;
+  const split = q > 1 && l.description.startsWith(pre) ? qtyRate(l.rounded, q) : { qty: 1, rate: l.rounded };
+  return split.qty > 1 ? { description: l.description.slice(pre.length), qty: split.qty, unit, rate: split.rate, amount: l.rounded }
+    : { description: l.description, qty: 1, unit: q > 1 ? 'Lot' : 'Nos', rate: l.rounded, amount: l.rounded };
+}
+
 // Priced rows: Job costing = one row for the whole job; Line costing = one row per line (+ the shared line).
 export function rowsFromEstimate(est) {
   const s = estimateSummary(est);
-  if (est.costingLevel === 'LINE') return { s, rows: s.lines.map(l => ({ lineKey: l.key, description: l.description, qty: 1, unit: 'Nos', rate: l.rounded, amount: l.rounded, isShared: !!l.isShared })) };
+  if (est.costingLevel === 'LINE') return { s, rows: s.lines.map(l => ({ lineKey: l.key, ...lineRow(l, est.lines.find(x => x.key === l.key)), isShared: !!l.isShared })) };
   return { s, rows: [{ lineKey: '', description: est.header.description, qty: 1, unit: 'Nos', rate: s.subtotal, amount: s.subtotal }] };
 }
 

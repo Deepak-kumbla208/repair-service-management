@@ -86,8 +86,10 @@ textarea { min-height: 64px; resize: vertical; }
 .with-mic textarea, .with-mic input { padding-right: 34px; }
 .mic {
   position: absolute; right: 5px; top: 5px; width: 26px; height: 26px; border-radius: 50%;
-  border: 1px solid var(--line); background: var(--white); cursor: pointer; font-size: 13px;
+  border: 1px solid var(--line); background: var(--white); cursor: pointer; padding: 0; color: var(--ink-2);
+  display: inline-flex; align-items: center; justify-content: center;
 }
+.mic svg { display: block; pointer-events: none; }
 .mic.live { background: var(--red); color: var(--white); border-color: var(--red); }
 
 /* ---------- Cards ---------- */
@@ -268,38 +270,31 @@ label.chip:hover span { border-color: var(--blue-500); }
 label.chip input:checked + span { background: var(--blue-100); border-color: var(--blue-500); color: var(--navy-800); font-weight: 600; }
 label.chip input:focus-visible + span { box-shadow: 0 0 0 3px rgba(55, 138, 221, .25); }
 
-/* E2 layout: properties panel left, main content right */
-.e2 { display: grid; grid-template-columns: 410px minmax(0, 1fr); gap: 12px; align-items: start; }
-.props { background: var(--white); border: 1px solid var(--line); border-radius: 6px; padding: 4px 16px 14px; }
-.e2-main > .card + .card { margin-top: 10px; }
-@media (max-width: 1100px) { .e2 { grid-template-columns: 1fr; } }
 .page-meta { color: var(--muted); font-size: 12px; margin-top: 3px; }
 .rb { font-weight: 600; color: var(--ink); cursor: pointer; background: none; border: 0; padding: 0; font: inherit; }
 .rb .arr { color: var(--blue-600); font-size: 10px; margin-left: 3px; }
 .rb:hover .arr { color: var(--navy-800); }
 
-/* Item lines ("What the customer needs") */
+/* Product lines ("What the customer needs") */
 .lines { width: 100%; }
 .lines th { background: var(--blue-100); color: var(--navy-800); font-weight: 400; text-align: left; padding: 6px 7px; }
 .lines td { padding: 3px 6px; border-top: 1px solid var(--line-soft); vertical-align: middle; }
 .lines input, .lines select { border: 0; border-bottom: 1px solid #C9C7BE; border-radius: 0; padding: 5px 2px; background: transparent; width: 100%; }
 .lines input:focus, .lines select:focus { box-shadow: none; border-bottom: 2px solid var(--blue-500); background: var(--blue-50); }
 .lines .pmc { white-space: nowrap; width: 64px; }
+.pinfo { display: inline-block; margin-top: 3px; padding: 1px 6px; border-radius: 4px; background: var(--zebra); color: var(--muted); font-size: 11px; }
 .pm { display: inline-flex; width: 24px; height: 24px; border-radius: 50%; align-items: center; justify-content: center; border: 0; cursor: pointer; font-weight: 700; margin-right: 4px; }
 .pm.add { background: var(--green-bg); color: var(--green-ink); }
 .pm.rm { background: var(--red-bg); color: var(--red-ink); }
 
-/* Site Viewing Report editor (S3): edit left, live A4 preview right */
-.s3 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+/* Site Viewing Report sections (web): one below another, full width, one open at a time */
 .acc-head { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: 0; border-top: 1px solid var(--line-soft); padding: 9px 2px; font-weight: 600; color: var(--navy-900); cursor: pointer; text-align: left; }
 .acc-head:first-child { border-top: 0; }
 .acc-head .done { color: var(--green); font-weight: 400; font-size: 11px; }
+.acc-head .tw { color: var(--blue-600); width: 10px; flex: none; }
 .acc-body { padding: 2px 2px 12px; }
-.preview { background: #CFCDC5; border-radius: 6px; padding: 10px; position: sticky; top: 10px; max-height: calc(100vh - 140px); overflow: auto; }
-.preview-bar { font-size: 11px; color: var(--ink-2); margin-bottom: 6px; display: flex; justify-content: space-between; }
-.preview .sheet { margin: 0; zoom: .62; }
-.sheet .hi { background: #FFF3C4 !important; }
-.s3 .acc-body .grid.g2, .s3 .acc-body .grid.g3 { grid-template-columns: minmax(0, 1fr); }
+fieldset.ro-sec { border: 0; margin: 0; padding: 6px 0 0; min-width: 0; }
+fieldset.ro-sec .mic, fieldset.ro-sec .add-dashed, fieldset.ro-sec .pm { display: none; }
 
 /* ---------- Stretch 2: estimate, approvals, scheduling board, phone Work Done form ---------- */
 .etabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 0 0 10px; flex-wrap: wrap; }
@@ -325,9 +320,9 @@ label.chip input:focus-visible + span { box-shadow: 0 0 0 3px rgba(55, 138, 221,
 .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
 .task { border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; margin-bottom: 8px; cursor: pointer; background: var(--white); }
 .task.on { border: 2px solid var(--blue-500); background: var(--blue-50); padding: 8px 10px; }
-.apr { display: grid; grid-template-columns: 280px minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.apr { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 12px; align-items: start; }
 .apr-foot { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; }
-@media (max-width: 1250px) { .apr { grid-template-columns: 250px minmax(0, 1fr); } .apr > .preview { display: none; } }
+@media (max-width: 1100px) { .apr { grid-template-columns: 220px minmax(0, 1fr); } }
 .board { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 12px; align-items: start; }
 .jobc { border: 1px solid var(--line); border-radius: 8px; padding: 10px 11px; background: var(--white) !important; color: var(--ink) !important; margin-bottom: 9px; box-shadow: inset 3px 0 0 var(--zc, var(--blue-500)); cursor: pointer; }
 .jobc .l { display: flex; gap: 6px; align-items: baseline; margin-top: 3px; font-size: 12px; }

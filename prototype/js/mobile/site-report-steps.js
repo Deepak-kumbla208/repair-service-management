@@ -1,6 +1,6 @@
 // Phone: Site Viewing Report steps 2–7, one per section of the team lead's form.
 // Photos (step 2) are attached to the report but are not part of the printed form.
-import { html, $, $$, field, readForm, toast } from '../core/ui.js';
+import { html, $, $$, field, readForm, toast, MIC } from '../core/ui.js';
 import { zones, items } from '../core/lookups.js';
 import { manHours } from '../core/costing.js';
 import { removeBlob } from '../core/media.js';
@@ -24,7 +24,7 @@ const step2 = {
     ${(rep.asked || []).length ? html`<div class="m-section">What the customer asked for <span class="tag info">screen only</span></div>
       <p class="small muted" style="margin:0 0 6px">From the enquiry. Tick each one once you have checked it on site; add a note if needed.</p>
       <div class="asked">${rep.asked.map((a, i) => html`<div class="ask ${a.done ? 'on' : ''}"><label class="check"><input type="checkbox" name="ask_${i}" ${a.done ? 'checked' : ''}> <b>${a.n}.</b> ${a.text}</label>
-        <div class="with-mic"><input type="text" name="asknote_${i}" placeholder="Note (optional)" value="${a.note || ''}"><button type="button" class="mic" data-mic="asknote_${i}" title="Voice input">🎤</button></div></div>`)}</div>` : ''}
+        <div class="with-mic"><input type="text" name="asknote_${i}" placeholder="Note (optional)" value="${a.note || ''}"><button type="button" class="mic" data-mic="asknote_${i}" title="Voice input">${MIC}</button></div></div>`)}</div>` : ''}
     <div class="stack" style="margin-top:10px">
       ${field({ name: 's2_other', label: 'Other', value: rep.s2.other })}
       ${field({ name: 's2_description', label: 'Job Scope / Description of Work', type: 'textarea', value: rep.s2.description, mic: true })}

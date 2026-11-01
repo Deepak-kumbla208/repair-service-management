@@ -3,7 +3,7 @@
 // office's "Checked & filed" (flow step 9). The same check-list panel shows a General Servicing job's results.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, fmtDate, fmtDateTime, pill, toast, openModal, readForm } from '../core/ui.js';
+import { html, $, fmtDate, fmtDateTime, pill, toast, openModal, readForm, foldHeader } from '../core/ui.js';
 import { zoneLabel, zoneCode, empName } from '../core/lookups.js';
 import { hydrateImages } from '../core/media.js';
 import { refreshAmc, todayStr } from '../core/contracts.js';
@@ -77,20 +77,21 @@ export function renderVisit(el, id) {
     </div>
     ${v.status === 'Done' ? html`<div class="note" style="margin-bottom:10px">Signed by the customer on ${fmtDateTime(s.signedAt)}. Check the report and the photos, then file it (flow step 9).</div>` : ''}
     ${trailHtml(v.enquiryId, '')}
-    <div class="e2">
-      <div class="props form-lines">
+    <div class="stack">
+      ${foldHeader({ id: `vis-${v.id}`, title: 'Visit, customer & site',
+        summary: [`${c.no} visit ${v.n} of ${v.of}`, v.technicianId ? empName(v.technicianId) : '', v.customer, v.contact, v.phone, v.site, zoneLabel(v.zoneId)].filter(Boolean).join(' · '),
+        body: html`<div class="fold-cols form-lines"><div>
         <div class="form-sec">Visit</div>
         ${row('Contract', html`<a href="#/contracts/${c.id}">${c.no}</a> · ${c.status}`)}${row('Visit', `${v.n} of ${v.of}`)}${row('Planned', fmtDate(v.plannedDate))}
         ${row('Agreed with customer', v.confirmedDate ? `${fmtDate(v.confirmedDate)}${v.confirmedVia ? ` · ${v.confirmedVia}` : ''}` : '')}
         ${row('Technician', v.technicianId ? `${empName(v.technicianId)}${v.helperIds?.length ? ` + ${v.helperIds.map(empName).join(', ')}` : ''}` : '')}
         ${row('Hours', `${v.workHours} team-hours + ${v.travelHours} h travel${v.days > 1 ? ` · ${v.days} days` : ''}`)}
         ${row('Service report', s?.signedAt ? v.reportNo : '')}
-        <div class="form-sec">Customer</div>
+        </div><div><div class="form-sec">Customer</div>
         ${row('Customer', v.customer)}${row('Contact', [v.contact, v.phone].filter(Boolean).join(' · '))}
-        <div class="form-sec">Site</div>
+        </div><div><div class="form-sec">Site</div>
         ${row('Site', html`${v.site}<br><span class="small muted">${v.address}</span>`)}${row('Zone', zoneLabel(v.zoneId))}${v.access ? row('Access', v.access) : ''}
-      </div>
-      <div class="e2-main">
+      </div></div>` })}
         <div class="card"><div class="card-head"><h2>Inspection check list</h2><span class="muted small">${v.shutters.length} shutters · only failed and unchecked items are listed</span></div>
           ${v.steps?.checkInAt ? checklistHtml(v) : html`<div class="muted">The technician fills it on the phone after checking in. Covered shutters: ${v.shutters.map(x => x.tag).join(', ')}.</div>`}</div>
         ${(v.failures || []).length ? html`<div class="card"><div class="card-head"><h2>Failed items</h2></div>
@@ -104,7 +105,6 @@ export function renderVisit(el, id) {
         ${(v.photosBefore || []).length || (v.photosAfter || []).length ? html`<div class="card"><div class="card-head"><h2>Photos</h2></div>
           ${[['Before', v.photosBefore], ['After', v.photosAfter], ['Company stamp', s?.cust?.stampId ? [s.cust.stampId] : []]].filter(([, l]) => l?.length).map(([label, l]) => html`<div class="small muted" style="margin:4px 0">${label}</div><div class="photos">${l.map(p => html`<div class="photo"><img data-media="${p}" alt="${label} photo"></div>`)}</div>`)}</div>` : ''}
         <div class="card"><div class="card-head"><h2>Activity</h2></div>${activityHtml(v, 'amcVisits')}</div>
-      </div>
     </div>
   </div>`);
   hydrateImages(el);

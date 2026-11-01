@@ -1,15 +1,15 @@
-// Quotation page (like the "S3" report editor): the wording on the left in line style, the live A4 print on the right.
-// Prices come from the estimate. Submit sends it to the Approver; Send stays locked until it is approved;
+// Quotation page, stacked: customer and quotation details in a header that folds to one line, then the priced
+// lines, the wording, the counter-check, sent / accepted and the revisions. No preview beside it: Print shows the
+// document. Prices come from the estimate. Submit sends it to the Approver; Send stays locked until it is approved;
 // acceptance (method, PO, attachment) creates the job; partial acceptance makes the next revision.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, go, debounce, fmtDate, fmtDateTime, pill, toast, openModal, chipGroup, readForm, markInvalid, confirmBox } from '../core/ui.js';
+import { html, $, go, debounce, fmtDate, fmtDateTime, fmtNum, pill, toast, openModal, chipGroup, readForm, markInvalid, confirmBox, foldHeader } from '../core/ui.js';
 import { vsOptions, vsLabel } from '../core/lookups.js';
 import { saveBlob } from '../core/media.js';
 import { canEdit, saveWording, submitForCheck, canSend, markSent, accept, reject, reviseWording, refreshExpiry, quotationsOf, todayIso } from '../core/quotations.js';
 import { reviseEstimate } from '../core/estimates.js';
 import { openTaskFor } from '../core/workflow.js';
-import { quotationSheet } from './print-docs.js';
 import { openWorkflow } from './enquiry-view.js';
 import { trailHtml } from './doc-trail.js';
 
@@ -52,35 +52,41 @@ export function renderQuotation(el, id) {
       ${estOpen && auth.can('estimation', 'edit') ? html`<button class="btn small" id="revEst">Revise estimate</button>` : ''}</div>` : ''}
     ${q.status === 'Submitted' && task ? html`<div class="note" style="margin-bottom:10px">Waiting for the ${task.roleName} (level ${task.level}): ${task.rules.map(r => r.name).join(' + ')}. Send unlocks after approval.</div>` : ''}
     ${trailHtml(enq.id, q.id)}
-    <div class="s3">
-      <form class="card form-lines" id="f" onsubmit="return false">
-        <div class="form-sec">Quotation</div>
-        ${row('Quotation No.', `${q.no} · Rev ${q.rev}`)}
-        ${editable ? html`<div class="field"><label>Date</label><input type="date" name="date" value="${q.date}"></div>` : row('Date', fmtDate(q.date))}
-        ${row('Valid until', html`<span id="vu">${fmtDate(q.validUntil)}</span> <span class="muted">(${q.validDays} days)</span>`)}
-        <div class="field"><label>Payment Term</label>${chipGroup('paymentTerm', vsOptions('PAYMENT_TERMS'), q.paymentTerm, !editable)}</div>
-        ${q.amc && q.amc.jobType === 'AMC' ? row('Contract', `${q.amc.periodMonths} months · ${vsLabel('BILLING', q.amc.billing)} billing · ${q.amc.sites.reduce((t, x) => t + x.visits, 0)} visits a year`) : ''}
-        <div class="form-sec">Customer</div>
-        ${row('Customer Name', q.customer)}${row('Contact Person', [q.contact, q.phone].filter(Boolean).join(' · '))}${row('Site Location', q.site)}
-        <div class="form-sec">Wording</div>
-        ${q.costingLevel === 'JOB' ? (editable ? html`<div class="field"><label>Description</label><textarea name="description" rows="3">${q.description}</textarea></div>` : row('Description', q.description))
-          : q.rows.map((r, i) => (editable ? html`<div class="field"><label>Line ${i + 1}</label><input type="text" name="row_${i}" value="${r.description}"></div>` : row(`Line ${i + 1}`, r.description)))}
+    <form class="stack" id="f" onsubmit="return false">
+      ${foldHeader({ id: `q-${q.id}`, title: 'Customer & quotation details', open: editable,
+        summary: [q.customer, q.contact, q.phone, q.site, `${q.no} Rev ${q.rev}`, fmtDate(q.date), vsLabel('PAYMENT_TERMS', q.paymentTerm)].filter(Boolean).join(' · '),
+        body: html`<div class="fold-cols form-lines">
+          <div><div class="form-sec">Customer</div>${row('Customer Name', q.customer)}${row('Contact Person', [q.contact, q.phone].filter(Boolean).join(' · '))}${row('Site Location', q.site)}</div>
+          <div><div class="form-sec">Quotation</div>
+          ${row('Quotation No.', `${q.no} · Rev ${q.rev}`)}
+          ${editable ? html`<div class="field"><label>Date</label><input type="date" name="date" value="${q.date}"></div>` : row('Date', fmtDate(q.date))}
+          ${row('Valid until', html`<span id="vu">${fmtDate(q.validUntil)}</span> <span class="muted">(${q.validDays} days)</span>`)}
+          <div class="field"><label>Payment Term</label>${chipGroup('paymentTerm', vsOptions('PAYMENT_TERMS'), q.paymentTerm, !editable)}</div>
+          ${q.amc && q.amc.jobType === 'AMC' ? row('Contract', `${q.amc.periodMonths} months · ${vsLabel('BILLING', q.amc.billing)} billing · ${q.amc.sites.reduce((t, x) => t + x.visits, 0)} visits a year`) : ''}
+          ${row('Prepared by', auth.userName(q.preparedBy))}</div>
+        </div>` })}
+      <div class="card"><div class="card-head"><h2>Lines</h2><span class="muted small">${q.costingLevel === 'LINE' ? 'Line costing: a price per line' : 'Job costing: one price for the whole job'} · prices from ${q.estimateNo}</span></div>
+        <table class="tbl"><thead><tr><th style="width:30px">#</th><th>Description</th><th class="num" style="width:60px">Qty</th><th style="width:60px">Unit</th><th class="num" style="width:110px">Rate (${company.currency})</th><th class="num" style="width:120px">Amount (${company.currency})</th></tr></thead><tbody>
+          ${q.rows.map((r, i) => html`<tr><td>${i + 1}</td><td class="wrap">${!editable ? r.description : q.costingLevel === 'JOB'
+            ? html`<textarea name="description" rows="2" style="width:100%">${q.description}</textarea>` : html`<input type="text" name="row_${i}" value="${r.description}" style="width:100%">`}</td>
+            <td class="num">${fmtNum(r.qty)}</td><td>${r.unit}</td><td class="num">${m2(r.rate)}</td><td class="num">${m2(r.amount)}</td></tr>`)}
+          <tr class="sum"><td colspan="5" class="num">Total</td><td class="num">${m2(q.subtotal)}</td></tr>
+          ${q.taxRate || q.tax ? html`<tr><td colspan="5" class="num">${q.taxLabel} ${fmtNum(q.taxRate)} %</td><td class="num">${m2(q.tax)}</td></tr>` : ''}
+          <tr class="sum"><td colspan="5" class="num"><b>Total incl. ${q.taxLabel || 'tax'}</b></td><td class="num"><b>${m2(q.total)}</b></td></tr>
+        </tbody></table></div>
+      <div class="card form-lines"><div class="card-head"><h2>Wording</h2></div>
         ${editable ? html`<div class="field"><label>Findings</label><input type="text" name="findings" value="${q.findings}"></div>` : row('Findings', q.findings)}
         <div class="field"><label>Terms</label><div class="ro">${q.terms.length} terms from the Terms master ${editable ? html`<a href="#" id="editTerms">edit</a>` : ''}</div></div>
-        <div id="terms" hidden>${q.terms.map((t, i) => html`<div class="field"><label>Term ${i + 1}</label><textarea name="term_${i}" rows="2">${t}</textarea></div>`)}</div>
-        ${row('Prepared by', auth.userName(q.preparedBy))}
-        ${q.approvals?.length ? html`<div class="form-sec">Counter-check</div>${q.approvals.map(a => row(`Level ${a.level}`, `${a.decision === 'return' ? 'Returned' : 'Approved'} by ${auth.userName(a.by)} · ${fmtDateTime(a.at)}${a.comment ? ` · ${a.comment}` : ''}`))}` : ''}
-        ${q.sentAt ? html`<div class="form-sec">Sent</div>${row('Sent', `${fmtDateTime(q.sentAt)} by ${q.sentVia}`)}` : ''}
-        ${q.acceptance ? html`<div class="form-sec">Accepted</div>${row('Method', vsLabel('ACCEPT_METHOD', q.acceptance.method))}${row('PO number', q.acceptance.poNo)}${row('Accepted by', `${q.acceptance.contact} · ${fmtDateTime(q.acceptance.at)}`)}` : ''}
-        <div class="form-sec">Revisions</div>
-        ${revs.map(r => row(`Rev ${r.rev}`, html`${r.id === q.id ? html`<b>this one</b>` : html`<a href="#/quotations/${r.id}">open</a>`} · ${r.status}${r.returnNote ? ` · returned: ${r.returnNote.comment}` : ''}`))}
-      </form>
-      <div class="preview"><div class="preview-bar"><span>Live print preview · A4</span><span>${editable ? 'updates as you type' : ''}</span></div><div id="pv"></div></div>
-    </div>
+        <div id="terms" hidden>${q.terms.map((t, i) => html`<div class="field"><label>Term ${i + 1}</label><textarea name="term_${i}" rows="2">${t}</textarea></div>`)}</div></div>
+      ${q.approvals?.length ? html`<div class="card form-lines"><div class="card-head"><h2>Counter-check</h2></div>${q.approvals.map(a => row(`Level ${a.level}`, `${a.decision === 'return' ? 'Returned' : 'Approved'} by ${auth.userName(a.by)} · ${fmtDateTime(a.at)}${a.comment ? ` · ${a.comment}` : ''}`))}</div>` : ''}
+      ${q.sentAt || q.acceptance ? html`<div class="card form-lines"><div class="card-head"><h2>${q.acceptance ? 'Sent and accepted' : 'Sent'}</h2></div>
+        ${q.sentAt ? row('Sent', `${fmtDateTime(q.sentAt)} by ${q.sentVia}`) : ''}
+        ${q.acceptance ? html`${row('Method', vsLabel('ACCEPT_METHOD', q.acceptance.method))}${row('PO number', q.acceptance.poNo)}${row('Accepted by', `${q.acceptance.contact} · ${fmtDateTime(q.acceptance.at)}`)}` : ''}</div>` : ''}
+      <div class="card form-lines"><div class="card-head"><h2>Revisions</h2></div>
+        ${revs.map(r => row(`Rev ${r.rev}`, html`${r.id === q.id ? html`<b>this one</b>` : html`<a href="#/quotations/${r.id}">open</a>`} · ${r.status}${r.returnNote ? ` · returned: ${r.returnNote.comment}` : ''}`))}</div>
+    </form>
   </div>`);
 
-  const pv = $('#pv', el);
-  const paint = () => { pv.innerHTML = String(quotationSheet(q, company)); };
   const readWording = () => {
     const d = readForm($('#f', el));
     const patch = { paymentTerm: d.paymentTerm || q.paymentTerm, findings: d.findings ?? q.findings };
@@ -91,7 +97,7 @@ export function renderQuotation(el, id) {
     return patch;
   };
   if (editable) {
-    const save = debounce(() => { const p = saveWording(q.id, readWording()); Object.assign(q, p); $('#vu', el).textContent = fmtDate(p.validUntil); paint(); }, 250);
+    const save = debounce(() => { const p = saveWording(q.id, readWording()); Object.assign(q, p); $('#vu', el).textContent = fmtDate(p.validUntil); }, 250);
     $('#f', el).addEventListener('input', save);
     $('#f', el).addEventListener('change', save);
     $('#editTerms', el)?.addEventListener('click', e => { e.preventDefault(); $('#terms', el).hidden = !$('#terms', el).hidden; });
@@ -114,7 +120,6 @@ export function renderQuotation(el, id) {
     title: `Customer rejected ${q.no}`, body: html`<div class="form-lines"><div class="field"><label>Reason</label><input type="text" name="reason" placeholder="e.g. price too high, chose another vendor"></div></div>`,
     actions: [{ label: 'Cancel' }, { label: 'Mark rejected', kind: 'danger', onClick: b => { reject(q.id, readForm(b).reason || 'Rejected by the customer'); renderQuotation(el, q.id); } }],
   }));
-  paint();
 }
 
 function sendDialog(el, q) {

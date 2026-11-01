@@ -2,7 +2,8 @@
 // confirmed with the customer, the countdown against the 1–2 hour target, and the returned report.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, $$, on, go, debounce, field, readForm, markInvalid, toast, fmtDateTime, fmtDuration, pill, tiles, emptyRow, dateInput, joinDateTime } from '../core/ui.js';
+import { html, $, $$, on, go, debounce, field, readForm, markInvalid, toast, fmtDateTime, fmtDuration, pill, tiles, emptyRow, dateInput, joinDateTime, foldHeader } from '../core/ui.js';
+import { linesTable } from './enquiry-parts.js';
 import { zones, zoneLabel, zoneCode, empName, technicians, findSite } from '../core/lookups.js';
 import { inspectionClock, isToday } from '../core/enquiries.js';
 import { techniciansFor, assignTechnician, startReport } from '../core/inspections.js';
@@ -97,7 +98,9 @@ export function renderInspection(el, id) {
   const visit = i.visitAt ? new Date(i.visitAt) : nextHour();
   let chosen = i.technicianId;
 
-  el.innerHTML = String(html`<div class="page" style="max-width:1200px">
+  const tags = site?.shutters?.length ? html`${site.shutters.map(s => html`<span class="pill" style="margin:0 4px 4px 0">${s.tag} ${s.location} · ${s.sizeCode}</span>`)}` : html`<span class="muted">None recorded yet</span>`;
+  const ro = (k, v) => html`<div class="field"><div class="field-label">${k}</div><div class="ro">${v || html`<span class="muted">—</span>`}</div></div>`;
+  el.innerHTML = String(html`<div class="page stack" style="max-width:1400px">
     ${pageHead({
       crumb: html`<a href="#/inspections">Site Inspection</a> › ${e.no}`,
       title: html`Site inspection · ${e.customerName} ${pill(i.status)}`,
@@ -105,16 +108,15 @@ export function renderInspection(el, id) {
       actions: html`<div class="row"><a class="btn" href="#/enquiries/${e.id}">Open ${e.no}</a>
         ${r?.status === 'Submitted' ? html`<a class="btn" href="#/reports/${r.id}">View report</a>` : ''}</div>`,
     })}
-    <div class="card"><div class="field-label">Target: inspection within ${company.inspectionTargetHours || 2} hours of the call</div>${clockHtml(inspectionClock(e, company))}</div>
-    <div class="cols2" style="margin-top:10px">
-      <div class="card"><div class="card-head"><h2>What the customer reported</h2></div>
-        <p>${e.description}</p>
-        <div class="kv two"><div><div class="k">Contact</div>${e.contactName} · ${e.mobile}</div><div><div class="k">Site</div>${site?.address || e.siteName} ${site?.blockUnit || ''}</div></div>
-        <div class="k muted small" style="margin-top:10px">Shutters at this site</div>
-        <div>${site?.shutters?.length ? html`${site.shutters.map(s => html`<span class="pill" style="margin:0 4px 4px 0">${s.tag} ${s.location} · ${s.sizeCode}</span>`)}` : html`<span class="muted">None recorded yet</span>`}</div>
-      </div>
-      <div class="card" id="assignCard"></div>
-    </div>
+    ${foldHeader({ id: `ins-${i.id}`, title: 'Enquiry & customer details', summary: [e.no, e.customerName, e.contactName, e.mobile, e.siteName, `Zone ${zoneLabel(i.zoneId)}`].filter(Boolean).join(' · '),
+      body: html`<div class="fold-cols form-lines">
+        <div><div class="form-sec">Enquiry</div>${ro('Enquiry No', html`<a href="#/enquiries/${e.id}">${e.no}</a>`)}${ro('Received', fmtDateTime(e.receivedAt))}</div>
+        <div><div class="form-sec">Customer</div>${ro('Customer', e.customerName)}${ro('Contact Person', e.contactName)}${ro('Mobile', e.mobile)}</div>
+        <div><div class="form-sec">Site</div>${ro('Site', `${site?.address || e.siteName} ${site?.blockUnit || ''}`)}${ro('Zone', zoneLabel(i.zoneId))}${ro('Shutters', tags)}</div>
+      </div>` })}
+    <div class="card"><div class="card-head"><h2>What the customer reported</h2></div>${linesTable(e.lines)}</div>
+    <div class="card"><div class="field-label">Target: inspection within ${company.inspectionTargetHours || 2} hours of the call</div>${clockHtml(inspectionClock(e, company))}
+      <div id="assignCard" style="margin-top:10px"></div></div>
     <div class="card"><div class="card-head"><h2>Site viewing report</h2>${r ? pill(r.status) : ''}</div>
       ${r ? html`<div class="kv six"><div><div class="k">Report No</div>${r.no}</div><div><div class="k">Technician</div>${empName(r.technicianId)}</div>
         <div><div class="k">Time in / out</div>${r.s1.timeIn || '—'} / ${r.s1.timeOut || '—'}</div><div><div class="k">Shutters picked</div>${r.shutters.length}</div>
@@ -122,7 +124,7 @@ export function renderInspection(el, id) {
         <div class="row" style="margin-top:10px"><a class="btn primary" href="#/reports/${r.id}">${canEditReport ? 'Open the report' : 'View report'}</a>
           ${auth.can('inspection', 'print') ? html`<a class="btn" href="#/reports/${r.id}/print">⎙ Print preview</a>` : ''}</div>`
       : i.technicianId && canEditReport
-        ? html`<p class="muted">Opens pre-filled from ${e.no} and its items. The office can edit and print it now (for example for a paper visit); the technician continues the same report on the phone.</p>
+        ? html`<p class="muted">Opens pre-filled from ${e.no} and its product lines. The office can edit and print it now (for example for a paper visit); the technician continues the same report on the phone.</p>
           <button class="btn primary" id="startReport">Open the site viewing report</button>`
         : html`<p class="muted">${i.technicianId ? 'The technician fills in the report on the phone (My jobs).' : 'Assign a technician first; the report then opens pre-filled.'}</p>`}
     </div>
@@ -145,7 +147,7 @@ export function renderInspection(el, id) {
       <span class="small ${x.visits ? '' : 'muted'}">${x.visits} visit(s) that day</span></label>`;
     const inZone = list.filter(x => x.match), others = list.filter(x => !x.match);
     box.innerHTML = String(html`<div class="card-head"><h2>${i.technicianId ? 'Change technician' : 'Assign technician'}</h2><span class="pill blue">Zone ${zoneLabel(i.zoneId)}</span></div>
-      <div class="form-lines">
+      <div class="form-lines fcols">
         ${field({ name: 'visitDate', label: 'Visit date', type: 'date', value: date, required: true })}
         ${field({ name: 'visitTime', label: 'Visit time', type: 'time', value: time, required: true })}
         ${field({ name: 'confirmedBy', label: 'Confirmed with customer by', type: 'select', options: ['Call', 'WhatsApp', 'Email', 'SMS'], value: i.confirmedBy || 'Call', required: true })}

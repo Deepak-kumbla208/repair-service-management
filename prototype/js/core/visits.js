@@ -5,7 +5,7 @@
 import * as store from './store.js';
 import * as auth from './auth.js';
 import { technicians, valueSet } from './lookups.js';
-import { freeStart, nextWorkday, defaultHelper, bookings, fmtHour, toIso, DAY_START, DAY_END, onMyWay, checkIn } from './jobs.js';
+import { freeStart, nextWorkday, isWorkday, defaultHelper, bookings, fmtHour, toIso, dayStart, dayEnd, onMyWay, checkIn } from './jobs.js';
 import { createInvoice, invoiceForJob } from './billing.js';
 import { saveNewEnquiry } from './enquiries.js';
 import { todayStr, maybeCloseContract, BOOKABLE } from './contracts.js';
@@ -24,11 +24,11 @@ export const visitDate = v => v.blocks?.[0]?.date || v.confirmedDate || v.planne
 export const isOverdue = v => OPEN_VISIT.includes(v.status) && visitDate(v) < todayStr();
 export const seesVisit = v => auth.scope('amcExecution') !== 'own' || v.technicianId === auth.user()?.employeeId;
 // Hours a visit blocks on each of its days: its team-hours spread over its days plus the round trip (at most a working day).
-export const perDayHours = v => Math.min(ceilHalf((Number(v.workHours) || 0) / (v.days || 1) + (Number(v.travelHours) || 0)), DAY_END - DAY_START - 0.5);
+export const perDayHours = v => Math.min(ceilHalf((Number(v.workHours) || 0) / (v.days || 1) + (Number(v.travelHours) || 0)), dayEnd() - dayStart() - 0.5);
 export function workingDays(ds, n) {
   const out = [];
   let d = new Date(`${ds}T00:00`);
-  if (d.getDay() === 0) d = nextWorkday(d);
+  if (!isWorkday(d)) d = nextWorkday(d);
   while (out.length < n) { out.push(dstr(d)); d = nextWorkday(d); }
   return out;
 }
@@ -54,6 +54,7 @@ export function suggestVisit(v, span = 21) {
 
 export function scheduleVisitProblems(v, slot) {
   const p = [];
+  if (store.heldByOther('amcVisits', v.id)) p.push(`The technician's phone is offline with changes to this visit; wait until it is back online.`);
   const c = store.get('contracts', v.contractId);
   if (!BOOKABLE.includes(c?.status)) p.push('The contract is not active.');
   if (!OPEN_VISIT.includes(v.status)) p.push('This visit has already started.');
@@ -63,7 +64,7 @@ export function scheduleVisitProblems(v, slot) {
   if (slot.technicianId && slot.date && slot.start != null) {
     const hours = perDayHours(v);
     workingDays(slot.date, v.days || 1).forEach((ds, j) => {
-      const from = j ? DAY_START + 0.5 : slot.start;
+      const from = j ? dayStart() + 0.5 : slot.start;
       const clash = bookings(slot.technicianId, ds, v.id).find(b => b.from < from + hours - 0.01 && b.to > from + 0.01);
       if (clash) p.push(`${ds}: the technician already has ${clash.no || clash.kind} ${fmtHour(clash.from)}–${fmtHour(clash.to)}.`);
     });
@@ -74,7 +75,7 @@ export function scheduleVisitProblems(v, slot) {
 // A visit that will not happen (customer cancelled, contract ended): it no longer blocks the contract's closure.
 export function cancelVisit(id, reason) {
   const v = store.get('amcVisits', id);
-  if (!OPEN_VISIT.includes(v.status)) return v;
+  if (!OPEN_VISIT.includes(v.status) || store.heldByOther('amcVisits', id)) return v;
   store.update('amcVisits', id, { blocks: [], cancelReason: reason }, false);
   store.setStatus('amcVisits', id, 'Cancelled', reason);
   maybeCloseContract(v.contractId);
@@ -98,7 +99,7 @@ export function scheduleVisit(id, { technicianId, helperIds = [], date, start, v
   if (problems.length) return { problems };
   if (v.status === 'Planned' || v.confirmedDate !== date) confirmVisitDate(id, { date, via: via || v.confirmedVia });
   const hours = perDayHours(v);
-  const blocks = workingDays(date, v.days || 1).map((ds, j) => { const from = j ? DAY_START + 0.5 : start; return { date: ds, from, to: from + hours }; });
+  const blocks = workingDays(date, v.days || 1).map((ds, j) => { const from = j ? dayStart() + 0.5 : start; return { date: ds, from, to: from + hours }; });
   const last = blocks[blocks.length - 1];
   const first = v.status !== 'Scheduled';
   store.update('amcVisits', id, { technicianId, helperIds, blocks, start: toIso(date, start), end: toIso(last.date, last.to) },

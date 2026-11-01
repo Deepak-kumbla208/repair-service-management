@@ -25,6 +25,7 @@ export function mTask(page, id) {
   const t = store.get('tasks', id);
   page.setTitle(t ? t.docNo : 'Task', 'm/tasks');
   if (!t || t.status !== 'Open') { page.body.innerHTML = '<div class="empty">This task is already done.</div>'; return; }
+  if (!myTasks().some(x => x.id === t.id)) { page.body.innerHTML = '<div class="empty">This task is not for your role.</div>'; return; }
   page.body.innerHTML = String(html`<div class="m-phone-task">${taskDetail(t, { compact: true })}</div>`);
   bindMics(page.body);
   page.body.onclick = e => {

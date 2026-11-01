@@ -5,7 +5,7 @@ import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, go, fmtDate, fmtDateTime, fmtDuration, toast, tiles, pill } from '../core/ui.js';
 import { vsLabel } from '../core/lookups.js';
-import { myTasks } from '../core/workflow.js';
+import { myTasks, cannotDecide } from '../core/workflow.js';
 import { decideQuotation, autoChecks } from '../core/quotations.js';
 import { estimateSummary } from '../core/estimates.js';
 import { approveJobTerm, confirmLeave } from '../core/jobs.js';
@@ -55,7 +55,7 @@ export function taskDetail(t, { compact = false } = {}) {
     return html`<div class="card"><div class="card-head"><h2>${t.title}</h2></div>
       <p>The customer accepted ${j.quotationNo} with the payment term <b>${vsLabel('PAYMENT_TERMS', j.paymentTerm)}</b>. Scheduling waits for this approval (flow step 6).</p>
       <div class="muted small">${j.customer} · ${cur} ${m2(j.total)}</div>
-      ${decision()}</div>`;
+      ${decision(compact, t)}</div>`;
   }
   const q = store.get('quotations', t.docId);
   const est = store.get('estimates', q.estimateId);
@@ -72,14 +72,17 @@ export function taskDetail(t, { compact = false } = {}) {
         <tr><td>Direct cost</td><td class="num">${m2(s.direct)}</td></tr><tr><td>Overhead</td><td class="num">${m2(s.overhead)}</td></tr><tr><td>Margin</td><td class="num">${m2(s.margin)}</td></tr>
         <tr class="sum"><td>Selling price</td><td class="num">${m2(s.subtotal)}</td></tr><tr><td>${q.taxLabel} ${q.taxRate} %</td><td class="num">${m2(q.tax)}</td></tr><tr class="grand"><td>Total quote</td><td class="num">${m2(q.total)}</td></tr>
       </tbody></table></div>`;
-  return html`${checks}${decision(compact)}`;
+  return html`${checks}${decision(compact, t)}`;
 }
 
-const decision = (compact = false) => html`<div class="apr-foot" style="${compact ? 'flex-direction:column;align-items:stretch' : ''}"><div class="with-mic grow"><textarea name="comment" placeholder="Comment (needed to return)" style="min-height:58px"></textarea><button type="button" class="mic" data-mic="comment" title="Voice input">🎤</button></div>
+// The decision buttons; off for the person who submitted the document (nobody approves their own document).
+const decision = (compact = false, t = null) => cannotDecide(t) ? html`<div class="note warn small" style="margin-top:10px">${cannotDecide(t)}</div>` : html`<div class="apr-foot" style="${compact ? 'flex-direction:column;align-items:stretch' : ''}"><div class="with-mic grow"><textarea name="comment" placeholder="Comment (needed to return)" style="min-height:58px"></textarea><button type="button" class="mic" data-mic="comment" title="Voice input">🎤</button></div>
   <div style="display:flex;flex-direction:column;gap:6px"><button class="btn primary" data-do="approve">✓ Approve</button><button class="btn danger" data-do="return">↩ Return</button></div></div>`;
 
 // Carry out a decision; returns an error text or ''.
 export function actOnTask(t, action, comment) {
+  if (!myTasks().some(x => x.id === t.id)) return 'This task is not for your role.';
+  if (cannotDecide(t)) return cannotDecide(t);
   if (action === 'return' && !comment.trim()) return 'Write a comment to say what needs changing.';
   if (t.kind === 'leaveSite') { confirmLeave(t.id, comment); return ''; }
   if (t.kind === 'renewal' && action === 'decline') { declineRenewal(t.docId, comment); return ''; }

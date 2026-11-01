@@ -4,7 +4,7 @@
 // billing plan only (one invoice per line, never from visits) and close by their own rule (core/contracts.js).
 import * as store from './store.js';
 import * as auth from './auth.js';
-import { withCompany } from './lookups.js';
+import { termTexts, letterhead } from './setup.js';
 import { taxTotals, termDays, round2, ageBucket } from './costing.js';
 import { maybeClose } from './closure.js';
 import { maybeCloseContract } from './contracts.js';
@@ -31,10 +31,8 @@ export function syncDueDate(jobId) {
 export const canRaiseInvoice = job => !!job && job.status !== 'Cancelled' && !invoiceForJob(job.id)
   && (!!job.workDone?.signedAt || (job.paymentTerm === 'IMMEDIATE' && !!job.start)) && auth.can('invoice', 'create');
 
-function invoiceTerms() {
-  const company = auth.company();
-  return store.list('terms', t => t.docType === 'Invoice' && t.isDefault && t.status !== 'Inactive').sort((a, b) => a.order - b.order).map(t => withCompany(t.text, company));
-}
+// The invoice terms chosen in Transaction Setup, in their order.
+const invoiceTerms = () => termTexts('Invoice');
 
 // Draft (or post) the invoice of a job from its accepted quotation. Lines marked "Not done" on the Work Done form
 // are flagged so the office can remove them before posting (flow step 10: approved quotation and actual work).
@@ -103,7 +101,8 @@ export function postInvoice(id) {
   if (inv.status !== 'Draft') return inv;
   const date = today();
   const no = store.nextNumber('INV');
-  store.update('invoices', id, { no, date, dueDate: dueFor(inv.jobId ? store.get('jobs', inv.jobId) : null, inv.paymentTerm, date), postedAt: new Date().toISOString(), postedBy: store.currentActor() }, `Posted as ${no}`);
+  // A posted invoice keeps the letterhead it was issued with.
+  store.update('invoices', id, { no, date, dueDate: dueFor(inv.jobId ? store.get('jobs', inv.jobId) : null, inv.paymentTerm, date), postedAt: new Date().toISOString(), postedBy: store.currentActor(), letterhead: letterhead() }, `Posted as ${no}`);
   store.setStatus('invoices', id, 'Posted', no);
   return store.get('invoices', id);
 }

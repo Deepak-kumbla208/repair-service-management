@@ -6,14 +6,15 @@ import { html } from '../core/ui.js';
 import { vsLabel, zoneLabel } from '../core/lookups.js';
 import { shutterState, signOf, checkItems } from '../core/visits.js';
 import { visitsOf, billingLines } from '../core/contracts.js';
-import { RATINGS } from './print-docs.js';
+import { RATINGS, logoHtml } from './print-docs.js';
+import { issued } from '../core/setup.js';
 
 const money = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dmy = s => (s ? s.slice(0, 10).split('-').reverse().join(' / ') : '');
 const right = 'text-align:right';
 const sec = (title, cols) => html`<tr class="sec"><td colspan="${cols}">${title}</td></tr>`;
 const head = (company, title, water = 'DEMO') => html`<div class="demo-water"><span>${water}</span></div><div class="demo-banner">DEMO – prototype, not a valid document</div>
-  <div class="head"><div class="logo">LOGO</div><div class="head-main"><h1>${title}</h1>
+  <div class="head"><div class="logo">${logoHtml(company)}</div><div class="head-main"><h1>${title}</h1>
     <div>${company.address} | ${company.regLabel}: ${company.regNo}${company.chargesTax ? ` | ${company.taxRegLabel}: ${company.taxRegNo}` : ''}</div>
     <div>Tel: ${company.tel} &nbsp;|&nbsp; Mobile: ${company.mobile} &nbsp;|&nbsp; Email: ${company.email}</div></div></div>`;
 const sizesOf = counts => Object.entries(counts || {}).filter(([, n]) => n).map(([k, n]) => `${n} × ${k}`).join(', ');
@@ -33,6 +34,7 @@ export function amcQuoteBlock(q) {
 
 // The contract summary.
 export function contractSheet(c, company) {
+  company = issued(c, company); // an activated contract keeps its letterhead
   const draft = c.status === 'Draft';
   const visits = draft ? [] : visitsOf(c.id);
   const lines = draft ? billingLines(c, c.start) : c.billingPlan;

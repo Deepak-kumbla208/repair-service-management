@@ -4,6 +4,7 @@ import * as auth from '../core/auth.js';
 import { html, $ } from '../core/ui.js';
 import { switchView } from '../app.js';
 import { openPalette } from '../web/palette.js';
+import { isOffline, waiting } from '../core/offline.js';
 
 function activeTab(route) {
   if (/^m\/(jobs|job|report|rjob|gjob|visit)/.test(route)) return 'jobs';
@@ -22,12 +23,15 @@ export function renderPhone(app, route, run) {
       <div class="m-status"><span>${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}</span><span>${auth.company().name}</span><span>▂▄▆ ▮</span></div>
       <div class="m-titlebar"><span id="mBack"></span><h1 id="mTitle"></h1>
         <button class="m-icon-btn" id="mSearch" aria-label="Search" title="Search">⌕</button>
-        <div class="seg" role="group" aria-label="View"><button id="toWeb">Web</button><button class="on">Mobile</button></div></div>
+        <div class="seg" role="group" aria-label="View"><button id="toWeb" ${isOffline() ? 'disabled title="Go back online first"' : ''}>Web</button><button class="on">Mobile</button></div></div>
     </div>
+    ${isOffline() ? html`<a class="m-offline" href="#/m/more">● Offline · ${waiting().length} change${waiting().length === 1 ? '' : 's'} waiting</a>`
+      : sessionStorage.getItem('rsmSynced') ? html`<div class="m-online">✓ ${sessionStorage.getItem('rsmSynced')}</div>` : ''}
     <div class="m-body" id="mBody"></div>
     <div id="mFoot"></div>
     <nav class="m-tabs">${tabs.map(t => html`<a class="m-tab ${t.key === on ? 'on' : ''}" href="#/${t.route}"><b>${t.icon}</b>${t.label}</a>`)}</nav>
   </div></div>`);
+  sessionStorage.removeItem('rsmSynced'); // the green "sent" line shows once
   $('#toWeb', app).onclick = () => switchView('web');
   $('#mSearch', app).onclick = () => openPalette();
   const page = {

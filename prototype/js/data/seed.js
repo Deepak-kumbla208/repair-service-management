@@ -11,21 +11,24 @@ const COMPANIES = [
   { id: DSH, tenantId: DSH, code: 'DSH', name: 'Demo Shutters Pte Ltd', country: 'Singapore', currency: 'SGD',
     taxLabel: 'GST', taxRegLabel: 'GST Reg. No.', taxRegNo: 'M9-0000000-0', chargesTax: true, defaultTaxCode: 'SR9',
     regLabel: 'UEN', regNo: '200000000D', address: 'Blk 10 Demo Road, #01-01, Singapore 100010',
-    tel: '+65 6000 0000', mobile: '+65 8000 0000', email: 'sales@demo-shutters.example', inspectionTargetHours: 2,
+    tel: '+65 6000 0000', mobile: '+65 8000 0000', email: 'sales@demo-shutters.example', inspectionTargetHours: 2, dpo: 'dpo@demo-shutters.example', logoId: '',
+    workDays: [1, 2, 3, 4, 5, 6], workStart: 8.5, workEnd: 17.5,
     bank: 'Demo Bank Singapore · account 000-000000-0', payNow: 'PayNow to UEN 200000000D', txDefaults: { ...TX_DEFAULTS, amc: AMC_TX }, placeholders: ['taxRegNo', 'regNo', 'bank', 'payNow'] },
   { id: GDD, tenantId: GDD, code: 'GDD', name: 'Gulf Demo Doors LLC', country: 'United Arab Emirates', currency: 'AED',
     taxLabel: 'VAT', taxRegLabel: 'TRN', taxRegNo: '100000000000003', chargesTax: true, defaultTaxCode: 'VAT5',
     regLabel: 'Trade licence', regNo: '000000', address: 'Office 12, Demo Business Centre, Al Quoz, Dubai, UAE',
-    tel: '+971 4 000 0000', mobile: '+971 50 000 0000', email: 'sales@gulf-demo-doors.example', inspectionTargetHours: 2,
+    tel: '+971 4 000 0000', mobile: '+971 50 000 0000', email: 'sales@gulf-demo-doors.example', inspectionTargetHours: 2, dpo: '', logoId: '',
+    workDays: [1, 2, 3, 4, 5], workStart: 8, workEnd: 17,
     bank: 'Demo Bank UAE · IBAN AE00 0000 0000 0000 0000 000', payNow: '', txDefaults: { ...TX_DEFAULTS, amc: AMC_TX }, placeholders: ['taxRegNo', 'regNo', 'bank'] },
 ];
 
+// [code, name, what it does, dashboard type (User Role)]
 const ROLES = [
-  ['ADMIN', 'Admin', 'Everything, including setup'],
-  ['OPS', 'Operations Executive', 'Enquiries, inspections, estimates, quotations, scheduling, invoices'],
-  ['APR', 'Approver', 'Counter-checks quotations; approves non-immediate payment terms'],
-  ['TECH', 'Technician', 'Own jobs on the phone'],
-  ['MGT', 'Management', 'Read-only view of everything'],
+  ['ADMIN', 'Admin', 'Everything, including setup', 'management'],
+  ['OPS', 'Operations Executive', 'Enquiries, inspections, estimates, quotations, scheduling, invoices', 'work'],
+  ['APR', 'Approver', 'Counter-checks quotations; approves non-immediate payment terms', 'approvals'],
+  ['TECH', 'Technician', 'Own jobs on the phone', 'phone'],
+  ['MGT', 'Management', 'Read-only view of everything; level-2 approvals', 'management'],
 ];
 
 // Menu access per role: [channel, actions, scope]
@@ -74,7 +77,7 @@ function accessFor(role) {
 }
 
 function rolesAndAccess(t) {
-  const roles = ROLES.map(([code, name, description]) => ({ id: `rol_${t}_${code}`, tenantId: t, code, name, description, status: 'Active' }));
+  const roles = ROLES.map(([code, name, description, dashboard]) => ({ id: `rol_${t}_${code}`, tenantId: t, code, name, description, dashboard, status: 'Active' }));
   const menuAccess = [];
   roles.forEach(r => Object.entries(accessFor(r.code)).forEach(([menu, x]) =>
     menuAccess.push({ id: `acc_${r.id}_${menu}`, tenantId: t, roleId: r.id, menu, ...x })));
@@ -89,6 +92,9 @@ const USERS = [
   [DSH, 'techB', 'Technician B', 'TECH', 4, 'Zone C (also D) · phone only'],
   [DSH, 'mgmt', 'Management', 'MGT', 5, 'Read-only, all transactions'],
   [GDD, 'gadmin', 'Admin', 'ADMIN', null, 'All menus, web and phone'],
+  // Nobody approves their own quotation, so the Gulf company needs a second person for the counter-check.
+  [GDD, 'gapprover', 'Approver', 'APR', null, 'Counter-checks quotations'],
+  [GDD, 'gmgmt', 'Management', 'MGT', null, 'Level-2 approvals (over 10,000)'],
 ];
 
 const SERIES = [['ENQ', 'Enquiry'], ['SVR', 'Site viewing report'], ['EST', 'Estimate'], ['QT', 'Quotation'], ['JOB', 'Job'], ['AMC', 'AMC contract'], ['INV', 'Invoice'], ['RCPT', 'Receipt']];
@@ -164,5 +170,9 @@ export function buildSeed() {
   out.inspections = [...sgTx.inspections, ...aeTx.inspections];
   out.siteReports = sgTx.siteReports;
   out.series = [...series(DSH, { ENQ: 3, SVR: 1 }), ...series(GDD, { ENQ: 1 })];
+  // Transaction Setup calls the term codes per document (meeting note); seeded from the terms of each type.
+  out.companies = COMPANIES.map(c => ({ ...c, txTerms: Object.fromEntries(['Quotation', 'AMC', 'Invoice'].map(d => [d,
+    out.terms.filter(x => x.tenantId === c.id && x.docType === d && x.isDefault).sort((a, b) => a.order - b.order).map(x => x.code)])) }));
+  out.logos = [];
   return out;
 }

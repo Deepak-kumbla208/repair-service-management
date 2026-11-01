@@ -7,6 +7,10 @@ import { html, $ } from '../core/ui.js';
 import { vsLabel } from '../core/lookups.js';
 import { hydrateImages } from '../core/media.js';
 import { amcQuoteBlock, contractSheet, serviceSheet } from './print-amc.js';
+import { issued, logoSrc } from '../core/setup.js';
+
+// The logo from Company Setup, or the empty box the team lead's forms have.
+export const logoHtml = company => { const src = logoSrc(company); return src ? html`<img src="${src}" alt="Logo">` : 'LOGO'; };
 
 const money = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dmy = s => (s ? s.slice(0, 10).split('-').reverse().join(' / ') : 'DD / MM / YYYY');
@@ -17,7 +21,7 @@ const CHECKED = ['Approved', 'Sent', 'Accepted', 'Expired'];
 
 function head(company, title, water = 'DEMO') {
   return html`<div class="demo-water"><span>${water}</span></div><div class="demo-banner">DEMO – prototype, not a valid document</div>
-    <div class="head"><div class="logo">LOGO</div><div class="head-main"><h1>${title}</h1>
+    <div class="head"><div class="logo">${logoHtml(company)}</div><div class="head-main"><h1>${title}</h1>
       <div>${company.address} | ${company.regLabel}: ${company.regNo}${company.chargesTax ? ` | ${company.taxRegLabel}: ${company.taxRegNo}` : ''}</div>
       <div>Tel: ${company.tel} &nbsp;|&nbsp; Mobile: ${company.mobile} &nbsp;|&nbsp; Email: ${company.email}</div></div></div>`;
 }
@@ -41,6 +45,7 @@ function signBlock(company, userId, rightSide) {
 }
 
 export function quotationSheet(q, company) {
+  company = issued(q, company); // a sent quotation keeps its letterhead
   return html`<div class="sheet">${head(company, 'QUOTATION', CHECKED.includes(q.status) ? 'DEMO' : 'NOT COUNTER-CHECKED')}
     <table>
       <tr><td class="lbl">Customer Name</td><td>${q.customer}</td><td class="lbl">Date</td><td>${dmy(q.date)}</td></tr>
@@ -59,6 +64,7 @@ export function quotationSheet(q, company) {
 }
 
 export function invoiceSheet(inv, company) {
+  company = issued(inv, company); // a posted invoice keeps its letterhead
   const title = company.chargesTax ? 'TAX INVOICE' : 'INVOICE';
   return html`<div class="sheet">${head(company, title, inv.status === 'Cancelled' ? 'CANCELLED' : inv.status === 'Draft' ? 'DRAFT' : 'DEMO')}
     <table>

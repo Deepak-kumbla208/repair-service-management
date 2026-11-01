@@ -15,6 +15,7 @@ import { setPartReady, earliestDate, freeStart, jobDuration, nextWorkday, schedu
 import { invoiceForJob, postInvoice, recordPayment, addFollowUp } from '../core/billing.js';
 import { markDocumented } from '../core/closure.js';
 import { buildAmcSamples } from './seed-demo-flow-amc.js';
+import { buildHistory } from './seed-history.js';
 
 const COLLS = ['enquiries', 'inspections', 'siteReports', 'estimates', 'quotations', 'jobs', 'invoices', 'payments', 'followUps', 'tasks', 'audit', 'customers', 'contracts', 'amcVisits'];
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/, DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -86,12 +87,14 @@ export const photo = (label, color) => picture(480, 360, g => { g.fillStyle = co
 let T = '';
 // The Gulf company has only an Admin, who then does every step.
 const userOf = login => (T === 'co_gdd' ? 'usr_co_gdd_gadmin' : `usr_${T}_${login}`);
-const as = login => store.setContext({ tenantId: T, userId: userOf(login) });
+export const as = login => store.setContext({ tenantId: T, userId: userOf(login) });
+// The 12-month history (data/seed-history.js) reuses these story steps for Demo Shutters.
+export const useTenant = t => { T = t; };
 const cust = code => store.findOne('customers', c => c.code === code);
 const item = code => store.findOne('items', i => i.code === code);
 const techLogin = { emp_co_dsh_3: 'techA', emp_co_dsh_4: 'techB' };
 
-function newEnquiry(code, tech, text, priority = 'MEDIUM') {
+export function newEnquiry(code, tech, text, priority = 'MEDIUM') {
   as('ops');
   const c = cust(code), con = c.contacts[0];
   return saveNewEnquiry({ receivedAt: new Date().toISOString(), channel: 'CALL', channelOther: '', type: 'REPAIR', enquiryStatus: priority === 'HIGH' ? 'HOT' : 'WARM', priority, siteInspection: 'YES',
@@ -99,7 +102,7 @@ function newEnquiry(code, tech, text, priority = 'MEDIUM') {
     lines: [{ itemRef: '', itemName: '', qty: null, description: text }] }, { assign: { technicianId: tech, visitAt: new Date(Date.now() + 3600000).toISOString(), confirmedBy: 'Phone' } });
 }
 // The technician's site report: picks [[tag, fault]], mats [[item code, qty, tag]], s3 / s4 overrides.
-function fileReport(enq, tech, { picks, mats = [], desc, s3 = {}, s4 = {} }, sigId) {
+export function fileReport(enq, tech, { picks, mats = [], desc, s3 = {}, s4 = {} }, sigId) {
   as(techLogin[tech] || 'gadmin');
   const e = store.get('enquiries', enq.id);
   const { site } = findSite(e.siteId);
@@ -113,7 +116,7 @@ function fileReport(enq, tech, { picks, mats = [], desc, s3 = {}, s4 = {} }, sig
   });
   submitReport(rep.id);
 }
-function makeQuote(enq, { line = false, term } = {}) {
+export function makeQuote(enq, { line = false, term } = {}) {
   as('ops');
   const est = createEstimate(enq.id);
   if (line) saveEstimate(est.id, { costingLevel: 'LINE' });
@@ -123,14 +126,14 @@ function makeQuote(enq, { line = false, term } = {}) {
   return q;
 }
 const decide = (q, login = 'approver', how = 'approve', note = '') => { as(login); decideQuotation(openTaskFor('quotation', q.id).id, how, note); };
-const send = q => { as('ops'); markSent(q.id, 'Email'); };
-function win(q, po, term) {
+export const send = q => { as('ops'); markSent(q.id, 'Email'); };
+export function win(q, po, term) {
   as('ops');
   const r = accept(q.id, { method: 'PO', poNo: po, poDate: dstr(new Date()), contact: store.get('quotations', q.id).contact, attachments: [], paymentTerm: term });
   return r.job;
 }
 // Schedule with the given technician on the first free day; then place it exactly at "days" from today, 09:00.
-function book(job, tech, { partsReady = true, days, at = '09:00' } = {}) {
+export function book(job, tech, { partsReady = true, days, at = '09:00' } = {}) {
   as('ops');
   if (partsReady) store.get('jobs', job.id).parts.forEach(p => setPartReady(job.id, p.key, true));
   const j = store.get('jobs', job.id), hours = jobDuration(j);
@@ -319,6 +322,7 @@ export async function buildDemoFlow() {
     auth.login('usr_co_gdd_gadmin', 'web');
     await gulf();
     await buildAmcSamples();
+    await buildHistory();
   } finally {
     auth.logout();
     store.holdWrites(false);

@@ -14,6 +14,7 @@ import { makeShutter, nextShutterTag, addShutters } from './customers.js';
 import { openTask, closeTask, cancelTasksFor } from './workflow.js';
 import { createContractInvoice, balanceOf } from './billing.js';
 import { fmtDate } from './ui.js';
+import { onWorkday, letterhead } from './setup.js';
 
 const pad = n => String(n).padStart(2, '0');
 const dstr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -28,7 +29,7 @@ export function addMonths(ds, n) {
 }
 export const firstOfNextMonth = () => { const d = new Date(); return dstr(new Date(d.getFullYear(), d.getMonth() + 1, 1)); };
 export const contractEnd = (start, months) => addDays(addMonths(start, months), -1);
-const offSunday = ds => (new Date(`${ds}T00:00`).getDay() === 0 ? addDays(ds, 1) : ds);
+const offDay = ds => onWorkday(ds); // a planned date on a day off moves to the next working day
 // Start of period k of n in a contract year (months when they divide evenly, else days).
 const periodStart = (start, months, n, k) => (months % n === 0 ? addMonths(start, (months / n) * k) : addDays(start, Math.round((k * 365 * months) / (12 * n))));
 
@@ -94,9 +95,9 @@ export function activateProblems(c, start = c.start) {
   return p;
 }
 
-// Visit dates: about two weeks into each period, off Sundays (question 9 to the team lead).
+// Visit dates: about two weeks into each period, on a working day (question 9 to the team lead).
 export function plannedDates(start, months, n) {
-  return Array.from({ length: n }, (_, k) => offSunday(addDays(periodStart(start, months, n, k), 14)));
+  return Array.from({ length: n }, (_, k) => offDay(addDays(periodStart(start, months, n, k), 14)));
 }
 export function billingLines(c, start) {
   const n = c.plan.length || 1;
@@ -136,7 +137,7 @@ export function activateContract(id, { start } = {}) {
   const end = contractEnd(s, c.periodMonths);
   const billingPlan = billingLines(c, s);
   const reminderDate = addDays(end, -amcDefaults().renewalDays);
-  store.update('contracts', id, { start: s, end, sites, billingPlan, renewal: { ...c.renewal, reminderDate }, activatedAt: new Date().toISOString(), activatedBy: store.currentActor() },
+  store.update('contracts', id, { start: s, end, sites, billingPlan, renewal: { ...c.renewal, reminderDate }, activatedAt: new Date().toISOString(), activatedBy: store.currentActor(), letterhead: letterhead() },
     `Activated: ${s} – ${end}, ${sites.reduce((t, x) => t + x.visits, 0)} visits, ${billingPlan.length} billing line${billingPlan.length > 1 ? 's' : ''}`);
   sites.forEach(site => plannedDates(s, c.periodMonths, site.visits).forEach((plannedDate, k) => {
     const zone = store.get('zones', site.zoneId);

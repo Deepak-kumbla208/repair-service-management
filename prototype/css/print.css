@@ -28,6 +28,7 @@
 .sheet .box { display: inline-block; width: 11px; height: 11px; border: 1px solid #333; margin-right: 5px; vertical-align: -1px; text-align: center; line-height: 9px; font-size: 9px; }
 .sheet .head { display: flex; align-items: stretch; border: 1px solid #555; margin-bottom: 8px; }
 .sheet .logo { width: 34mm; display: flex; align-items: center; justify-content: center; border-right: 1px solid #555; color: #888; font-size: 9pt; }
+.sheet .logo img { max-width: 30mm; max-height: 18mm; object-fit: contain; }
 .sheet .head-main { flex: 1; text-align: center; padding: 6px; }
 .sheet .head-main h1 { font-size: 15pt; letter-spacing: 1px; color: #111; }
 .sheet .head-main div { font-size: 9pt; }

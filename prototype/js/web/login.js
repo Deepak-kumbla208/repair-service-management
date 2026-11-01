@@ -4,13 +4,14 @@ import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $$, confirmBox } from '../core/ui.js';
 import { resetDemo } from '../app.js';
+import { guideCard, startGuide, goStep } from './guide.js';
 
 const initials = name => name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
 function choices(coId, view) {
   const companies = store.all('companies');
   const roles = store.all('roles');
-  const users = store.all('users').filter(u => u.tenantId === coId);
+  const users = store.all('users').filter(u => u.tenantId === coId && u.status !== 'Inactive');
   const co = companies.find(c => c.id === coId);
   return html`
     <div class="field-label" style="margin-bottom:4px">Company</div>
@@ -39,7 +40,8 @@ export function renderLogin(app) {
         <ul><li>Repair, AMC and General Servicing jobs</li><li>Web for the office, phone for technicians</li><li>Menus and data follow each user's role</li></ul>
         <p class="small" style="margin-top:auto">Prototype with sample test data. Data stays in this browser; nothing is sent anywhere.</p>
       </aside>
-      <main class="login-main"><div class="login-card"><h1 style="margin-bottom:14px">Log in as a demo user</h1>${choices(coId, view)}</div></main>
+      <main class="login-main"><div class="login-card"><h1 style="margin-bottom:14px">Log in as a demo user</h1>${choices(coId, view)}</div>
+        ${coId === 'co_dsh' ? html`<div class="login-card" style="margin-top:14px">${guideCard()}</div>` : ''}</main>
     </div>`);
   } else {
     app.innerHTML = String(html`<div class="mobile-stage"><div class="phone">
@@ -54,6 +56,7 @@ export function renderLogin(app) {
     auth.login(b.dataset.user, view);
     location.hash = view === 'mobile' ? '#/m/home' : '#/home';
   });
+  $$('[data-guide]', app).forEach(b => b.onclick = () => { startGuide(b.dataset.guide); goStep(); });
   app.querySelector('#reset').onclick = async () => {
     if (await confirmBox('Reset demo data', 'All changes and photos will be removed and the sample data restored.', 'Reset')) resetDemo();
   };

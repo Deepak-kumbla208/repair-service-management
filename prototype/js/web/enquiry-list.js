@@ -42,9 +42,11 @@ export function enquiryTiles(list, company) {
 }
 
 const KEY = 'rsmEnqFilters';
-const loadState = () => { try { return { tile: '', q: '', type: '', zone: '', status: '', priority: '', period: '', ...JSON.parse(sessionStorage.getItem(KEY)) }; } catch { return { tile: '', q: '' }; } };
+const loadState = () => { try { return { tile: '', q: '', type: '', zone: '', status: '', priority: '', period: '', stage: '', ...JSON.parse(sessionStorage.getItem(KEY)) }; } catch { return { tile: '', q: '' }; } };
 const saveState = s => sessionStorage.setItem(KEY, JSON.stringify(s));
 export const setEnquiryTile = tile => saveState({ ...loadState(), tile });
+// Open the register with only these filters (the dashboard's stage bars and zone figures use it).
+export const setEnquiryFilters = f => saveState({ tile: '', q: '', type: '', zone: '', status: '', priority: '', period: '', stage: '', ...f });
 
 function periodTest(period, iso) {
   if (!period) return true;
@@ -72,6 +74,7 @@ export function renderEnquiryList(el) {
       <select id="status" title="Status"><option value="">All statuses</option>${ENQ_STATUSES.map(s => html`<option ${s === state.status ? 'selected' : ''}>${s}</option>`)}</select>
       <select id="priority" title="Priority"><option value="">All priorities</option>${vsOptions('PRIORITY').map(o => html`<option value="${o.value}" ${o.value === state.priority ? 'selected' : ''}>${o.label}</option>`)}</select>
       <select id="period" title="Date"><option value="">Any date</option><option value="today">Today</option><option value="d7">Last 7 days</option><option value="d30">Last 30 days</option></select>
+      ${state.stage ? html`<span class="pill blue">Stage: ${state.stage} <button class="btn link small" id="noStage" title="Remove">✕</button></span>` : ''}
       <button class="btn link" id="clear">Clear</button>
     </div>
     <div class="tbl-wrap"><table class="tbl"><thead><tr>
@@ -94,7 +97,7 @@ export function renderEnquiryList(el) {
     shown = list.filter(e => (!tile || tile.test(e))
       && (!state.type || e.type === state.type) && (!state.zone || e.zoneId === state.zone)
       && (!state.status || e.status === state.status) && (!state.priority || e.priority === state.priority)
-      && periodTest(state.period, e.receivedAt)
+      && periodTest(state.period, e.receivedAt) && (!state.stage || (e.stage || 'New') === state.stage)
       && terms.every(t => [e.no, e.customerName, e.contactName, e.mobile, e.email, e.siteName, e.description, e.remarks].join(' ').toLowerCase().includes(t)));
     $('#rows', el).innerHTML = String(shown.length ? html`${shown.map(e => {
       const r = registerRow(e);
@@ -109,8 +112,10 @@ export function renderEnquiryList(el) {
   on(el, 'click', 'tr[data-id]', (e, tr) => go(`enquiries/${tr.dataset.id}`));
   $('#q', el).addEventListener('input', debounce(e => { state.q = e.target.value; paint(); }, 150));
   ['type', 'zone', 'status', 'priority', 'period'].forEach(k => $(`#${k}`, el).addEventListener('change', e => { state[k] = e.target.value; paint(); }));
+  $('#noStage', el)?.addEventListener('click', e => { state.stage = ''; e.target.closest('.pill').remove(); paint(); });
   $('#clear', el).onclick = () => {
-    Object.assign(state, { tile: '', q: '', type: '', zone: '', status: '', priority: '', period: '' });
+    Object.assign(state, { tile: '', q: '', type: '', zone: '', status: '', priority: '', period: '', stage: '' });
+    $('#noStage', el)?.closest('.pill')?.remove();
     $$('select', el).forEach(s => { s.value = ''; });
     $('#q', el).value = '';
     paint();

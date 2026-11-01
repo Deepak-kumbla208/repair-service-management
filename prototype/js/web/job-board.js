@@ -5,12 +5,11 @@ import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, toast, tiles, openModal, readForm, field } from '../core/ui.js';
 import { zoneCode, technicians, empName, vsLabel } from '../core/lookups.js';
-import { suggestSlot, earliestDate, bookings, jobDuration, setPartReady, scheduleJob, scheduleProblems, freeStart, helpers, defaultHelper, nextWorkday, fmtHour, seesJob, INSPECTION_HOURS } from '../core/jobs.js';
+import { suggestSlot, earliestDate, bookings, jobDuration, setPartReady, scheduleJob, scheduleProblems, freeStart, helpers, defaultHelper, nextWorkday, isWorkday, dayStart, fmtHour, seesJob, INSPECTION_HOURS } from '../core/jobs.js';
 import { pageHead } from './shell.js';
 import { render } from '../app.js';
 
 const PX = 20;                           // pixels per hour on the calendar
-const DAY0 = 8.5;                        // 08:30
 const pad = n => String(n).padStart(2, '0');
 const dstr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const zc = id => `z${['A', 'B', 'C', 'D'].includes(zoneCode(id)) ? zoneCode(id) : 'A'}`;
@@ -39,7 +38,7 @@ function jobCard(j, sug) {
 function calendar(days, sel, sug) {
   const techs = technicians();
   const today = dstr(new Date());
-  return html`<div class="cal">
+  return html`<div class="cal" style="grid-template-columns:140px repeat(${days.length}, minmax(0, 1fr))">
     <div class="hd">Technician</div>${days.map(d => html`<div class="hd" style="${dstr(d) === today ? 'font-weight:700' : ''}">${fmtDay(d)}</div>`)}
     ${techs.map(t => html`<div class="who"><b>${t.name}</b><br><span class="muted">Zones ${[zoneCode(t.mainZoneId), ...(t.extraZoneIds || []).map(zoneCode)].join(', ')}</span><br><span class="muted small">+ ${defaultHelper(t.id)?.name || 'helper'}</span></div>
       ${days.map(d => {
@@ -48,9 +47,9 @@ function calendar(days, sel, sug) {
         const free = sel && freeStart(t.id, ds, jobDuration(sel), sel.id) != null && ds >= earliestDate(sel) && ds >= today;
         const isSug = sug && sug.technicianId === t.id && sug.date === ds;
         return html`<div class="day ${free ? 'free' : ''}" ${free ? html`data-slot="${t.id}|${ds}" title="Place ${sel.no} here"` : ''}>
-          ${items.map(b => html`<a class="blk ${zc(b.zoneId)} ${b.kind === 'amc' ? 'amc' : ''}" href="#/${{ job: 'jobs', amc: 'amc-visits', inspection: 'inspections' }[b.kind]}/${b.id}" style="top:${(b.from - DAY0) * PX}px;height:${Math.max(28, (b.to - b.from) * PX - 2)}px">
+          ${items.map(b => html`<a class="blk ${zc(b.zoneId)} ${b.kind === 'amc' ? 'amc' : ''}" href="#/${{ job: 'jobs', amc: 'amc-visits', inspection: 'inspections' }[b.kind]}/${b.id}" style="top:${(b.from - dayStart()) * PX}px;height:${Math.max(28, (b.to - b.from) * PX - 2)}px">
             <b>${fmtHour(b.from)}–${fmtHour(b.to)}</b><br>${b.kind === 'job' ? b.no : b.kind === 'amc' ? `AMC · ${b.no}` : 'Site inspection'} · ${b.title}</a>`)}
-          ${isSug ? html`<div class="blk ${zc(sel.zoneId)} sug" data-slot="${t.id}|${ds}" style="top:${(sug.start - DAY0) * PX}px;height:${jobDuration(sel) * PX - 2}px"><b>${fmtHour(sug.start)}–${fmtHour(sug.end)}</b><br>${sel.no} · suggested</div>` : ''}
+          ${isSug ? html`<div class="blk ${zc(sel.zoneId)} sug" data-slot="${t.id}|${ds}" style="top:${(sug.start - dayStart()) * PX}px;height:${jobDuration(sel) * PX - 2}px"><b>${fmtHour(sug.start)}–${fmtHour(sug.end)}</b><br>${sel.no} · suggested</div>` : ''}
         </div>`;
       })}`)}
   </div>`;
@@ -62,16 +61,18 @@ export function renderJobBoard(el) {
   if (!unscheduled.find(j => j.id === state.sel)) state.sel = unscheduled.find(j => j.termApproved)?.id || '';
   const sel = unscheduled.find(j => j.id === state.sel) || null;
   const sug = sel && sel.termApproved ? suggestSlot(sel) : null;
-  if (!state.week) { const t = new Date(); state.week = mondayOf(t.getDay() === 0 ? nextWorkday(t) : t); }
+  if (!state.week) { const t = new Date(); state.week = mondayOf(isWorkday(t) ? t : nextWorkday(t)); }
   if (sug && state.autoJump !== sel.id) { state.week = mondayOf(new Date(`${sug.date}T00:00`)); state.autoJump = sel.id; }
-  const days = [...Array(6)].map((_, i) => { const d = new Date(state.week); d.setDate(d.getDate() + i); return d; });
-  const weekEnd = dstr(days[5]);
+  // The company's working days of the week (Company Setup), Monday first.
+  const days = [...Array(7)].map((_, i) => { const d = new Date(state.week); d.setDate(d.getDate() + i); return d; }).filter(isWorkday);
+  const last = days[days.length - 1];
+  const weekEnd = dstr(last);
   const leave = store.list('tasks', t => t.kind === 'leaveSite' && t.status === 'Open');
 
   el.innerHTML = String(html`<div class="page" style="max-width:1600px">
     ${pageHead({ crumb: 'Transactions › Job Execution', title: 'Scheduling board',
       sub: 'Accepted quotations become jobs here. Pick a job: the system suggests a technician (zone first) and the first day the parts are ready.',
-      actions: html`<div class="row"><a class="btn" href="#/jobs/list">All jobs</a><button class="btn small" id="prev">‹</button><b>${fmtDay(days[0])} – ${fmtDay(days[5])} ${days[5].toLocaleString('en-SG', { month: 'short' })}</b><button class="btn small" id="next">›</button><button class="btn small" id="thisWeek">This week</button></div>` })}
+      actions: html`<div class="row"><a class="btn" href="#/jobs/list">All jobs</a><button class="btn small" id="prev">‹</button><b>${fmtDay(days[0])} – ${fmtDay(last)} ${last.toLocaleString('en-SG', { month: 'short' })}</b><button class="btn small" id="next">›</button><button class="btn small" id="thisWeek">This week</button></div>` })}
     ${tiles([
       { key: 'open', label: 'Not scheduled', count: unscheduled.length, sub: 'jobs waiting for a slot', tone: 'warn' },
       { key: 'apr', label: 'Waiting for approval', count: unscheduled.filter(j => !j.termApproved).length, sub: 'non-immediate payment term', tone: 'warn' },
@@ -92,7 +93,7 @@ export function renderJobBoard(el) {
   el.onclick = e => {
     const t = e.target;
     if (t.closest('#prev, #next')) { state.week.setDate(state.week.getDate() + (t.closest('#prev') ? -7 : 7)); state.week = new Date(state.week); return renderJobBoard(el); }
-    if (t.closest('#thisWeek')) { const n = new Date(); state.week = mondayOf(n.getDay() === 0 ? nextWorkday(n) : n); return renderJobBoard(el); }
+    if (t.closest('#thisWeek')) { const n = new Date(); state.week = mondayOf(isWorkday(n) ? n : nextWorkday(n)); return renderJobBoard(el); }
     if (t.closest('[data-part]') || t.closest('a')) return;
     const sched = t.closest('[data-sched]');
     if (sched) { const j = store.get('jobs', sched.dataset.sched); const s = suggestSlot(j); return scheduleDialog(el, j, s ? { technicianId: s.technicianId, date: s.date, start: s.start } : {}); }

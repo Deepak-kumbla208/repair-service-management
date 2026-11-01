@@ -12,6 +12,8 @@ import { render } from '../app.js';
 const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const BUCKETS = ['0–30', '31–60', '61–90', '90+'];
 const state = { tile: '', q: '' };
+// The dashboard opens this page with a tile already on (e.g. Overdue).
+export const setPaymentsTile = tile => { state.tile = tile; state.q = ''; };
 
 export function renderPayments(el) {
   const cur = auth.company().currency;

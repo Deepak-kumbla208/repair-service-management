@@ -17,12 +17,13 @@ import { signature, stamp, photo } from './seed-demo-flow.js';
 
 let T = '';
 const as = login => store.setContext({ tenantId: T, userId: T === 'co_gdd' ? 'usr_co_gdd_gadmin' : `usr_${T}_${login}` });
+export const useAmcTenant = t => { T = t; };
 const cust = code => store.findOne('customers', c => c.code === code);
 const TECH = { A: 'emp_co_dsh_3', B: 'emp_co_dsh_4' };
 const LOGIN = { emp_co_dsh_3: 'techA', emp_co_dsh_4: 'techB' };
 
 // Run fn as if it were that moment: every "now" in the rules (dates, numbers, history) reads the moved clock.
-function at(when, fn) {
+export function at(when, fn) {
   const Real = Date, off = when.getTime() - Real.now();
   class Moved extends Real { constructor(...a) { super(...(a.length ? a : [Real.now() + off])); } static now() { return Real.now() + off; } }
   globalThis.Date = Moved;
@@ -32,7 +33,7 @@ const on = (ds, hhmm = '09:00') => new Date(`${ds}T${hhmm}:00`);
 const ago = (days, hhmm = '10:00') => on(addDays(todayStr(), -days), hhmm);
 
 // ---------- Story steps ----------
-function enquiry(code, type, text, siteIdx = 0) {
+export function enquiry(code, type, text, siteIdx = 0) {
   as('ops');
   const c = cust(code), con = c.contacts[0];
   return saveNewEnquiry({ receivedAt: new Date().toISOString(), channel: 'EMAIL', channelOther: '', type, enquiryStatus: 'WARM', priority: 'MEDIUM', siteInspection: 'NO',
@@ -40,7 +41,7 @@ function enquiry(code, type, text, siteIdx = 0) {
     siteId: c.sites[siteIdx].id, lines: [{ itemRef: '', itemName: '', qty: null, description: text }] });
 }
 // The estimate with its sites' visits and the billing plan; extra: more sites of the customer (site indexes).
-function estimate(enq, { visits, billing, extra = [] } = {}) {
+export function estimate(enq, { visits, billing, extra = [] } = {}) {
   as('ops');
   let est = createEstimate(enq.id);
   const c = store.get('customers', est.customerId);
@@ -50,8 +51,8 @@ function estimate(enq, { visits, billing, extra = [] } = {}) {
   saveEstimate(est.id, draft);
   return store.get('estimates', est.id);
 }
-function quote(est) { as('ops'); const q = createFromEstimate(est.id); submitForCheck(q.id); return store.get('quotations', q.id); }
-function approveAll(q) {
+export function quote(est) { as('ops'); const q = createFromEstimate(est.id); submitForCheck(q.id); return store.get('quotations', q.id); }
+export function approveAll(q) {
   for (let t = openTaskFor('quotation', q.id); t; t = openTaskFor('quotation', q.id)) { as(t.roleCode === 'MGT' ? 'mgmt' : 'approver'); decideQuotation(t.id, 'approve', ''); }
   return store.get('quotations', q.id);
 }
@@ -71,7 +72,7 @@ function book(v, tech, date = v.plannedDate, via = 'Phone') {
   return null;
 }
 // The technician's visit on the phone: all pass, except the given failures [[tag, item code, note, part code]].
-function serve(coll, id, pics, fails = []) {
+export function serve(coll, id, pics, fails = []) {
   const d = store.get(coll, id);
   as(LOGIN[d.technicianId]);
   startTravel(coll, id); arrive(coll, id);

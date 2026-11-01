@@ -11,7 +11,7 @@ import { amcPrefill, amcProblems, describe } from './amc-estimates.js';
 const rid = () => store.uid('r_');
 const pad = n => String(n).padStart(2, '0');
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
-export const DEFAULTS = { costingLevel: 'JOB', sharedCosts: 'SPREAD', overheadPct: 20, marginBasis: 'MARKUP', marginPct: 20, quoteValidityDays: 7 };
+export const DEFAULTS = { costingLevel: 'JOB', sharedCosts: 'SPREAD', overheadPct: 20, marginBasis: 'MARKUP', marginPct: 20, quoteValidityDays: 7, defaultPaymentTerm: 'IMMEDIATE' };
 export const txDefaults = () => ({ ...DEFAULTS, ...(auth.company()?.txDefaults || {}) });
 
 export function companyTax() {

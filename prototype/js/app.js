@@ -17,7 +17,7 @@ import { renderInspectionList, renderInspection } from './web/site-inspection.js
 import { renderReport } from './web/report-view.js';
 import { renderPrintSvr } from './web/print-svr.js';
 import { renderMasterList, renderMasterForm } from './web/master-engine.js';
-import { renderAdmin, renderSoon } from './web/admin-preview.js';
+import { renderAdmin, renderSoon } from './web/admin.js';
 import { renderEstimateList, renderQuotationList } from './web/lists.js';
 import { renderEstimate } from './web/estimate-form.js';
 import { renderQuotation } from './web/quotation-view.js';
@@ -32,6 +32,8 @@ import { renderContractList, renderContract } from './web/contracts.js';
 import { renderAmcScheduling } from './web/amc-scheduling.js';
 import { renderVisitList, renderVisit } from './web/visits.js';
 import { refreshAmc } from './core/contracts.js';
+import { isOffline } from './core/offline.js';
+import { drawGuideBar } from './web/guide.js';
 import { mRepairJob, mRepairStep } from './mobile/repair-job.js';
 import { mService, mServiceStep, mShutter } from './mobile/service.js';
 import { mTasks, mTask } from './mobile/tasks.js';
@@ -78,18 +80,19 @@ const WEB = [
   [/^soon\/([^/]+)$/, m => m[1], renderSoon],
 ];
 
+// [pattern, page, menu needed on the phone (a menu hidden in Menu Access refuses its pages too)]
 const MOBILE = [
   [/^m\/home$/, mHome],
   [/^m\/jobs$/, mJobs],
-  [/^m\/job\/([^/]+)$/, mJob],
-  [/^m\/report\/([^/]+)\/(\d)$/, mReport],
-  [/^m\/enquiries$/, mEnquiries],
-  [/^m\/enquiry\/([^/]+)$/, mEnquiry],
-  [/^m\/rjob\/([^/]+)$/, mRepairJob],
-  [/^m\/rjob\/([^/]+)\/(\w+)$/, mRepairStep],
-  [/^m\/(visit|gjob)\/([^/]+)$/, mService],
-  [/^m\/(visit|gjob)\/([^/]+)\/sh\/([^/]+)$/, mShutter],
-  [/^m\/(visit|gjob)\/([^/]+)\/(\w+)$/, mServiceStep],
+  [/^m\/job\/([^/]+)$/, mJob, 'inspection'],
+  [/^m\/report\/([^/]+)\/(\d)$/, mReport, 'inspection'],
+  [/^m\/enquiries$/, mEnquiries, 'enquiry'],
+  [/^m\/enquiry\/([^/]+)$/, mEnquiry, 'enquiry'],
+  [/^m\/rjob\/([^/]+)$/, mRepairJob, 'job'],
+  [/^m\/rjob\/([^/]+)\/(\w+)$/, mRepairStep, 'job'],
+  [/^m\/(visit|gjob)\/([^/]+)$/, mService, m => (m[1] === 'visit' ? 'amcExecution' : 'job')],
+  [/^m\/(visit|gjob)\/([^/]+)\/sh\/([^/]+)$/, mShutter, m => (m[1] === 'visit' ? 'amcExecution' : 'job')],
+  [/^m\/(visit|gjob)\/([^/]+)\/(\w+)$/, mServiceStep, m => (m[1] === 'visit' ? 'amcExecution' : 'job')],
   [/^m\/tasks$/, mTasks],
   [/^m\/task\/([^/]+)$/, mTask],
   [/^m\/more$/, mMore],
@@ -127,6 +130,7 @@ export function routeForView(route, view) {
 const replaceRoute = r => location.replace(`#/${r}`);
 
 export function render() {
+  drawGuideBar(); // the guided demo's step bar, outside the app area
   const route = location.hash.replace(/^#\/?/, '');
   document.querySelectorAll('.menu-pop, .modal-back, .palette-back').forEach(x => x.remove());
   if (!auth.session()) {
@@ -135,13 +139,17 @@ export function render() {
   }
   const view = auth.view();
   if (!route || route === 'login') return replaceRoute(view === 'mobile' ? 'm/home' : 'home');
-  refreshAmc(); // the daily check: instalment invoices on their bill dates, renewal reminders, contract ends
+  // The daily check (instalment invoices on their bill dates, renewal reminders, contract ends) runs on the office's
+  // side; an offline phone has no server to run it, and doing it there too would make the same invoice twice.
+  if (!isOffline()) refreshAmc();
   const wanted = routeForView(route, view);
   if (wanted !== route) return replaceRoute(wanted);
 
   if (view === 'mobile') {
     const hit = MOBILE.find(([re]) => re.test(route));
     if (!hit) return replaceRoute('m/home');
+    const need = typeof hit[2] === 'function' ? hit[2](route.match(hit[0])) : hit[2];
+    if (need && !auth.can(need, 'view', 'mobile')) return renderPhone(app, route, page => { page.setTitle('No access', 'm/home'); page.body.innerHTML = '<div class="empty">Your role cannot open this on the phone.</div>'; });
     return renderPhone(app, route, page => hit[1](page, ...route.match(hit[0]).slice(1)));
   }
 
@@ -166,7 +174,7 @@ export function render() {
 
 // Base sample data, then the stage samples (one enquiry at every step of the money side).
 async function seedAll() {
-  app.innerHTML = '<div class="empty" style="padding-top:30vh">Preparing the sample data…</div>';
+  app.innerHTML = '<div class="empty" style="padding-top:30vh">Preparing the sample data… about 10 seconds, only on the first visit and after "Reset demo data".</div>';
   await clearAllMedia().catch(() => {});
   store.writeSeed(buildSeed());
   await buildDemoFlow().catch(e => console.error('Stage samples could not be built', e));

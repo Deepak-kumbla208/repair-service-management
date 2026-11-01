@@ -44,11 +44,11 @@ const AMC_TERMS = [
   ['Breakdown call-outs between visits are charged separately. Contract customers get priority service and [X] % off repair labour.', true],
   ['The contract runs for the period stated from its start date and is billed as shown in the billing plan, in advance.'],
   ['{company} will send a renewal quotation before the contract ends.'],
-  ['This quotation is valid for 7 days from the date of issue.'],
+  ['This quotation is valid for {validity} days from the date of issue.'],
 ];
 function terms(t) {
   return AMC_TERMS.map(([text, ph], i) => base(t, `trm_${t}_A${i + 1}`, { code: `AMC-0${i + 1}`, title: `AMC term ${i + 1}`, docType: 'AMC', order: i + 1, text,
-    validityDays: i === AMC_TERMS.length - 1 ? 7 : null, isDefault: true, placeholders: ph ? ['text'] : [] }));
+    isDefault: true, placeholders: ph ? ['text'] : [] }));
 }
 
 // Made-up customers for the AMC and GS stage samples.

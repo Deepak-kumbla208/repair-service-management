@@ -9,7 +9,7 @@ It covers the whole job, from the first enquiry to the final payment:
 
 There's a web view for the office and a mobile view for technicians, and each user sees their own menu.
 
-**Status:** prototype in progress. Parts 1 and 2 and the first half of part 3 are built: masters, enquiries, site inspection, the money side of a repair job (estimate, quotation with an approval step, scheduling, the technician's job and Work Done form on the phone, invoice, payment and job closure), and AMC contracts and general servicing (AMC estimate, contract with visit plan and billing plan, visit scheduling, the inspection checklist on the phone, invoices from the billing plan, renewals). Admin screens and dashboards come next.
+**Status:** prototype, all three parts built: masters, enquiries, site inspection, the money side of a repair job (estimate, quotation with an approval step, scheduling, the technician's job and Work Done form on the phone, invoice, payment and job closure), AMC contracts and general servicing (AMC estimate, contract with visit plan and billing plan, visit scheduling, the inspection checklist on the phone, invoices from the billing plan, renewals), the admin screens (company, transaction setup, users and roles, menu access, approval rules), a dashboard per role, a phone that can work offline, and a guided demo.
 
 ## What it covers
 
@@ -18,6 +18,7 @@ There's a web view for the office and a mobile view for technicians, and each us
 - Job scheduling, work-done forms with customer sign-off, invoices and payment recording
 - AMC contracts, planned maintenance visits and inspection checklists
 - Masters, roles, menu access, approval levels and per-company tax and country settings
+- Admin screens to change all of these, dashboards per role, and an offline mode for the phone
 
 ## Run it
 
@@ -32,7 +33,8 @@ Then open http://localhost:8000.
 
 ## Try it
 
-- Log in as a demo user; there are no passwords. The made-up company "Demo Shutters Pte Ltd" has an Admin, an operations executive, an approver, two technicians and a management user. "Gulf Demo Doors LLC" is a second made-up company (UAE, AED) with its own data.
+- New here? Use the **Guided demo** on the login page: three walkthroughs (repair, AMC, general servicing) that log you in as the right user at each step and open the right record.
+- Log in as a demo user; there are no passwords. The made-up company "Demo Shutters Pte Ltd" has an Admin, an operations executive, an approver, two technicians and a management user. "Gulf Demo Doors LLC" is a second made-up company (UAE, AED) with its own data, an Admin, an approver and a management user.
 - Use the Web / Mobile switch at the top. Technicians work in the Mobile view.
 - Press Ctrl+K to search everything your role can open.
 - Suggested walk-through, part 1: as the operations executive, use "Paste email" to enter an enquiry and assign a technician; then switch to Mobile, log in as that technician, fill in the site report and sign it; the report then appears on the web.
@@ -43,4 +45,4 @@ Then open http://localhost:8000.
 
 ## Demo data
 
-The demo data is sample test data. Documents the prototype prints (quotations, invoices, reports) are marked "DEMO" and are not valid business documents. Data is kept in your browser only, and the app has a "Reset demo data" button.
+The demo data is sample test data. Documents the prototype prints (quotations, invoices, reports) are marked "DEMO" and are not valid business documents. Data is kept in your browser only, and the app has a "Reset demo data" button. The sample data includes 12 months of made-up history for the dashboards; preparing it takes about 10 seconds on the first visit.

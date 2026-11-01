@@ -6,6 +6,7 @@ import * as auth from '../core/auth.js';
 import { html, $ } from '../core/ui.js';
 import { zones, productName } from '../core/lookups.js';
 import { hydrateImages } from '../core/media.js';
+import { logoHtml } from './print-docs.js';
 
 const box = on => html`<span class="box">${on ? '✓' : ''}</span>`;
 const opt = (on, label) => html`<span class="nowrap" style="margin-right:14px">${box(on)}${label}</span>`;
@@ -14,7 +15,7 @@ const sec = (n, title, cols) => html`<tr class="sec"><td colspan="${cols}">${n}&
 
 function sheetHead(company) {
   return html`<div class="demo-banner">DEMO – prototype, not a valid document</div>
-    <div class="head"><div class="logo">LOGO</div><div class="head-main"><h1>SITE VIEWING REPORT</h1>
+    <div class="head"><div class="logo">${logoHtml(company)}</div><div class="head-main"><h1>SITE VIEWING REPORT</h1>
       <div>${company.address} | ${company.regLabel}: ${company.regNo}</div>
       <div>Tel: ${company.tel} &nbsp;|&nbsp; Mobile: ${company.mobile} &nbsp;|&nbsp; Email: ${company.email}</div></div></div>`;
 }

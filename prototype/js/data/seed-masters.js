@@ -61,11 +61,11 @@ const QUOTE_TERMS = [
   '{company} reserves the right to revise this quotation if further faults are found after inspection.',
   'Customers with a valid Maintenance Contract with {company} receive priority service and discounted charges.',
   'The quoted price covers normal office hours (8:30 am to 5:30 pm). Work after 5:30 pm is charged at 1.5 times the quoted rate.',
-  'This quotation is valid for 7 days from the date of issue.',
+  'This quotation is valid for {validity} days from the date of issue.',
 ];
 
 function terms(t, invoiceTerms) {
-  const q = QUOTE_TERMS.map((text, i) => base(t, `trm_${t}_Q${i + 1}`, { code: `QT-0${i + 1}`, title: `Quotation term ${i + 1}`, docType: 'Quotation', order: i + 1, text, validityDays: i === 5 ? 7 : null, isDefault: true }));
+  const q = QUOTE_TERMS.map((text, i) => base(t, `trm_${t}_Q${i + 1}`, { code: `QT-0${i + 1}`, title: `Quotation term ${i + 1}`, docType: 'Quotation', order: i + 1, text, isDefault: true }));
   const inv = invoiceTerms.map(([text, ph], i) => base(t, `trm_${t}_I${i + 1}`, { code: `INV-0${i + 1}`, title: `Invoice term ${i + 1}`, docType: 'Invoice', order: i + 1, text, isDefault: true, placeholders: ph ? ['text'] : [] }));
   return [...q, ...inv];
 }

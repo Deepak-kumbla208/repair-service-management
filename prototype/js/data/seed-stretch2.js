@@ -1,20 +1,22 @@
 // Stretch 2 sample data: the preset approval rules and a Kosmic repair enquiry whose site report is already in,
 // so the money side (estimate → quotation → job → invoice → payment) can be shown right after "Reset demo data".
 
-// Preset approval rules (the engine in core/workflow.js; the editing screen comes in Stretch 3).
+// Preset approval rules (the engine in core/workflow.js; edited in the Authorization Workflow Master).
 // Each rule adds an approval level for a document when its condition is true. Rules on the same level are one task.
 export function approvalRules(t) {
-  const rule = (code, name, when, level, roleCode, condition = null) =>
-    ({ id: `rul_${t}_${code}`, tenantId: t, code, name, docType: 'quotation', when, level, roleCode, condition, mode: 'any', active: true });
+  const rule = (code, docType, name, when, level, roleCode, condition = null) =>
+    ({ id: `rul_${t}_${code}`, tenantId: t, code, name, docType, when, level, roleCode, condition, mode: 'any', active: true });
   return [
-    rule('QT_CHECK', 'Quotation counter-check', 'Every quotation, before it is sent', 1, 'APR'),
-    rule('PAY_TERM', 'Payment term not immediate', 'Payment term is not Immediate (needed before scheduling)', 1, 'APR', { field: 'paymentTerm', op: 'neq', value: 'IMMEDIATE' }),
-    rule('QT_HIGH', 'Quotation over 10,000', 'Total incl. tax over 10,000 (sample level-2 rule)', 2, 'MGT', { field: 'total', op: 'gt', value: 10000 }),
+    rule('QT_CHECK', 'quotation', 'Quotation counter-check', 'Every quotation', 1, 'APR'),
+    rule('PAY_TERM', 'quotation', 'Payment term not immediate', 'Payment term is not Immediate', 1, 'APR', { field: 'paymentTerm', op: 'neq', value: 'IMMEDIATE' }),
+    rule('QT_HIGH', 'quotation', 'Quotation over 10,000', 'Total with tax over 10,000', 2, 'MGT', { field: 'total', op: 'gt', value: 10000 }),
+    // A payment term changed when the customer accepts (not Immediate) is approved before the job is scheduled.
+    rule('JOB_TERM', 'job', 'Payment term changed at acceptance', 'Payment term is not Immediate', 1, 'APR', { field: 'paymentTerm', op: 'neq', value: 'IMMEDIATE' }),
   ];
 }
 
-// Defaults for new transactions (Transaction Setup; editing screen in Stretch 3).
-export const TX_DEFAULTS = { costingLevel: 'JOB', sharedCosts: 'SPREAD', overheadPct: 20, marginBasis: 'MARKUP', marginPct: 20, quoteValidityDays: 7, inspectionHours: 2 };
+// Defaults for new transactions (edited in Transaction Setup).
+export const TX_DEFAULTS = { costingLevel: 'JOB', sharedCosts: 'SPREAD', overheadPct: 20, marginBasis: 'MARKUP', marginPct: 20, quoteValidityDays: 7, defaultPaymentTerm: 'IMMEDIATE' };
 
 const hist = (...steps) => steps.map(([status, iso, by, note]) => ({ status, at: iso, by, note: note || '' }));
 const localDate = iso => { const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };

@@ -1,8 +1,8 @@
 // Menu catalogue, following the team lead's "Application Menu Structure" sheet.
 // stretch: the build stretch that delivers the screen; menus above BUILT_STRETCH show a "coming" page
-// (3.5 = Stretch 3 Part B: the admin screens).
+// (3.5 = Stretch 3 Part B: the admin screens, now built).
 export const GROUPS = ['Dashboard', 'Master', 'Transactions', 'Admin Setup'];
-export const BUILT_STRETCH = 3;
+export const BUILT_STRETCH = 3.5;
 
 export const MENUS = [
   { key: 'dashboard', label: 'Dashboard', group: 'Dashboard', icon: '◧', route: 'home', stretch: 1 },
@@ -31,11 +31,11 @@ export const MENUS = [
   { key: 'invoice', label: 'Invoice', group: 'Transactions', icon: '▧', route: 'invoices', stretch: 2 },
   { key: 'payment', label: 'Payment Collection', group: 'Transactions', icon: '$', route: 'payments', stretch: 2 },
 
-  { key: 'companySetup', label: 'Company Setup', group: 'Admin Setup', icon: '⌂', route: 'admin/companySetup', stretch: 3.5, preview: true },
-  { key: 'transactionSetup', label: 'Transaction Setup', group: 'Admin Setup', icon: '#', route: 'admin/transactionSetup', stretch: 3.5, preview: true },
-  { key: 'userRole', label: 'User Role', group: 'Admin Setup', icon: '☻', route: 'admin/userRole', stretch: 3.5, preview: true },
-  { key: 'menuAccess', label: 'Menu Access', group: 'Admin Setup', icon: '⊞', route: 'admin/menuAccess', stretch: 3.5, preview: true },
-  { key: 'authWorkflow', label: 'Authorization Workflow Master', group: 'Admin Setup', icon: '⇶', stretch: 3.5 },
+  { key: 'companySetup', label: 'Company Setup', group: 'Admin Setup', icon: '⌂', route: 'admin/companySetup', stretch: 3.5 },
+  { key: 'transactionSetup', label: 'Transaction Setup', group: 'Admin Setup', icon: '#', route: 'admin/transactionSetup', stretch: 3.5 },
+  { key: 'userRole', label: 'User Role', group: 'Admin Setup', icon: '☻', route: 'admin/userRole', stretch: 3.5 },
+  { key: 'menuAccess', label: 'Menu Access', group: 'Admin Setup', icon: '⊞', route: 'admin/menuAccess', stretch: 3.5 },
+  { key: 'authWorkflow', label: 'Authorization Workflow Master', group: 'Admin Setup', icon: '⇶', route: 'admin/authWorkflow', stretch: 3.5 },
 ];
 
 export const MASTER_KEYS = MENUS.filter(m => m.group === 'Master').map(m => m.key);
@@ -52,3 +52,27 @@ export const MOBILE_TABS = [
 ];
 
 export const ACTIONS = ['view', 'create', 'edit', 'cancel', 'approve', 'print'];
+
+// What Menu Access offers per menu (problem 13 of the Part B plan check): only the rights its screens check
+// (cancelling is part of Edit), Mobile only where a phone screen exists, Own only where work is assigned to a person.
+const MASTER_RIGHTS = ['view', 'create', 'edit'];
+export const MENU_RULES = {
+  dashboard: { actions: ['view'], phone: true },
+  customer: { actions: MASTER_RIGHTS, phone: true }, item: { actions: MASTER_RIGHTS, phone: true },
+  employee: { actions: MASTER_RIGHTS }, transport: { actions: MASTER_RIGHTS }, equipment: { actions: MASTER_RIGHTS }, labour: { actions: MASTER_RIGHTS },
+  product: { actions: MASTER_RIGHTS }, size: { actions: MASTER_RIGHTS }, valueset: { actions: MASTER_RIGHTS }, tax: { actions: MASTER_RIGHTS }, terms: { actions: MASTER_RIGHTS },
+  enquiry: { actions: ['view', 'create', 'edit'], phone: true },
+  inspection: { actions: ['view', 'edit', 'print'], phone: true, own: true },
+  estimation: { actions: ['view', 'create', 'edit'] },
+  quotation: { actions: ['view', 'edit', 'approve', 'print'], phone: true },
+  job: { actions: ['view', 'edit', 'approve'], phone: true, own: true },
+  amcContract: { actions: ['view', 'edit'] },
+  amcScheduling: { actions: ['view', 'edit'] },
+  amcExecution: { actions: ['view', 'edit'], phone: true, own: true },
+  closure: { actions: ['view', 'edit'] },
+  invoice: { actions: ['view', 'create', 'edit'], phone: true, own: true },
+  payment: { actions: ['view', 'create', 'edit'], phone: true, own: true },
+  companySetup: { actions: ['view', 'edit'] }, transactionSetup: { actions: ['view', 'edit'] }, userRole: { actions: ['view', 'edit'] },
+  menuAccess: { actions: ['view', 'edit'] }, authWorkflow: { actions: ['view', 'edit'] },
+};
+export const ACTION_LABELS = { view: 'View', create: 'Create', edit: 'Edit', approve: 'Approve', print: 'Print' };

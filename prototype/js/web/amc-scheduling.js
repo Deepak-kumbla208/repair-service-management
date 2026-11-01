@@ -8,7 +8,7 @@ import { html, $, go, on, fmtDate, pill, toast, openModal, readForm, chipGroup, 
 import { zones, zoneCode, technicians, empName } from '../core/lookups.js';
 import { refreshAmc, todayStr, addMonths } from '../core/contracts.js';
 import { suggestVisit, scheduleVisit, scheduleVisitProblems, confirmVisitDate, isOverdue, visitDate, perDayHours, OPEN_VISIT, DONE_VISIT } from '../core/visits.js';
-import { fmtHour, helpers } from '../core/jobs.js';
+import { fmtHour, helpers, isWorkday } from '../core/jobs.js';
 import { pageHead } from './shell.js';
 import { render } from '../app.js';
 
@@ -44,11 +44,12 @@ export function renderAmcScheduling(el) {
     .sort((a, b) => (isOverdue(b) - isOverdue(a)) || visitDate(a).localeCompare(visitDate(b)));
   const [yy, mm] = state.month.split('-').map(Number);
 
-  // Month grid, Monday to Saturday (Sunday is not a working day).
+  // Month grid of the company's working days (Company Setup), Monday first.
   const cells = [];
   const last = new Date(yy, mm, 0);
   const d = new Date(yy, mm - 1, 1 - ((new Date(yy, mm - 1, 1).getDay() + 6) % 7)); // the Monday on or before the 1st
-  while (d <= last || d.getDay() !== 1) { if (d.getDay() !== 0) cells.push(new Date(d)); d.setDate(d.getDate() + 1); }
+  while (d <= last || d.getDay() !== 1) { if (isWorkday(d)) cells.push(new Date(d)); d.setDate(d.getDate() + 1); }
+  const heads = [1, 2, 3, 4, 5, 6, 0].filter(n => cells.some(c => c.getDay() === n)).map(n => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][n]);
   const ds = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const onDay = day => shown.filter(v => (v.blocks?.length ? v.blocks.some(b => b.date === day) : visitDate(v) === day));
   const block = v => {
@@ -77,7 +78,7 @@ export function renderAmcScheduling(el) {
         <div class="row" style="margin-bottom:6px"><button class="btn small" data-step="-1">‹</button><b style="font-size:14px">${MONTHS[mm - 1]} ${yy}</b><button class="btn small" data-step="1">›</button>
           ${state.month !== ym(t) ? html`<button class="btn link small" data-month="${ym(t)}">This month</button>` : ''}<span class="grow"></span>
           <span class="legend">${zs.map(z => html`<span><i class="${ZCLS[z.code] || ''}"></i>${z.code}</span>`)}</span></div>
-        <div class="mcal">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(h => html`<div class="hd">${h}</div>`)}
+        <div class="mcal" style="grid-template-columns:repeat(${heads.length}, minmax(0, 1fr))">${heads.map(h => html`<div class="hd">${h}</div>`)}
           ${cells.map(d => { const day = ds(d); return html`<div class="c ${d.getMonth() !== mm - 1 ? 'out' : ''} ${day === t ? 'today' : ''}"><div class="d">${d.getDate()}${day === t ? ' · today' : ''}</div>${onDay(day).map(block)}</div>`; })}</div>
         <p class="mini-note">A visit longer than one working day shows on each of its days. Click a visit to open it.</p>
       </div>

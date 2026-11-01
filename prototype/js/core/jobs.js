@@ -6,12 +6,17 @@
 import * as store from './store.js';
 import * as auth from './auth.js';
 import { findSite, technicians, empName } from './lookups.js';
-import { openTask, closeTask, cancelTasksFor } from './workflow.js';
+import { openTask, closeTask, cancelTasksFor, startApproval, levelsFor, openLevel, registerFacts } from './workflow.js';
 import { createInvoice, invoiceForJob, paymentsFor, syncDueDate } from './billing.js';
 import { round2, amcSiteRow } from './costing.js';
 import { snapshot, registerCounts } from './contracts.js';
+import { workWeek, isWorkday, nextWorkday } from './setup.js';
+import { fmtDate } from './ui.js';
 
-export const DAY_START = 8.5, DAY_END = 17.5;   // working day 08:30–17:30
+// The working day comes from Company Setup (default 08:30–17:30, Monday–Saturday).
+export const dayStart = () => workWeek().start;
+export const dayEnd = () => workWeek().end;
+export { isWorkday, nextWorkday };
 export const INSPECTION_HOURS = 2;               // a site inspection blocks 2 hours on the board
 export const OPEN_JOB = ['To schedule', 'Scheduled', 'On the way', 'On site'];
 const pad = n => String(n).padStart(2, '0');
@@ -80,14 +85,13 @@ export function setPartReady(jobId, key, ready) {
   const j = store.get('jobs', jobId);
   store.update('jobs', jobId, { parts: j.parts.map(p => (p.key === key ? { ...p, ready } : p)) }, `${j.parts.find(p => p.key === key)?.name}: ${ready ? 'in stock' : 'to order'}`);
 }
-export function nextWorkday(d) { const x = new Date(d); do { x.setDate(x.getDate() + 1); } while (x.getDay() === 0); return x; }
 // Earliest date: today (same-day repairs) when every part is in stock, else today + the longest lead time.
-// Sundays are skipped.
+// Days off (Company Setup's working week) are skipped.
 export function earliestDate(job, from = new Date()) {
   const lead = Math.max(0, ...job.parts.filter(p => !p.ready).map(p => Number(p.leadDays) || 0));
   const base = new Date(from); base.setHours(0, 0, 0, 0);
   if (lead) base.setDate(base.getDate() + lead);
-  return dstr(base.getDay() === 0 ? nextWorkday(base) : base);
+  return dstr(isWorkday(base) ? base : nextWorkday(base));
 }
 export const partsReadyBy = (job, ds) => earliestDate(job) <= ds;
 
@@ -102,14 +106,14 @@ export function bookings(techId, ds, exceptJobId = '') {
   return [...jobs, ...insp, ...amc].sort((a, b) => a.from - b.from);
 }
 // First free start time on a day for a block of `hours`, or null. Today starts no earlier than now.
-const earliestStart = ds => Math.max(DAY_START + 0.5, ds === dstr(new Date()) ? ceilHalf(hoursOf(new Date().toISOString())) : 0);
+const earliestStart = ds => Math.max(dayStart() + 0.5, ds === dstr(new Date()) ? ceilHalf(hoursOf(new Date().toISOString())) : 0);
 export function freeStart(techId, ds, hours, exceptJobId = '') {
   let t = earliestStart(ds); // 09:00, or now
   for (const b of bookings(techId, ds, exceptJobId)) {
     if (b.from >= t + hours) break;
     t = Math.max(t, b.to);
   }
-  return t + hours <= DAY_END + 0.01 ? t : null;
+  return t + hours <= dayEnd() + 0.01 ? t : null;
 }
 // Suggest a technician (zone first, then free time) and the first day the parts are ready.
 export function suggestSlot(job, days = 14) {
@@ -129,6 +133,7 @@ export const defaultHelper = techId => { const t = store.get('employees', techId
 
 export function scheduleProblems(job, slot) {
   const p = [];
+  if (store.heldByOther('jobs', job.id)) p.push(`The technician's phone is offline with changes to this job; wait until it is back online.`);
   if (!job.termApproved) p.push(job.termNote ? 'The Approver returned the payment term: change it or ask again.' : 'The payment term is not immediate: the Approver must approve it first.');
   if (!slot.technicianId) p.push('Pick a technician.');
   if (slot.date < dstr(new Date())) p.push('Pick today or a later date.');
@@ -148,7 +153,7 @@ export function scheduleJob(jobId, { technicianId, helperIds = [], date, start, 
   if (problems.length) return { problems };
   const first = job.status === 'To schedule';
   store.update('jobs', jobId, { technicianId, helperIds, start: toIso(date, start), end: toIso(date, start + hours) },
-    `${first ? 'Scheduled' : 'Moved'}: ${empName(technicianId)}, ${date} ${fmtHour(start)}–${fmtHour(start + hours)}`);
+    `${first ? 'Scheduled' : 'Moved'}: ${empName(technicianId)}, ${fmtDate(date)} ${fmtHour(start)}–${fmtHour(start + hours)}`);
   if (first) store.setStatus('jobs', jobId, 'Scheduled', empName(technicianId));
   let invoice = invoiceForJob(jobId);
   if (job.paymentTerm === 'IMMEDIATE' && !invoice) invoice = createInvoice(jobId, { post: true, note: 'raised at scheduling (payment immediate)' });
@@ -156,15 +161,28 @@ export function scheduleJob(jobId, { technicianId, helperIds = [], date, start, 
   return { problems: [], invoice };
 }
 
-const termTask = (j, title) => openTask({ kind: 'approval', docType: 'job', docId: j.id, docNo: j.no, title, customer: j.customer, amount: j.total,
-  level: 1, roleCode: 'APR', roleName: store.findOne('roles', r => r.code === 'APR')?.name || 'Approver', rules: [{ code: 'PAY_TERM', name: 'Payment term not immediate' }] });
-export const openTermTask = j => termTask(j, `Payment term for ${j.no}`);
+// What the approval rules can test on a job (a payment term changed at acceptance; preset rule JOB_TERM).
+registerFacts('job', j => {
+  const q = store.get('quotations', j.quotationId);
+  return { subtotal: q?.subtotal ?? null, total: j.total ?? q?.total, jobType: j.type === 'GS' ? 'GS' : 'REPAIR',
+    newCustomer: !store.list('enquiries', e => e.customerId === j.customerId && e.id !== j.enquiryId && e.stage === 'Won').length };
+});
+// The payment-term approval runs through the rules (docType "job"); with no matching rule the term is approved.
+function askTermApproval(j, title) {
+  const { task } = startApproval('job', j, { docNo: j.no, title, customer: j.customer, amount: j.total, submittedBy: store.currentActor() });
+  if (!task) store.update('jobs', j.id, { termApproved: true, termNote: '' }, 'Payment term: no approval rule applies');
+  return task;
+}
+export const openTermTask = j => askTermApproval(j, `Payment term for ${j.no}`);
 
 export function approveJobTerm(taskId, decision, comment) {
   const t = closeTask(taskId, decision, comment);
   if (!t) return;
-  if (decision === 'approve') store.update('jobs', t.docId, { termApproved: true, termNote: '' }, `Payment term approved${comment ? `: ${comment}` : ''}`);
-  else store.update('jobs', t.docId, { termNote: comment }, `Payment term returned: ${comment}`);
+  if (decision !== 'approve') { store.update('jobs', t.docId, { termNote: comment }, `Payment term returned: ${comment}`); return; }
+  const j = store.get('jobs', t.docId);
+  const next = levelsFor('job', j).find(l => l.level > t.level);
+  if (next) { openLevel('job', j, next, { docNo: j.no, title: t.title, customer: j.customer, amount: j.total, submittedBy: t.submittedBy }); return; }
+  store.update('jobs', t.docId, { termApproved: true, termNote: '' }, `Payment term approved${comment ? `: ${comment}` : ''}`);
 }
 
 // After the Approver returns a term: change it (Immediate needs no approval) or ask again with the same term.
@@ -172,13 +190,14 @@ export function changeJobTerm(jobId, term) {
   const j = store.get('jobs', jobId);
   const immediate = term === 'IMMEDIATE';
   store.update('jobs', jobId, { paymentTerm: term, termApproved: immediate, termNote: '' }, immediate ? 'Payment term changed to Immediate' : `Payment term ${term} sent to the Approver again`);
-  if (!immediate) termTask(store.get('jobs', jobId), `Payment term for ${j.no} (asked again)`);
+  if (!immediate) askTermApproval(store.get('jobs', jobId), `Payment term for ${j.no} (asked again)`);
 }
 
 // Cancelling a job cancels its invoice (the number is kept), closes its open tasks and marks the enquiry Lost.
 // Refused once a payment is recorded (no refunds in the prototype). Returns an error text or ''.
 export function cancelJob(jobId, reason) {
   const j = store.get('jobs', jobId);
+  if (store.heldByOther('jobs', jobId)) return `The technician's phone is offline with changes to this job; wait until it is back online.`;
   const paid = invoiceForJob(jobId);
   if (paid && paymentsFor(paid.id).length) return `${paid.no} already has a payment, so the job cannot be cancelled.`;
   store.setStatus('jobs', jobId, 'Cancelled', reason);

@@ -1,14 +1,18 @@
 // Phone: Home (role-based tiles and today's work), More (view switch, switch user, reset), and later-stretch tabs.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, on, go, tiles, confirmBox } from '../core/ui.js';
+import { html, on, go, tiles, confirmBox, toast, fmtTime } from '../core/ui.js';
 import { isToday } from '../core/enquiries.js';
-import { switchView, resetDemo } from '../app.js';
+import { switchView, resetDemo, render } from '../app.js';
 import { logoutTo } from '../web/shell.js';
 import { enquiryTiles, setEnquiryTile } from '../web/enquiry-list.js';
 import { myWork, openReport } from './jobs.js';
 import { myTasks } from '../core/workflow.js';
 import { taskCard } from './tasks.js';
+import { revenue, owed, amcEnding, visitsOverdue } from '../core/dashboard.js';
+import { isOffline, waiting, goOffline, goOnline } from '../core/offline.js';
+
+const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export function mHome(page) {
   const u = auth.user(), r = auth.role(), c = auth.company();
@@ -29,8 +33,17 @@ export function mHome(page) {
   } else {
     const tasks = auth.hasTasks('mobile') ? myTasks() : [];
     if (auth.hasTasks('mobile')) body = html`${body}<div class="m-section">Tasks waiting for you (${tasks.length})</div>${tasks.length ? html`${tasks.slice(0, 3).map(taskCard)}` : html`<div class="muted small">Nothing waiting.</div>`}`;
+    if (r.dashboard === 'management') {
+      const money = owed();
+      body = html`${body}<div class="m-section">This month</div><div class="m-card"><div class="kv two">
+        <div><div class="k">Revenue before ${c.taxLabel || 'tax'}</div><div class="v"><b>${m2(revenue('month'))}</b></div></div>
+        <div><div class="k">Owed to us</div><div class="v"><b>${m2(money.total)}</b>${money.overdue ? html`<br><span class="small" style="color:var(--red-ink)">${m2(money.overdue)} overdue</span>` : ''}</div></div>
+        <div><div class="k">AMC ending in 60 days</div><div class="v"><b>${amcEnding().length}</b></div></div>
+        <div><div class="k">AMC visits overdue</div><div class="v"><b>${visitsOverdue().length}</b></div></div></div></div>
+        <p class="muted small">The full Management dashboard is in the Web view.</p>`;
+    }
     if (auth.can('enquiry', 'view', 'mobile')) body = html`${body}<div class="m-section">Enquiries</div>${tiles(enquiryTiles(store.list('enquiries'), c).slice(0, 3), '', 'm-tiles')}
-      <p class="muted small">Full dashboards come in Stretch 3. Use the search icon at the top to find any enquiry.</p>`;
+      <p class="muted small">Use the search icon at the top to find any enquiry.</p>`;
   }
   page.body.innerHTML = String(body);
   on(page.body, 'click', '[data-tile]', (e, b) => {
@@ -45,12 +58,25 @@ export function mMore(page) {
   page.setTitle('More');
   page.body.innerHTML = String(html`
     <div class="m-card"><b>${u.name}</b>${r.name !== u.name ? html`<br><span class="muted">${r.name}</span>` : ''}<br><span class="small">${c.name} · ${c.country}</span></div>
+    <div class="m-section">Work offline</div>
+    <label class="m-card row" style="justify-content:space-between;cursor:pointer"><span>Work offline<br><span class="muted small">${isOffline() ? 'Changes stay on this phone until you go back online' : 'For places without signal: the office gets your changes when you are back online'}</span></span>
+      <input type="checkbox" id="offline" ${isOffline() ? 'checked' : ''}></label>
+    ${isOffline() ? html`<div class="m-section">Waiting to send (${waiting().length})</div>
+      ${waiting().slice(-12).map(a => html`<div class="wl small">${fmtTime(a.at)} · ${a.summary}</div>`)}
+      <button class="btn primary block" id="online" style="margin:8px 0 4px">Go back online and send</button>` : ''}
     <div class="stack">
-      <button class="btn block" id="web">Switch to the Web view</button>
+      <button class="btn block" id="web" ${isOffline() ? 'disabled' : ''}>Switch to the Web view</button>
       <button class="btn block" id="user">Switch user</button>
       <button class="btn block danger" id="reset">Reset demo data</button>
     </div>
     <p class="muted small" style="margin-top:14px">Prototype with sample test data. Everything stays in this browser; nothing is sent anywhere.</p>`);
+  page.body.querySelector('#offline').onchange = e => {
+    if (e.target.checked) { goOffline(); toast('Offline: your changes wait on this phone'); }
+    else { const r = goOnline(); sessionStorage.setItem('rsmSynced', `Back online · ${r.count} change${r.count === 1 ? '' : 's'} sent${r.numbers.length ? ` · ${r.numbers.map(x => `${x.temp} is now ${x.real}`).join(', ')}` : ''}`); }
+    go('m/more');
+    render();
+  };
+  page.body.querySelector('#online')?.addEventListener('click', () => { const r = goOnline(); sessionStorage.setItem('rsmSynced', `Back online · ${r.count} change${r.count === 1 ? '' : 's'} sent${r.numbers.length ? ` · ${r.numbers.map(x => `${x.temp} is now ${x.real}`).join(', ')}` : ''}`); render(); });
   page.body.querySelector('#web').onclick = () => switchView('web');
   page.body.querySelector('#user').onclick = () => logoutTo(c.id);
   page.body.querySelector('#reset').onclick = async () => {
@@ -59,6 +85,6 @@ export function mMore(page) {
 }
 
 export function mSoon(page) {
-  page.setTitle('Coming soon');
-  page.body.innerHTML = String(html`<div class="m-card"><span class="tag info">Stretch 3</span><p style="margin-top:8px">This screen comes in a later stretch.</p></div>`);
+  page.setTitle('Not on the phone');
+  page.body.innerHTML = String(html`<div class="m-card"><p>This screen is in the Web view.</p></div>`);
 }

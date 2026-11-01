@@ -10,6 +10,7 @@ import { savePhotos, signaturePad, bindMics } from '../core/capture.js';
 import { seesJob, onMyWay, checkIn, workDoneFor, saveJob, completeWorkDone, requestLeave, checkOut } from '../core/jobs.js';
 import { invoiceForJob, balanceOf, recordPayment, paymentsFor } from '../core/billing.js';
 import { RATINGS } from '../web/print-docs.js';
+import { isOffline } from '../core/offline.js';
 
 export const STEPS = [['before', 'Before photos'], ['works', 'Works done'], ['feedback', 'Feedback'], ['signoff', 'Sign-off'], ['payment', 'Payment'], ['leave', 'Leave site']];
 const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -143,7 +144,7 @@ const RENDER = {
     const l = j.leaveSite;
     if (j.steps?.checkOutAt) return html`<div class="okay"><b>✓ Checked out at ${fmtTime(j.steps.checkOutAt)}</b><br><span class="small">Job done. Thank you.</span></div>`;
     if (l?.confirmedAt) return html`<div class="okay"><b>✓ Office confirmed at ${fmtTime(l.confirmedAt)}</b><br><span class="small">You can check out now</span></div>`;
-    if (l?.requestedAt) return html`<div class="wait"><b>Waiting for the office OK…</b><br><span class="small">Request sent ${fmtTime(l.requestedAt)} to the Operations Executive</span></div><button type="button" class="btn block" id="refresh" style="margin-top:8px">Check again</button>`;
+    if (l?.requestedAt) return html`<div class="wait"><b>Waiting for the office OK…</b><br><span class="small">${isOffline() ? `Asked at ${fmtTime(l.requestedAt)} while offline: the request reaches the office when the phone is back online` : `Request sent ${fmtTime(l.requestedAt)} to the Operations Executive`}</span></div><button type="button" class="btn block" id="refresh" style="margin-top:8px">Check again</button>`;
     return html`<div class="m-card small">Ask the office before you leave the site (flow step 8). The Operations Executive confirms on the web or the phone.</div>`;
   },
 };

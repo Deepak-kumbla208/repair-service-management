@@ -6,10 +6,11 @@ import * as store from './store.js';
 import * as auth from './auth.js';
 import { findSite, withCompany } from './lookups.js';
 import { estimateSummary, reviseEstimate, txDefaults, companyTax } from './estimates.js';
-import { startApproval, levelsFor, openLevel, closeTask, cancelTasksFor } from './workflow.js';
+import { startApproval, levelsFor, openLevel, closeTask, cancelTasksFor, registerFacts } from './workflow.js';
 import { createJobFromQuotation, createGsJob, openTermTask } from './jobs.js';
 import { createContractFromQuotation } from './contracts.js';
 import { amcChecks } from './amc-estimates.js';
+import { letterhead, termsFor, termTexts } from './setup.js';
 
 const isoDate = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 export const todayIso = () => isoDate(new Date());
@@ -18,13 +19,12 @@ export function addDays(dateStr, days) { const d = new Date(`${dateStr}T00:00`);
 export const EDITABLE = ['Draft', 'Returned'];
 export const OPEN = ['Draft', 'Submitted', 'Returned', 'Approved', 'Sent'];
 
-// AMC quotations use the AMC terms; repair and General Servicing quotations the quotation terms.
+// AMC quotations use the AMC terms; repair and General Servicing quotations the quotation terms. Which terms, in which
+// order, and the validity come from Transaction Setup ({validity} in a term's text becomes the number of days).
 export const termsDocType = est => (est?.kind === 'AMC' && est.jobType === 'AMC' ? 'AMC' : 'Quotation');
 function quoteTerms(docType = 'Quotation') {
-  const company = auth.company();
-  const terms = store.list('terms', t => t.docType === docType && t.isDefault && t.status !== 'Inactive').sort((a, b) => a.order - b.order);
-  const validity = terms.find(t => t.validityDays)?.validityDays || txDefaults().quoteValidityDays;
-  return { texts: terms.map(t => withCompany(t.text, company)), validity };
+  const validity = Number(txDefaults().quoteValidityDays) || 7;
+  return { texts: termTexts(docType, { validity }), validity };
 }
 
 // Priced rows: Job costing = one row for the whole job; Line costing = one row per line (+ the shared line).
@@ -65,7 +65,8 @@ export function createFromEstimate(estId) {
   const q = store.insert('quotations', {
     no, rev, estimateId: est.id, estimateNo: `${est.no} Rev ${est.rev}`, enquiryId: est.enquiryId, enquiryNo: enq.no, customerId: est.customerId, siteId: est.siteId,
     customer: est.header.customer, contact: est.header.contact, phone: est.header.phone, site: est.header.site, address: [site?.address, site?.blockUnit].filter(Boolean).join(', '),
-    date, validDays: validity, validUntil: addDays(date, validity), paymentTerm: prev?.paymentTerm || customer?.paymentTerm || 'IMMEDIATE',
+    // A revision keeps the validity its terms were written with (the terms are copied from the previous revision).
+    date, validDays: prev?.validDays || validity, validUntil: addDays(date, prev?.validDays || validity), paymentTerm: prev?.paymentTerm || customer?.paymentTerm || txDefaults().defaultPaymentTerm || 'IMMEDIATE',
     costingLevel: est.costingLevel, rows, subtotal: s.subtotal, taxLabel: est.taxLabel, taxRate: est.taxRate, tax: s.tax, total: s.total,
     description: sameLines && prev ? prev.description : est.header.description, findings: sameLines && prev ? prev.findings : est.header.findings,
     terms: prev ? prev.terms : texts, preparedBy: store.currentActor(), prevId: prev?.id || '', termApproved: false, approvals: [], jobId: '', amc, type: enq.type,
@@ -86,7 +87,8 @@ export function reviseWording(id) {
   const cur = store.get('quotations', id);
   if (CLOSED.includes(cur.status) || cur.status === 'Superseded') return cur;
   const copy = structuredClone(cur);
-  ['id', 'tenantId', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'status', 'statusHistory', 'sentAt', 'sentVia', 'acceptance'].forEach(k => delete copy[k]);
+  // A new revision is a new draft: not sent, not submitted, and it takes the letterhead when it is sent.
+  ['id', 'tenantId', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'status', 'statusHistory', 'sentAt', 'sentVia', 'sentBy', 'acceptance', 'letterhead', 'submittedAt', 'submittedBy', 'approvedAt'].forEach(k => delete copy[k]);
   const date = todayIso();
   const q = store.insert('quotations', { ...copy, rev: cur.rev + 1, prevId: cur.id, date, validUntil: addDays(date, cur.validDays), termApproved: false, approvals: [], returnNote: null },
     { status: 'Draft', note: `${cur.no} Rev ${cur.rev + 1} (wording)` });
@@ -104,14 +106,23 @@ export function saveWording(id, patch) {
   return store.update('quotations', id, next, false);
 }
 
-const info = q => ({ docNo: `${q.no} Rev ${q.rev}`, title: `Counter-check ${q.no} Rev ${q.rev}`, customer: q.customer, amount: q.total });
+const info = q => ({ docNo: `${q.no} Rev ${q.rev}`, title: `Counter-check ${q.no} Rev ${q.rev}`, customer: q.customer, amount: q.total, submittedBy: q.submittedBy });
+
+// A customer with no won enquiry before this one counts as new.
+export const isNewCustomer = (customerId, enquiryId) => !store.list('enquiries', e => e.customerId === customerId && e.id !== enquiryId && e.stage === 'Won').length;
+// What the approval rules can test on a quotation (Authorization Workflow Master).
+registerFacts('quotation', q => {
+  const est = store.get('estimates', q.estimateId);
+  const s = est ? estimateSummary(est) : null;
+  return { marginPct: s ? Math.round(s.marginOnPricePct * 10) / 10 : null, jobType: q.type || store.get('enquiries', q.enquiryId)?.type || 'REPAIR', newCustomer: isNewCustomer(q.customerId, q.enquiryId) };
+});
 
 // Submit for the counter-check: the approval rules decide the levels (flow step 5).
 export function submitForCheck(id) {
   const q = store.get('quotations', id);
   if (!EDITABLE.includes(q.status)) return q;
   store.update('quotations', id, { submittedAt: new Date().toISOString(), submittedBy: store.currentActor(), returnNote: null }, `${q.no} Rev ${q.rev} submitted for the counter-check`);
-  const { task } = startApproval('quotation', q, info(q));
+  const { task } = startApproval('quotation', q, info(store.get('quotations', id)));
   if (!task) return approveFinal(q.id);
   store.setStatus('quotations', id, 'Submitted', `Waiting for ${task.roleName}`);
   store.setStatus('enquiries', q.enquiryId, 'Quotation in check', `${q.no} Rev ${q.rev}`);
@@ -154,7 +165,8 @@ export function markSent(id, via) {
   const q = store.get('quotations', id);
   if (!['Approved', 'Sent'].includes(q.status)) return q;
   // The first send is the date of issue: the validity days count from it, not from the draft date.
-  const issue = q.sentAt ? {} : { date: todayIso(), validUntil: addDays(todayIso(), q.validDays) };
+  // It also keeps the letterhead it went out with (a later Company Setup change does not alter it).
+  const issue = q.sentAt ? {} : { date: todayIso(), validUntil: addDays(todayIso(), q.validDays), letterhead: letterhead() };
   store.update('quotations', id, { ...issue, sentAt: new Date().toISOString(), sentVia: via, sentBy: store.currentActor() }, `${q.no} Rev ${q.rev} sent by ${via}`);
   store.setStatus('quotations', id, 'Sent', via);
   store.update('enquiries', q.enquiryId, { stage: 'Quoted' }, false);
@@ -233,7 +245,7 @@ export function autoChecks(q) {
   add(Math.abs(estimateSummary(est).subtotal - q.subtotal) < 0.005, `Prices match ${q.estimateNo}`);
   const tax = companyTax();
   add(q.taxRate === tax.taxRate, q.taxRate ? `${q.taxLabel} ${q.taxRate} % from the Tax master (${tax.taxCode})` : 'No tax charged (Company Setup)');
-  const termCount = store.list('terms', t => t.docType === termsDocType(est) && t.isDefault && t.status !== 'Inactive').length;
+  const termCount = termsFor(termsDocType(est)).length;
   add(q.terms.length >= termCount, `All ${termCount} ${termsDocType(est) === 'AMC' ? 'AMC' : 'quotation'} terms included`);
   const ph = (est.materials || []).filter(m => m.placeholder || m.noRate);
   if (ph.length) add(false, `${ph.length} placeholder rate${ph.length > 1 ? 's' : ''}: ${ph.map(m => `${m.name} (${Number(m.rate).toFixed(2)})`).join(', ')}`);

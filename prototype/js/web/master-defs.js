@@ -119,15 +119,13 @@ export const DEFS = {
     search: r => [r.code, r.name, r.category],
   },
   terms: {
-    coll: 'terms', title: 'Terms', codePrefix: '', nameField: 'title', note: 'Terms are copied into documents. {company} is replaced by the company name from Company Setup.',
+    coll: 'terms', title: 'Terms', codePrefix: '', nameField: 'title', note: 'The texts. Which terms go on each document, and in which order, is set in Transaction Setup. {company} becomes the company name; {validity} the quotation validity days.',
     fields: [
       { name: 'code', label: 'Code', required: true }, { name: 'title', label: 'Title', required: true },
-      { name: 'docType', label: 'Document type', type: 'select', options: ['Quotation', 'Invoice'], required: true },
-      { name: 'order', label: 'Display order', type: 'number' }, { name: 'validityDays', label: 'Validity days', type: 'number', hint: 'Sets the quotation expiry date' },
-      { name: 'isDefault', label: 'Add to new documents by default', type: 'checkbox' },
+      { name: 'docType', label: 'Document type', type: 'select', options: ['Quotation', 'AMC', 'Invoice'], required: true },
       { name: 'text', label: 'Text', type: 'textarea', cls: 'spanall', required: true },
     ],
-    columns: [['code', 'Code'], ['docType', 'Document'], ['order', 'Order'], ['text', 'Text', { wrap: true, company: true }]],
+    columns: [['code', 'Code'], ['docType', 'Document'], ['text', 'Text', { wrap: true, company: true }]],
     search: r => [r.code, r.title, r.docType, r.text],
     sort: (a, b) => a.docType.localeCompare(b.docType) || a.order - b.order,
   },

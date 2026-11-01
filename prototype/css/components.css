@@ -120,6 +120,7 @@ textarea { min-height: 64px; resize: vertical; }
 .tbl tbody tr.click { cursor: pointer; }
 .tbl tbody tr.click:hover td { background: var(--blue-50); }
 .tbl td.wrap { white-space: normal; min-width: 220px; }
+.tbl td.w { white-space: normal; }
 .tbl td.clip { max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
 .tbl td.num, .tbl th.num { text-align: right; }
 .tbl .lnk { color: var(--blue-600); font-weight: 600; }
@@ -431,3 +432,56 @@ label.chip input:focus-visible + span { box-shadow: 0 0 0 3px rgba(55, 138, 221,
 .trail .sep { color: var(--faint); }
 .trail a, .trail b { padding: 1px 7px; border-radius: 9px; background: var(--white); border: 1px solid var(--line); text-decoration: none; }
 .trail b { background: var(--blue-100); border-color: var(--blue-200); color: var(--navy-900); }
+.trail .plain { padding: 1px 7px; border-radius: 9px; border: 1px dashed var(--line); color: var(--muted); }
+
+/* Admin Setup (Stretch 3 Part B) */
+.logo-box { height: 96px; border: 1px dashed var(--line); border-radius: 6px; display: flex; align-items: center; justify-content: center; padding: 6px; text-align: center; }
+.logo-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.mx th, .mx td { text-align: center; padding-left: 5px; padding-right: 5px; }
+.mx td:first-child, .mx th:first-child { text-align: left; }
+.mx .grp td { background: var(--blue-50) !important; font-weight: 600; color: var(--navy-800); text-align: left; }
+.mx td.na { color: var(--faint); }
+.mx tr.changed td { background: #FFF8EC !important; }
+.chan { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.chan button { border: 0; border-left: 1px solid var(--line); background: var(--white); color: var(--muted); padding: 2px 8px; font: inherit; font-size: 11px; cursor: pointer; }
+.chan button:first-child { border-left: 0; }
+.chan button.on { background: var(--blue-600); color: var(--white); }
+.chan button.off.on { background: var(--gray-bg); color: var(--ink-2); font-weight: 700; }
+.chan button:disabled { cursor: default; opacity: .5; }
+.lvl { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+.lvl .s { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--white); min-width: 160px; }
+.lvl .s b { display: block; color: var(--navy-900); }
+.lvl .s.off { opacity: .5; }
+.lvl .arrow { align-self: center; color: var(--faint); }
+.tbl tr.sel td { background: var(--blue-50) !important; }
+/* Dashboards (Stretch 3 Part B): stat tiles, month bars, horizontal bars */
+.dgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; margin-bottom: 12px; }
+.stat { display: block; text-align: left; font: inherit; border: 1px solid var(--line); border-radius: 8px; background: var(--white); padding: 10px 12px; color: inherit; }
+.stat.click { cursor: pointer; }
+.stat:hover { border-color: var(--blue-500); }
+.stat span { font-size: 12px; color: var(--muted); }
+.stat b { display: block; font-size: 22px; color: var(--navy-900); font-weight: 600; }
+.stat small { display: block; font-size: 11px; color: var(--faint); margin-top: 2px; }
+.stat small.bad { color: var(--red-ink); }
+.vbars { display: flex; align-items: flex-end; gap: 8px; height: 160px; border-bottom: 1px solid var(--line); padding: 0 4px; }
+.vbars > div { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; font-size: 11px; color: var(--ink-2); cursor: pointer; }
+.vbars i { display: block; width: 72%; background: var(--blue-600); border-radius: 4px 4px 0 0; min-height: 1px; }
+.vbars > div:hover i { background: var(--navy-800); }
+.vlab { display: flex; gap: 8px; padding: 4px 4px 0; }
+.vlab span { flex: 1; text-align: center; font-size: 11px; color: var(--faint); }
+.hb { display: grid; grid-template-columns: 90px 1fr 80px; gap: 6px; align-items: center; font-size: 12px; margin: 5px 0; }
+.hb i { display: block; height: 12px; background: var(--blue-600); border-radius: 0 4px 4px 0; min-width: 1px; }
+.hb em { font-style: normal; text-align: right; color: var(--ink-2); }
+.hb.click { cursor: pointer; }
+.hb.click:hover span { color: var(--blue-600); }
+.kv .click, li.click { cursor: pointer; }
+/* Offline phone (Stretch 3 Part B) */
+.m-offline { display: block; background: #FFF8EC; color: var(--amber-ink); border-bottom: 1px solid #F0D9AE; font-size: 12px; font-weight: 600; padding: 5px 14px; flex: none; text-decoration: none; }
+.m-online { background: var(--green-bg); color: var(--green-ink); border-bottom: 1px solid #97C459; font-size: 12px; font-weight: 600; padding: 5px 14px; flex: none; }
+.wl { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin-bottom: 5px; background: var(--white); }
+.offline-chip { background: #FFF8EC; border-color: #F0D9AE; color: var(--amber-ink); cursor: default; }
+/* Guided demo (Stretch 3 Part B) */
+.guide-bar { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 60; width: min(880px, calc(100vw - 24px)); display: flex; align-items: center; gap: 8px;
+  background: var(--navy-900); color: var(--white); border-radius: 10px; padding: 9px 12px; font-size: 12.5px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+.guide-bar .btn.link { color: var(--blue-200); }
+.guide-card { margin: 0; border: 0; padding: 0; }

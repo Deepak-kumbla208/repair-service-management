@@ -11,7 +11,7 @@ function applyContext() {
 
 export function restore() {
   sess = store.readSession();
-  if (sess && !store.all('users').some(u => u.id === sess.userId)) sess = null;
+  if (sess && !store.all('users').some(u => u.id === sess.userId && u.status !== 'Inactive')) sess = null;
   applyContext();
   return sess;
 }

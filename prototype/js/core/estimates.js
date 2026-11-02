@@ -54,10 +54,9 @@ export function prefill(enq, rep) {
   // A repair enquiry made from failed checklist items (AMC visit or GS job) brings its shutters and parts.
   const fromFails = !rep && (enq.failures || []).length ? failedShutters(enq, site) : null;
   const shutters = (fromFails?.shutters || rep?.shutters || []).map(s => {
-    const product = store.get('products', s.productId);
     const size = sizes.find(z => z.code === s.sizeCode);
     return { key: s.key, tag: s.tag, location: s.location, productId: s.productId, typeName: productName(s.productId), width: s.width, height: s.height, unit: s.unit,
-      qty: 1, fault: s.finding || '', sizeCode: s.sizeCode, factor: Number(product?.factor) || 1, ...shutterLabour(size, product?.factor, 1) };
+      qty: 1, fault: s.finding || '', sizeCode: s.sizeCode, ...shutterLabour(size, 1) };
   });
 
   // With no report, each enquiry product line becomes a line; a line naming a part or material brings its row.

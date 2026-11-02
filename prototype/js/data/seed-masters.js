@@ -49,10 +49,10 @@ function sizes(t) {
     base(t, `siz_${t}_${code}`, { code, name, order: i + 1, maxWidth, maxHeight, amcTeamHrs, amcExtraWorkers, amcExtraHrs, repairTeamHrs, repairExtraWorkers, repairExtraHrs, tags: { repairTeamHrs: 'market-based' } }));
 }
 
-// ---------- Product: shutter types and labour factors (Repair estimator) ----------
+// ---------- Product: shutter types (the repair estimator's types; no labour factor, user 2 Nov 2026) ----------
 function products(t) {
-  return [['RS', 'Rolling shutter', 1], ['CS', 'Collapsible shutter', 0.9], ['SF', 'Sliding / folding', 0.9], ['SD', 'Sectional door', 1.25], ['MR', 'Motorised rolling', 1.4]]
-    .map(([code, name, factor]) => base(t, `prd_${t}_${code}`, { code, name, factor, description: '' }));
+  return [['RS', 'Rolling shutter'], ['CS', 'Collapsible shutter'], ['SF', 'Sliding / folding'], ['SD', 'Sectional door'], ['MR', 'Motorised rolling']]
+    .map(([code, name]) => base(t, `prd_${t}_${code}`, { code, name, description: '' }));
 }
 
 const QUOTE_TERMS = [

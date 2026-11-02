@@ -64,10 +64,10 @@ export const DEFS = {
     search: r => [r.code, r.name, r.rateSet, r.skill],
   },
   product: {
-    coll: 'products', title: 'Product', codePrefix: '', note: 'Shutter types and their labour factors (from the repair estimator).',
+    coll: 'products', title: 'Product', codePrefix: '', note: 'Shutter types. Repair hours come from the Shutter Size master, the same for every type.',
     fields: [{ name: 'code', label: 'Code', required: true }, { name: 'name', label: 'Shutter type', required: true },
-      { name: 'factor', label: 'Labour factor', type: 'number', step: '0.05', required: true }, { name: 'description', label: 'Description', type: 'textarea', cls: 'spanall' }],
-    columns: [['code', 'Code'], ['name', 'Shutter type'], ['factor', 'Labour factor'], ['description', 'Description']],
+      { name: 'description', label: 'Description', type: 'textarea', cls: 'spanall' }],
+    columns: [['code', 'Code'], ['name', 'Shutter type'], ['description', 'Description']],
     search: r => [r.code, r.name, r.description],
   },
   item: {

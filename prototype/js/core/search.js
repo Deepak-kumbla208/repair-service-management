@@ -10,7 +10,7 @@ const MASTER_SOURCES = [
   ['employee', 'employees', e => `${e.name}`, e => `${e.code} · ${e.designation}`],
   ['equipment', 'equipment', e => e.name, e => `${e.code} · ${e.ownership}`],
   ['labour', 'labour', l => `${l.name} (${l.rateSet})`, l => l.code],
-  ['product', 'products', p => p.name, p => `${p.code} · factor ${p.factor}`],
+  ['product', 'products', p => p.name, p => p.code],
   ['item', 'items', i => i.name, i => `${i.code} · ${i.spec || i.unit}`],
   ['size', 'sizes', s => `${s.code} · ${s.name}`, () => 'Shutter size'],
   ['valueset', 'valueSets', v => v.name, v => v.values.map(x => x.label).join(', ')],

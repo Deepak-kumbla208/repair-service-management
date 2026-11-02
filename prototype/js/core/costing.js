@@ -34,15 +34,15 @@ export const otRate = (hourly, multiplier = 1.5) => Number(hourly || 0) * multip
 export const manHours = (persons, days, hoursPerDay) => Number(persons || 0) * Number(days || 0) * Number(hoursPerDay || 0);
 
 // ---------- Repair labour from the shutters (rate card, PLAN.md) ----------
-// Hours for one shutter: the Shutter Size master's repair hours × the type factor × qty.
+// Hours for one shutter: the Shutter Size master's repair hours × qty (no factor by shutter type: user, 2 Nov 2026).
 // Returns { teamHrs, extraWorkers, extraHrs } so the Labour tab can count labour once.
-export function shutterLabour(size, factor = 1, qty = 1) {
+export function shutterLabour(size, qty = 1) {
   if (!size) return { teamHrs: 0, extraWorkers: 0, extraHrs: 0 };
-  const f = num(factor) || 1, q = num(qty) || 1;
+  const q = num(qty) || 1;
   return {
-    teamHrs: round2(num(size.repairTeamHrs) * f * q),
+    teamHrs: round2(num(size.repairTeamHrs) * q),
     extraWorkers: num(size.repairExtraWorkers),
-    extraHrs: round2(num(size.repairExtraHrs) * f * q),
+    extraHrs: round2(num(size.repairExtraHrs) * q),
   };
 }
 

@@ -34,8 +34,8 @@ function shuttersTab(est, ctx) {
   return html`<table class="tbl"><thead><tr><th>Location / Label</th><th>Type</th><th>Width</th><th>Height</th><th class="num">Qty</th><th>Fault Reported</th><th>Size Class</th><th class="num">Team hrs</th><th class="num">Extra workers × hrs</th><th class="num">Labour Amount</th></tr></thead><tbody>
     ${est.shutters.map((s, i) => html`<tr><td><b>${s.tag}</b> ${s.location}</td><td>${s.typeName}</td><td>${dim(s.width, s.unit)}</td><td>${dim(s.height, s.unit)}</td>
       <td class="num">${inp(ctx, 'shutters', i, 'qty', s.qty, { w: 50, step: 1 })}</td><td class="wrap">${inp(ctx, 'shutters', i, 'fault', s.fault, { type: 'text', w: 210 })}</td><td>${s.sizeCode}</td>
-      <td class="num">${fmtNum(s.teamHrs)} <span class="muted small">(× ${s.factor})</span></td><td class="num">${s.extraWorkers ? `${s.extraWorkers} × ${fmtNum(s.extraHrs)}` : '—'}</td><td class="num">${m2(labourFor(s.key))}</td></tr>`)}
-  </tbody></table><p class="mini-note">From the products in the site report's Job scope. Hours = Shutter Size master × the type factor (Product master) × qty; they fill the Labour tab, so labour is counted once.</p>`;
+      <td class="num">${fmtNum(s.teamHrs)}</td><td class="num">${s.extraWorkers ? `${s.extraWorkers} × ${fmtNum(s.extraHrs)}` : '—'}</td><td class="num">${m2(labourFor(s.key))}</td></tr>`)}
+  </tbody></table><p class="mini-note">From the products in the site report's Job scope. Hours = the Shutter Size master's repair hours × qty; they fill the Labour tab, so labour is counted once.</p>`;
 }
 
 function labourTab(est, ctx) {
@@ -145,7 +145,7 @@ export function applyChange(est, t, i, f) {
   }
   if (t === 'shutters' && f === 'qty') {
     const size = store.list('sizes').find(z => z.code === r.sizeCode);
-    Object.assign(r, shutterLabour(size, r.factor, r.qty));
+    Object.assign(r, shutterLabour(size, r.qty));
     est.labour.filter(x => x.lineKey === r.key).forEach(x => {
       const extra = /additional/i.test(x.trade);
       const h = extra ? r.extraHrs : r.teamHrs;

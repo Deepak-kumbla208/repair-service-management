@@ -23,7 +23,7 @@ const visit1 = id => { const c = contract(id); return c && store.list('amcVisits
 const FLOWS = {
   repair: { title: 'Repair', sub: 'enquiry → site report → estimate → quotation → job → payment → closed', steps: [
     { who: OPS, text: 'Open the Kosmic enquiry (site report received) and click "Create estimate".', route: () => enqRoute('enq_co_dsh_3') },
-    { who: OPS, text: 'Check the estimate (2,047.73 with GST), click "Create quotation", then "Submit for check".', route: () => est('enq_co_dsh_3') },
+    { who: OPS, text: 'Check the estimate (2,057.83 with GST), click "Create quotation", then "Submit for check".', route: () => est('enq_co_dsh_3') },
     { who: APR, text: 'As the Approver, look at the automatic checks and click "Approve".', route: () => approve('enq_co_dsh_3') },
     { who: OPS, text: 'Click "Send to customer", then "Record acceptance" with a PO number: the job is made.', route: () => qt('enq_co_dsh_3') },
     { who: OPS, text: 'On the job, click "Schedule": the invoice is raised at once because payment is immediate.', route: () => { const j = job('enq_co_dsh_3'); return j ? `jobs/${j.id}` : 'jobs'; } },

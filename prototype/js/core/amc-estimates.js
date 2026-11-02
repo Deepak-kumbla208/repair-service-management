@@ -137,7 +137,7 @@ export function amcChecks(q, est, add) {
     if (x.typed) add(false, `${x.name}: ${r.shutters} shutters typed from the BOQ (no shutter register yet; it is made when the contract starts)`);
     else { const all = covered(findSite(x.siteId).site).length; add(true, `${x.name}: ${r.shutters} of ${all} shutters in the register covered, ${x.visits} visit${x.visits === 1 ? '' : 's'} a year`); }
   });
-  est.transport.filter(t => t.placeholder).forEach(t => add(false, `${t.zoneLabel}: AMC rate ${num(t.rate).toFixed(2)} / round trip ${num(t.hrs)} h is a placeholder`));
+  est.transport.filter(t => t.placeholder).forEach(t => add(false, `${t.zoneLabel}: AMC rate ${num(t.rate).toFixed(2)} / travel ${num(t.hrs)} h per trip is a placeholder`));
   const s = summarizeAmc(est, zones());
   if (est.billing !== 'ONCE') add(true, `${s.plan.length} invoice${s.plan.length > 1 ? 's' : ''} in the billing plan; ${q.taxLabel || 'tax'} worked out on each invoice`);
 }

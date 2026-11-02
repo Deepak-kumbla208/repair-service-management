@@ -127,7 +127,7 @@ const step3 = {
     <div class="m-card" style="margin-top:10px">Total Man-hours: <b id="mh">${manHours(rep.s3.persons, rep.s3.days, rep.s3.hoursPerDay) || '—'}</b> <span class="small muted">(persons × days × hours)</span></div>
     ${field({ name: 's3_remarks', label: 'Remarks', value: rep.s3.remarks })}
     <div class="field" style="margin-top:10px"><div class="field-label">Working Hours</div><div class="checks" style="grid-template-columns:1fr">
-      ${check('s3_normal', 'Normal hours', rep.s3.normal)}${check('s3_afterHours', 'After hours / night', rep.s3.afterHours)}
+      ${check('s3_normal', 'Normal hours', rep.s3.normal)}${check('s3_afterHours', 'Overtime (after 5:30 pm)', rep.s3.afterHours)}
       ${check('s3_weekend', 'Weekend / Public holiday', rep.s3.weekend)}${check('s3_phased', 'Phased (per level / block)', rep.s3.phased)}</div></div>`,
   read: (body, rep) => ({ s3: readSection(body, 's3', rep.s3) }),
   bind(body) {

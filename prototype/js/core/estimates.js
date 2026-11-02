@@ -83,7 +83,7 @@ export function prefill(enq, rep) {
     ? [...shutters.map(s => ({ key: s.key, tag: s.tag, qty: 1, unit: 'Nos', description: lineText(s, materials.filter(m => m.lineKey === s.key)) })), ...partLines]
     : enqLines.map(l => ({ key: l.key, tag: '', qty: l.qty || 1, unit: l.unit || 'Nos', partKey: materials.find(m => m.lineKey === l.key)?.key || '', description: enquiryLineText(l) }));
 
-  // Labour: one row per shutter for the team, plus one for extra workers (L / XL). After hours → OT column.
+  // Labour: one row per shutter for the team, plus one for extra workers (L / XL). Overtime or weekend → OT column.
   const labour = [];
   shutters.forEach(s => {
     const hrs = (h, r) => (ot ? { hrs: 0, otHrs: h } : { hrs: h, otHrs: 0 });

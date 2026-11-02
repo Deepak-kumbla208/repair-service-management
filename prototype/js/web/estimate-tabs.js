@@ -48,7 +48,7 @@ function labourTab(est, ctx) {
       <td class="num">${inp(ctx, 'labour', i, 'otHrs', r.otHrs, { w: 56 })}</td><td class="num">${m2(r.otRate)}</td><td class="num">${m2(x.ot)}</td><td class="num">${m2(x.total)}</td>${del(ctx, 'labour', i)}</tr>`; })}
     <tr class="sum"><td></td><td><b>TOTAL</b></td>${est.costingLevel === 'LINE' ? html`<td></td>` : ''}<td></td><td></td><td class="num">${fmtNum(sum.hrs)}</td><td></td><td class="num">${m2(sum.basic)}</td><td></td><td></td><td class="num">${m2(sum.ot)}</td><td class="num"><b>${m2(sum.total)}</b></td>${delHead(ctx)}</tr>
   </tbody></table>${addBtn(ctx, 'labour', 'Add labour row')}
-  ${est.svrManHours ? html`<p class="mini-note">Check: ${fmtNum(teamHrs)} team-hours = ${fmtNum(teamHrs * 2)} man-hours for a team of 2; the site report says ${fmtNum(est.svrManHours)} man-hours.${est.afterHours ? ' The site report says after hours or weekend, so the hours are in the OT column (1.5 ×).' : ''}</p>` : ''}`;
+  ${est.svrManHours ? html`<p class="mini-note">Check: ${fmtNum(teamHrs)} team-hours = ${fmtNum(teamHrs * 2)} man-hours for a team of 2; the site report says ${fmtNum(est.svrManHours)} man-hours.${est.afterHours ? ' The site report says overtime (after 5:30 pm) or weekend, so the hours are in the OT column (1.5 ×).' : ''}</p>` : ''}`;
 }
 
 function transportTab(est, ctx) {
@@ -58,7 +58,7 @@ function transportTab(est, ctx) {
       <td class="num">${inp(ctx, 'transport', i, 'trips', r.trips, { w: 50, step: 1 })}</td><td class="num">${inp(ctx, 'transport', i, 'hrs', r.hrs, { w: 56 })}</td><td class="num">${inp(ctx, 'transport', i, 'rate', r.rate, { w: 70 })}</td><td class="num">${m2(transportRow(r))}</td>${del(ctx, 'transport', i)}</tr>`)}
     ${total(ctx.editable ? 1 : 0, html`<td class="num"><b>${m2(est.transport.reduce((t, r) => t + transportRow(r), 0))}</b></td>`, est.costingLevel === 'LINE' ? 8 : 7)}
   </tbody></table>${addBtn(ctx, 'transport', 'Add a trip or zone')}
-  <p class="mini-note">The site's zone with its Repair rate. No. of Hrs = trips × the zone's round-trip time ("Trips" is a screen helper).</p>`;
+  <p class="mini-note">The site's zone with its Repair rate. No. of Hrs = trips × the zone's travel hours per trip ("Trips" is a screen helper).</p>`;
 }
 
 function materialsTab(est, ctx) {

@@ -53,7 +53,7 @@ export function svrSheetHtml(rep, company) {
       ${sec(3, 'LABOUR / MAN-HOURS / TRANSPORT', 6)}
       <tr><td class="lbl">Transport Zone</td><td class="lbl">No. of Persons</td><td class="lbl">No. of Days</td><td class="lbl">Hours / Day</td><td class="lbl">Total Man-hours</td><td class="lbl">Remarks</td></tr>
       <tr><td data-f="s3.zoneId">${zoneCodes.map(z => html`<span style="margin-right:6px">${box(z.on)}${z.code}</span>`)}</td><td data-f="s3.persons">${s3.persons ?? ''}</td><td data-f="s3.days">${s3.days ?? ''}</td><td data-f="s3.hoursPerDay">${s3.hoursPerDay ?? ''}</td><td>${total || ''}</td><td data-f="s3.remarks">${s3.remarks}</td></tr>
-      <tr><td class="lbl">Working Hours</td><td colspan="5" data-f="s3.normal s3.afterHours s3.weekend s3.phased">${opt(s3.normal, 'Normal hours')}${opt(s3.afterHours, 'After hours / night /')}${opt(s3.weekend, 'Weekend / Public holiday')}${opt(s3.phased, 'Phased (per level / block)')}</td></tr>
+      <tr><td class="lbl">Working Hours</td><td colspan="5" data-f="s3.normal s3.afterHours s3.weekend s3.phased">${opt(s3.normal, 'Normal hours')}${opt(s3.afterHours, 'Overtime (after 5:30 pm)')}${opt(s3.weekend, 'Weekend / Public holiday')}${opt(s3.phased, 'Phased (per level / block)')}</td></tr>
     </table>
     <table style="margin-top:6px">
       ${sec(4, 'EQUIPMENT & ACCESS FOR THE WORK', 3)}

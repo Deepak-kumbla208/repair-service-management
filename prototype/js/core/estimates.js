@@ -35,10 +35,10 @@ function repairRates() {
 const findItem = (id, name) => store.get('items', id) || store.findOne('items', i => i.name.toLowerCase() === String(name || '').trim().toLowerCase());
 const equipmentByCode = code => store.findOne('equipment', e => e.code === code && e.status !== 'Inactive');
 
-// Line text: "RS-1 Front shop: motor not working (parts: 1 × Motor 400 kg single phase)"
+// Line text: the site report's action needed, else the fault: "RS-1 Front shop: replace the motor (parts: 1 × Motor 400 kg single phase)"
 function lineText(s, mats) {
   const parts = mats.map(m => `${m.qty} × ${m.name}`).join(', ');
-  return `${s.tag} ${s.location}: ${s.fault || 'repair'}${parts ? ` (parts: ${parts})` : ''}`;
+  return `${s.tag} ${s.location}: ${s.action || s.fault || 'repair'}${parts ? ` (parts: ${parts})` : ''}`;
 }
 
 // Everything an estimate needs, pre-filled. rep may be null (repair without inspection).
@@ -56,7 +56,7 @@ export function prefill(enq, rep) {
   const shutters = (fromFails?.shutters || rep?.shutters || []).map(s => {
     const size = sizes.find(z => z.code === s.sizeCode);
     return { key: s.key, tag: s.tag, location: s.location, productId: s.productId, typeName: productName(s.productId), width: s.width, height: s.height, unit: s.unit,
-      qty: 1, fault: s.finding || '', sizeCode: s.sizeCode, ...shutterLabour(size, 1) };
+      qty: 1, fault: s.finding || '', action: s.action || '', sizeCode: s.sizeCode, ...shutterLabour(size, 1) };
   });
 
   // With no report, each enquiry product line becomes a line; a line naming a part or material brings its row.
@@ -107,7 +107,7 @@ export function prefill(enq, rep) {
   return {
     enquiryId: enq.id, reportId: rep?.id || '', customerId: enq.customerId, siteId: enq.siteId,
     header: { customer: enq.customerName, contact: enq.contactName, phone: enq.mobile || contactNo, site: enq.siteName, address: [site?.address, site?.blockUnit].filter(Boolean).join(', '),
-      date: today(), preparedBy: store.currentActor(), findings: oneLine(rep?.s2?.findings) || enq.description, description: oneLine(rep?.s2?.description) || enq.description },
+      date: today(), preparedBy: store.currentActor(), findings: oneLine(String(rep?.s2?.findings || '').replace(/^\s*\d+\.\s+/gm, '')) || enq.description, description: oneLine(rep?.s2?.description) || enq.description },
     costingLevel: d.costingLevel, sharedCosts: d.sharedCosts, sharedLabel: zone ? `Transport & mobilisation (Zone ${zone.code})` : 'Transport & mobilisation',
     overheads: [{ key: rid(), name: 'Overheads', basis: 'PCT', value: d.overheadPct }], marginBasis: d.marginBasis, marginPct: d.marginPct,
     ...companyTax(), shutters, lines, labour, transport, materials, equipment, afterHours: ot,

@@ -25,6 +25,8 @@ const VALUE_SETS = [
   ['PAYMENT_METHOD', 'Payment Method', 'Extensible', [['CASH', 'Cash'], ['CHEQUE', 'Cheque'], ['BANK', 'Bank transfer'], ['PAYNOW', 'PayNow']]],
   ['ACCEPT_METHOD', 'Acceptance Method', 'Extensible', [['PO', 'Purchase order'], ['SIGNED', 'Signed quotation'], ['EMAIL', 'Email'], ['WHATSAPP', 'WhatsApp']]],
   ['WORK_DONE', 'Work Done Status', 'System', [['DONE', 'Done'], ['PARTLY', 'Partly done'], ['NOT_DONE', 'Not done']]],
+  // Site viewing report findings: Urgent = not safe to use. The third item marks the default.
+  ['FINDING_PRIORITY', 'Finding Priority', 'System', [['URGENT', 'Urgent', false], ['NORMAL', 'Normal', true], ['LATER', 'Can wait', false]]],
 ];
 
 // inactive: value codes switched off for this company (e.g. PayNow outside Singapore).
@@ -32,8 +34,8 @@ function valueSets(t, inactive = []) {
   return VALUE_SETS.map(([code, name, access, vals]) => base(t, `vs_${t}_${code}`, {
     code, name, access,
     values: vals.map((v, i) => {
-      const [c, label] = Array.isArray(v) ? v : [v.toUpperCase().replace(/[^A-Z0-9]+/g, '_'), v];
-      return { code: c, label, order: i + 1, isDefault: i === 0 && code !== 'ENQ_STATUS', active: !inactive.includes(`${code}.${c}`) };
+      const [c, label, def] = Array.isArray(v) ? v : [v.toUpperCase().replace(/[^A-Z0-9]+/g, '_'), v];
+      return { code: c, label, order: i + 1, isDefault: def ?? (i === 0 && code !== 'ENQ_STATUS'), active: !inactive.includes(`${code}.${c}`) };
     }),
   }));
 }

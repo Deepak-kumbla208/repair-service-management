@@ -489,3 +489,14 @@ fieldset.ro-sec .mic, fieldset.ro-sec .add-dashed, fieldset.ro-sec .pm { display
 .ask-prod { margin: 6px 0 2px; }
 .ask .measure { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .ask .measure input { width: 64px; }
+/* Findings per product: fault, action, priority (one column on the phone) */
+.find-row { display: grid; grid-template-columns: 150px 1fr 1fr auto; gap: 4px 14px; align-items: end; padding: 6px 0; border-top: 1px dashed var(--line); }
+.find-row:not(:has(.find-who)) { grid-template-columns: 1fr 1fr auto; }
+.phone .find-row, .phone .find-row:not(:has(.find-who)) { grid-template-columns: 1fr; }
+@media (max-width: 900px) { .find-row, .find-row:not(:has(.find-who)) { grid-template-columns: 1fr; } }
+.find-who { display: flex; flex-wrap: wrap; gap: 2px 6px; align-items: baseline; padding-bottom: 4px; }
+.find-who .small { flex-basis: 100%; }
+.form-lines .find-row .field { display: block; }
+.tag.new { border: 1px solid #97C459; color: var(--green-ink); background: var(--green-bg); }
+.prio label.p-URGENT input:checked + span { background: var(--red-bg); border-color: #E24B4A; color: var(--red); }
+.prio label.p-NORMAL input:checked + span { background: var(--amber-bg); border-color: #EF9F27; color: var(--amber-ink); }

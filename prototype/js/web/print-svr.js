@@ -1,11 +1,12 @@
-// Print preview of the Site Viewing Report. The layout follows the team lead's Word form exactly
-// (7 sections and its footer). Photos and the picked-shutter list are screen helpers: photos print only
+// Print preview of the Site Viewing Report. The layout follows the team lead's Word form exactly, except Customer
+// Complaint / Findings, a table per product (user, 2 Nov 2026). Photos are a screen helper: photos print only
 // on a separate attachment page. Every printed page carries the DEMO mark.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $ } from '../core/ui.js';
 import { zones, productName } from '../core/lookups.js';
 import { hydrateImages } from '../core/media.js';
+import { findingRows, perProduct, priorityLabel } from '../core/inspections.js';
 import { logoHtml } from './print-docs.js';
 
 const box = on => html`<span class="box">${on ? '✓' : ''}</span>`;
@@ -23,6 +24,20 @@ function sheetHead(company) {
 // Text for "Full Address & Shutter Location": the site address plus the products in Job scope (a new one once it
 // has a location).
 export const shutterLocations = rep => rep.shutters.filter(s => s.location).map(s => `${s.tag} ${s.location}`.trim()).join('; ');
+
+// Customer Complaint / Findings: one row per product, and per line with no product (user-approved change to the form,
+// 2 Nov 2026); at least 3 rows so a blank form has room to write. Reports saved before print their single box.
+function findingsTable(rep) {
+  const rows = findingRows(rep);
+  const blank = Array.from({ length: Math.max(0, 3 - rows.length) }, () => null);
+  const pri = f => (f.priority === 'URGENT' ? html`<b>${priorityLabel(f.priority).toUpperCase()}</b>` : priorityLabel(f.priority));
+  return html`<table class="finds" data-f="s2.findings"><tr><td class="lbl" colspan="8" style="width:auto">Customer Complaint / Findings</td></tr>
+    <tr class="fhead"><th style="width:5%">No.</th><th style="width:15%">Product / Tag</th><th style="width:11%">Location</th><th style="width:5%">Size</th><th>Customer complaint</th><th>Fault found</th><th>Action needed</th><th style="width:9%">Priority</th></tr>
+    ${rows.map((f, i) => html`<tr><td>${i + 1}</td><td>${f.tag ? `${f.tag} ${f.product}` : '—'}</td><td>${f.location || (f.tag ? '' : '—')}</td><td>${f.size || (f.tag ? '' : '—')}</td>
+      <td>${f.complaint || ''}</td><td>${f.fault}</td><td>${f.action}</td><td>${pri(f)}</td></tr>`)}
+    ${blank.map((_, i) => html`<tr><td>${rows.length + i + 1}</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`)}
+    <tr><td colspan="8"><b>Other findings:</b> ${rep.s2.otherFindings}</td></tr></table>`;
+}
 
 export function svrSheetHtml(rep, company) {
   const { s1, s2, s3, s4, s5, s6, s7 } = rep;
@@ -48,7 +63,8 @@ export function svrSheetHtml(rep, company) {
       <tr><td colspan="3" data-f="s2.other">Other: ${s2.other}</td></tr>
     </table>
     <table><tr><td class="lbl">Job Scope / Description of Work</td><td data-f="s2.description" style="white-space:pre-line">${s2.description}</td></tr>
-      <tr><td class="lbl">Customer Complaint / Findings</td><td data-f="s2.findings" style="white-space:pre-line">${s2.findings}</td></tr></table>
+      ${perProduct(rep) ? '' : html`<tr><td class="lbl">Customer Complaint / Findings</td><td data-f="s2.findings" style="white-space:pre-line">${s2.findings}</td></tr>`}</table>
+    ${perProduct(rep) ? findingsTable(rep) : ''}
     <table style="margin-top:6px">
       ${sec(3, 'LABOUR / MAN-HOURS / TRANSPORT', 6)}
       <tr><td class="lbl">Transport Zone</td><td class="lbl">No. of Persons</td><td class="lbl">No. of Days</td><td class="lbl">Hours / Day</td><td class="lbl">Total Man-hours</td><td class="lbl">Remarks</td></tr>

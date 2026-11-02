@@ -23,6 +23,8 @@
 .sheet table { width: 100%; border-collapse: collapse; }
 .sheet td, .sheet th { border: 1px solid #555; padding: 4px 6px; vertical-align: top; text-align: left; font-weight: 400; }
 .sheet .lbl { width: 22%; background: #F2F2F2; font-weight: 600; }
+.sheet .fhead th { background: #F2F2F2; font-weight: 600; }
+.sheet .finds td { height: 18px; }
 .sheet .sec td { background: var(--navy-900); color: #fff; font-weight: 700; letter-spacing: .3px; border-color: var(--navy-900); }
 .sheet .gap { height: 6px; border: 0; padding: 0; }
 .sheet .box { display: inline-block; width: 11px; height: 11px; border: 1px solid #333; margin-right: 5px; vertical-align: -1px; text-align: center; line-height: 9px; font-size: 9px; }

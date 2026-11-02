@@ -7,7 +7,7 @@ import * as auth from '../core/auth.js';
 import { saveBlob } from '../core/media.js';
 import { findSite } from '../core/lookups.js';
 import { saveNewEnquiry } from '../core/enquiries.js';
-import { startReport, saveReport, submitReport, jobScope } from '../core/inspections.js';
+import { startReport, saveReport, submitReport, jobScope, reportShutters, findingRows, findingsText } from '../core/inspections.js';
 import { createEstimate, saveEstimate } from '../core/estimates.js';
 import { createFromEstimate, saveWording, submitForCheck, decideQuotation, markSent, accept, reject } from '../core/quotations.js';
 import { openTaskFor } from '../core/workflow.js';
@@ -110,12 +110,16 @@ export function fileReport(enq, tech, { picks, mats = [], desc, s3 = {}, s4 = {}
   const rep = startReport(e.inspectionId);
   const sh = tag => site.shutters.find(s => s.tag === tag);
   const picked = picks.map(([tag, finding]) => { const s = sh(tag); return { key: s.id, shutterId: s.id, tag: s.tag, location: s.location, productId: s.productId, width: s.width, height: s.height, unit: s.unit, sizeCode: s.sizeCode, motor: s.motor, finding }; });
-  const scope = jobScope({ ...rep, shutters: picked });
+  // The technician checked everything the customer asked for; each picked product gets its fault (priority Normal).
+  const fault = Object.fromEntries(picked.map(p => [p.shutterId, p.finding]));
+  const asked = jobScope({ ...rep, shutters: picked }).asked.map(a => ({ ...a, done: true,
+    found: Object.fromEntries((a.linkIds || []).filter(id => id in fault).map(id => [id, { fault: fault[id], action: '', priority: 'NORMAL' }])) }));
+  const shutters = reportShutters(rep, asked);
   const rows = mats.map(([code, qty, tag]) => { const it = item(code); return { name: it.name, spec: it.spec || '', qty, unit: it.unit, remarks: '', itemId: it.id, shutterKey: sh(tag)?.id || '' }; });
   saveReport(rep.id, {
-    s1: { ...rep.s1, timeIn: '10:10', timeOut: '10:55' }, shutters: scope.shutters, s5: { rows, consumables: '' }, s3: { ...rep.s3, hoursPerDay: 6, ...s3 }, s4: { ...rep.s4, ...s4 },
-    s2: { ...rep.s2, replace: rows.length > 0, description: desc, findings: picks.map(([t, f]) => `${t} ${f}`).join('; ') }, s7: { ...rep.s7, signatureId: sigId, custName: e.contactName, custSignatureId: custSigId },
-    asked: scope.asked.map(a => ({ ...a, done: true })), // the technician checked everything the customer asked for
+    s1: { ...rep.s1, timeIn: '10:10', timeOut: '10:55' }, shutters, asked, s5: { rows, consumables: '' }, s3: { ...rep.s3, hoursPerDay: 6, ...s3 }, s4: { ...rep.s4, ...s4 },
+    s2: { ...rep.s2, replace: rows.length > 0, description: desc, findings: findingsText(findingRows(rep, asked, shutters)), otherFindings: '' },
+    s7: { ...rep.s7, signatureId: sigId, custName: e.contactName, custSignatureId: custSigId },
   });
   submitReport(rep.id);
 }

@@ -1,7 +1,7 @@
 // Site inspection rules: technicians by zone, assignment with a confirmed visit time,
 // and the Site Viewing Report (SVR) from start to submission.
 import * as store from './store.js';
-import { technicians, empName, findSite, productName } from './lookups.js';
+import { technicians, empName, findSite, productName, vsOptions, vsDefault } from './lookups.js';
 import { makeShutter, addShutters } from './customers.js';
 import { cleanLines, lineText } from './enquiries.js';
 
@@ -37,7 +37,7 @@ function materialRows(enq) {
     return { name: l.itemName, spec: it?.spec || '', qty: l.qty || 1, unit: l.unit || it?.unit || '', remarks: l.description || '', itemId: it?.id || null, shutterKey: '' };
   });
 }
-// Customer Complaint / Findings: one line per enquiry line, numbered when there are several.
+// How reports saved before findings per product pre-filled Customer Complaint / Findings: one line per enquiry line.
 function findingsFrom(enq) {
   const lines = cleanLines(enq.lines).map(lineText);
   if (!lines.length) return enq.description || '';
@@ -51,7 +51,7 @@ function namedIn(l, site, taken) {
     return new RegExp(`(?<![A-Za-z0-9-])${tag}(?![A-Za-z0-9])`, 'i').test(text);
   });
 }
-// Job scope, "What the customer asked for" (screen only): one row per enquiry line, ticked once checked on site.
+// Job scope, "Products and findings": one row per enquiry line, ticked once checked on site; printed as Customer Complaint / Findings.
 // A line about a shutter type (Product master), or naming a recorded shutter by tag, is a product row: type, qty,
 // location and size, or linkIds = the customer's products already recorded at the site. The technician adds more
 // product rows on site (added: true). The report's shutters come from these rows (reportShutters).
@@ -77,6 +77,18 @@ function tagMaker(site) {
   let n = Math.max(0, ...reg.map(s => parseInt(String(s.tag).replace(/\D/g, ''), 10)).filter(x => !isNaN(x)));
   return () => `${prefix}${++n}`;
 }
+// Findings (user, 2 Nov 2026): each product, and each line with no product, has its fault found, the action needed and a
+// priority (Value Set Master "Finding Priority"; the built-in list serves data saved before that list existed). They are
+// kept on the row by product key (r.found); rows saved before keep their note as the fault.
+const PRIORITY_LIST = [{ value: 'URGENT', label: 'Urgent' }, { value: 'NORMAL', label: 'Normal' }, { value: 'LATER', label: 'Can wait' }];
+export const priorityOptions = () => { const o = vsOptions('FINDING_PRIORITY'); return o.length ? o : PRIORITY_LIST; };
+export const priorityLabel = code => priorityOptions().find(o => o.value === code)?.label || '';
+const defaultPriority = () => vsDefault('FINDING_PRIORITY') || 'NORMAL';
+export function findingOf(r, key) {
+  const f = r.found?.[key] || {};
+  return { fault: f.fault ?? r.note ?? '', action: f.action || '', priority: f.priority || defaultPriority() };
+}
+
 // The report's shutters from its product rows: the linked customer products, then one new product for each of the rest
 // of the qty (same location and size). They fill "Shutter Location" and become the estimate lines.
 export function reportShutters(rep, rows = rep.asked) {
@@ -85,16 +97,44 @@ export function reportShutters(rep, rows = rep.asked) {
   const nextTag = tagMaker(site);
   const out = [];
   (rows || []).filter(isProductRow).forEach(r => {
-    const finding = r.note || r.desc || '';
+    const found = key => { const f = findingOf(r, key); return { finding: f.fault || r.desc || '', action: f.action, priority: f.priority, rowKey: r.key }; };
     const linked = (r.linkIds || []).map(id => reg.find(s => s.id === id)).filter(s => s && !out.some(o => o.shutterId === s.id));
     linked.forEach(s => out.push({ key: s.id, shutterId: s.id, tag: s.tag, location: s.location, productId: s.productId, width: s.width, height: s.height, unit: s.unit,
-      sizeCode: s.sizeCode, motor: s.motor, finding, rowKey: r.key }));
+      sizeCode: s.sizeCode, motor: s.motor, ...found(s.id) }));
     for (let i = linked.length; i < (Number(r.qty) || 1); i++) {
-      out.push({ key: `${r.key}_${i}`, shutterId: null, isNew: true, tag: nextTag(), location: r.location || '', productId: r.productId, width: r.width ?? null,
-        height: r.height ?? null, unit: r.unit || 'm', sizeCode: r.sizeCode || '', motor: '', finding, rowKey: r.key });
+      const key = `${r.key}_${i}`;
+      out.push({ key, shutterId: null, isNew: true, tag: nextTag(), location: r.location || '', productId: r.productId, width: r.width ?? null,
+        height: r.height ?? null, unit: r.unit || 'm', sizeCode: r.sizeCode || '', motor: '', ...found(key) });
     }
   });
   return out;
+}
+
+// Customer Complaint / Findings as printed: one row per product (shutter), and one per line with no product.
+export function findingRows(rep, rows = rep.asked, shutters = rep.shutters) {
+  return (rows || []).flatMap(r => isProductRow(r)
+    ? (shutters || []).filter(s => s.rowKey === r.key).map(s => ({ key: s.key, tag: s.tag, product: productName(s.productId), location: s.location, size: s.sizeCode,
+      complaint: r.desc, ...findingOf(r, s.key) }))
+    : [{ key: r.key, tag: '', product: '', location: '', size: '', complaint: r.text, ...findingOf(r, r.key) }]);
+}
+// The same findings as one text (s2.findings): the estimate's and the quotation's Findings. Reports saved before the
+// table print this text in the old single box.
+export function findingsText(rows, other = '') {
+  const lines = rows.map(f => {
+    const what = f.fault || (f.tag ? f.complaint : '');
+    const urgent = f.priority === 'URGENT' ? ` (${priorityLabel('URGENT').toLowerCase()})` : '';
+    return f.tag ? `${f.tag} ${f.product}${what ? `: ${what}` : ''}${urgent}` : `${f.complaint}${f.fault ? `: ${f.fault}` : ''}${urgent}`;
+  }).filter(Boolean);
+  if (other) lines.push(other);
+  return lines.length === 1 ? lines[0] : lines.map((t, i) => `${i + 1}. ${t}`).join('\n');
+}
+export const perProduct = rep => rep.s2?.otherFindings !== undefined;
+// Other findings (anything not about one product). A report saved before keeps its findings text here if it was changed
+// from the enquiry pre-fill.
+export function otherFindings(rep) {
+  if (perProduct(rep)) return rep.s2.otherFindings;
+  const enq = store.get('enquiries', rep.enquiryId);
+  return enq && rep.s2.findings === findingsFrom(enq) ? '' : rep.s2.findings || '';
 }
 
 // Reports saved before the products moved to Job scope: rows get keys, and a shutter no row covers becomes a row of its
@@ -140,13 +180,15 @@ export function reportDraft(inspId, { fromOffice = true } = {}) {
   const { site } = findSite(enq.siteId);
   const tech = store.get('employees', insp.technicianId);
   const asked = askedFrom(enq, site);
+  const shutters = reportShutters({ siteId: enq.siteId }, asked);
   return {
     inspectionId: inspId, enquiryId: enq.id, technicianId: insp.technicianId, customerId: enq.customerId, siteId: enq.siteId,
     s1: { customer: enq.customerName, site: site?.name || enq.siteName, address: site?.address || '', blockUnit: site?.blockUnit || '', viewedBy: tech?.name || '',
       viewDate: insp.visitAt ? localDate(insp.visitAt) : today(), contactPerson: enq.contactName, contactNo: [enq.mobile, enq.email].filter(Boolean).join(' / '),
       timeIn: fromOffice ? '' : nowTime(), timeOut: '' },
-    asked, shutters: reportShutters({ siteId: enq.siteId }, asked),
-    s2: { supplyInstall: false, repair: enq.type === 'REPAIR', replace: false, motor: false, dismantle: false, servicing: enq.type !== 'REPAIR', other: '', description: '', findings: findingsFrom(enq) },
+    asked, shutters,
+    s2: { supplyInstall: false, repair: enq.type === 'REPAIR', replace: false, motor: false, dismantle: false, servicing: enq.type !== 'REPAIR', other: '', description: '',
+      findings: findingsText(findingRows({}, asked, shutters)), otherFindings: '' },
     s3: { zoneId: enq.zoneId, persons: 2, days: 1, hoursPerDay: null, remarks: '', normal: true, afterHours: false, weekend: false, phased: false },
     s4: { ladder: false, scaffolding: false, scaffoldSets: '', scissor: false, scissorNos: '', boom: false, hoist: false, welding: false, grinding: false, powerTools: false, other: '', maxHeight: null, providedBy: '', rentalDuration: '', others: '' },
     s5: { rows: materialRows(enq), consumables: '' },
@@ -185,14 +227,14 @@ export const saveReport = (id, patch) => store.update('siteReports', id, patch, 
 export function reportProblems(rep, { paper = false } = {}) {
   const p = [];
   // Each message names the section and the field to fill, the same words on the web and the phone.
-  if (!rep.shutters.length && !rep.s2.description) p.push('Add at least one product under “What the customer asked for” (section 2 Job scope, “+ Add product”), or write the “Job Scope / Description of Work” (section 2 Job scope).');
+  if (!rep.shutters.length && !rep.s2.description) p.push('Add at least one product under “Products and findings” (section 2 Job scope, “+ Add product”), or write the “Job Scope / Description of Work” (section 2 Job scope).');
   (rep.asked || []).filter(r => isProductRow(r) && (Number(r.qty) || 1) > (r.linkIds || []).length && (!r.location || !r.sizeCode))
-    .forEach(r => p.push(`Enter the location and tap the size of line ${r.n} (${productName(r.productId) || 'product'}) under “What the customer asked for” (section 2 Job scope).`));
+    .forEach(r => p.push(`Enter the location and tap the size of line ${r.n} (${productName(r.productId) || 'product'}) under “Products and findings” (section 2 Job scope).`));
   if (!rep.s7.name) p.push('Enter the name under “Viewed by” (section 7 Sign-off).');
   if (!paper && !rep.s7.signatureId) p.push('Sign under “Viewed by” (section 7 Sign-off).');
   const asks = (rep.asked || []).filter(a => !a.added); // rows added on site are not asked by the customer
   const left = asks.filter(a => !a.done).length;
-  if (!paper && left) p.push(`Tick each line under “What the customer asked for” once you have checked it on site (section 2 Job scope): ${left} of ${asks.length} not ticked yet.`);
+  if (!paper && left) p.push(`Tick each line under “Products and findings” once you have checked it on site (section 2 Job scope): ${left} of ${asks.length} not ticked yet.`);
   const s7 = rep.s7;
   if (!paper && s7.custAbsent && !s7.custAbsentReason) p.push('Give the reason under “Customer not available to sign” (section 7 Sign-off).');
   if (!paper && !s7.custAbsent && !(s7.custSignatureId && s7.custName)) p.push('Let the customer sign under “Acknowledged by” with their name (section 7 Sign-off), or tick “Customer not available to sign” and give the reason.');
@@ -212,7 +254,8 @@ export function submitReport(id, { paper = false } = {}) {
     addShutters(rep.customerId, rep.siteId, made.map(m => m.sh), `${made.length} new customer product(s) recorded from ${rep.no}`);
     const idOf = key => made.find(m => m.key === key)?.sh.id;
     shutters = rep.shutters.map(s => { const m = made.find(x => x.key === s.key); return m ? { ...s, key: m.sh.id, isNew: false, shutterId: m.sh.id, sizeCode: m.sh.sizeCode } : s; });
-    asked = asked.map(r => ({ ...r, linkIds: [...(r.linkIds || []), ...made.filter(m => m.rowKey === r.key).map(m => m.sh.id)] }));
+    asked = asked.map(r => ({ ...r, linkIds: [...(r.linkIds || []), ...made.filter(m => m.rowKey === r.key).map(m => m.sh.id)],
+      ...(r.found ? { found: Object.fromEntries(Object.entries(r.found).map(([k, f]) => [idOf(k) || k, f])) } : {}) }));
     s5 = { ...s5, rows: s5.rows.map(r => ({ ...r, shutterKey: idOf(r.shutterKey) || r.shutterKey })) };
   }
   store.update('siteReports', id, { shutters, asked, s5, paper, submittedAt: new Date().toISOString(), s1: { ...rep.s1, timeOut: rep.s1.timeOut || (paper ? '' : nowTime()) } },

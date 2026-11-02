@@ -32,7 +32,10 @@ export function kosmicRepair(t, cust, at) {
   const [rs1, rs2] = site.shutters;
   const recv = at(1, 16, 20), assigned = at(1, 16, 30), visit = at(1, 16, 45), timeIn = at(1, 16, 50), done = at(1, 17, 30);
   const enqId = `enq_${t}_3`, inspId = `ins_${t}_3`, repId = `svr_${t}_1`, tech = `emp_${t}_3`;
-  const findings = 'RS-1 motor needs replacing; RS-2 jammed, springs worn';
+  // Findings per product (site report section 2), and the same as one text for the estimate.
+  const f1 = { fault: 'Motor not working, needs replacing', action: 'Supply and install a 400 kg single phase motor', priority: 'URGENT' };
+  const f2 = { fault: 'Jammed; springs worn', action: 'Release the jam and replace both springs', priority: 'NORMAL' };
+  const findings = `1. RS-1 Rolling shutter: ${f1.fault} (urgent)\n2. RS-2 Collapsible shutter: ${f2.fault}`;
   const enquiry = {
     id: enqId, tenantId: t, no: `ENQ-${year}-0003`, receivedAt: recv, channel: 'EMAIL', channelOther: '', type: 'REPAIR', enquiryStatus: 'HOT', priority: 'HIGH',
     siteInspection: 'YES', recordedBy: ops, remarks: '', attachments: [],
@@ -50,16 +53,17 @@ export function kosmicRepair(t, cust, at) {
   };
   // Job scope: the enquiry line names RS-1 and RS-2, so its row links both customer products.
   const rowKey = `ask_${t}_k1`;
-  const picked = (s, finding) => ({ key: s.id, shutterId: s.id, tag: s.tag, location: s.location, productId: s.productId, width: s.width, height: s.height, unit: s.unit, sizeCode: s.sizeCode, motor: s.motor, finding, rowKey });
+  const picked = (s, f) => ({ key: s.id, shutterId: s.id, tag: s.tag, location: s.location, productId: s.productId, width: s.width, height: s.height, unit: s.unit, sizeCode: s.sizeCode, motor: s.motor,
+    finding: f.fault, action: f.action, priority: f.priority, rowKey });
   const report = {
     id: repId, tenantId: t, no: `SVR-${year}-0001`, inspectionId: inspId, enquiryId: enqId, technicianId: tech, customerId: k.id, siteId: site.id,
     s1: { customer: k.name, site: site.name, address: site.address, blockUnit: site.blockUnit, viewedBy: 'Technician A', viewDate: localDate(visit), contactPerson: con.name,
       contactNo: `${con.mobile} / ${con.email}`, timeIn: hhmm(timeIn), timeOut: hhmm(done) },
-    shutters: [picked(rs1, 'Motor not working, needs replacing'), picked(rs2, 'Jammed; springs worn')],
+    shutters: [picked(rs1, f1), picked(rs2, f2)],
     asked: [{ key: rowKey, n: 1, text: enquiry.description, desc: enquiry.description, done: true, note: '', productId: rs1.productId, qty: 2, location: '', sizeCode: '',
-      width: null, height: null, unit: 'm', linkIds: [rs1.id, rs2.id] }],
+      width: null, height: null, unit: 'm', linkIds: [rs1.id, rs2.id], found: { [rs1.id]: f1, [rs2.id]: f2 } }],
     s2: { supplyInstall: false, repair: true, replace: true, motor: true, dismantle: false, servicing: false, other: '',
-      description: 'Supply and install a 400 kg single phase motor on RS-1; release the RS-2 jam and replace the springs.', findings },
+      description: 'Supply and install a 400 kg single phase motor on RS-1; release the RS-2 jam and replace the springs.', findings, otherFindings: '' },
     s3: { zoneId: site.zoneId, persons: 2, days: 1, hoursPerDay: 6, remarks: '', normal: true, afterHours: false, weekend: false, phased: false },
     s4: { ladder: true, scaffolding: false, scaffoldSets: '', scissor: false, scissorNos: '', boom: false, hoist: false, welding: false, grinding: false, powerTools: true, other: '', maxHeight: 3, providedBy: 'Contractor', rentalDuration: '', others: '' },
     s5: { rows: [

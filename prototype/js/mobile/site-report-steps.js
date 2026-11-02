@@ -5,7 +5,7 @@ import { zones, items, products, productName, sizes, findSite } from '../core/lo
 import { manHours, classifySize } from '../core/costing.js';
 import { removeBlob } from '../core/media.js';
 import { savePhotos, signaturePad } from '../core/capture.js';
-import { isProductRow, reportShutters, jobScope, newProductRow } from '../core/inspections.js';
+import { isProductRow, reportShutters, jobScope, newProductRow, findingOf, findingRows, findingsText, otherFindings, priorityOptions } from '../core/inspections.js';
 
 const check = (name, label, on) => html`<label class="check"><input type="checkbox" name="${name}" ${on ? 'checked' : ''}> ${label}</label>`;
 // Read "prefix_key" controls back into a section object.
@@ -16,11 +16,23 @@ function readSection(body, prefix, current) {
   return out;
 }
 
-// "What the customer asked for" (screen only): one row per enquiry line, ticked once checked on site. A product row
-// also takes the type, qty, location and size (tap S / M / L / XL, or measure); a product the customer already has at
-// the site is tapped instead. Rows are named by their key, so adding or removing one never mixes up the others.
+// "Products and findings" (printed as Customer Complaint / Findings): one row per enquiry line, ticked once checked on
+// site. A product row also takes the type, qty, location and size (tap S / M / L / XL, or measure); a product the
+// customer already has at the site is tapped instead. Each product (each line with no product) then gets its fault,
+// the action needed and a priority. Fields are named by row or product key, so adding or removing one never mixes up
+// the others.
 const sizeList = () => sizes().filter(z => z.status !== 'Inactive').sort((a, b) => a.order - b.order);
-function askRow(r, site, used) {
+const micInput = (name, value, placeholder = '') => html`<div class="with-mic"><input type="text" name="${name}" value="${value}" placeholder="${placeholder}"><button type="button" class="mic" data-mic="${name}" title="Voice input">${MIC}</button></div>`;
+function findRow(r, k, s) {
+  const f = findingOf(r, k);
+  return html`<div class="find-row" data-fk="${k}" data-of="${r.key}">
+    ${s ? html`<div class="find-who"><b>${s.tag}</b>${s.isNew ? html`<span class="tag new">new</span>` : ''}<span class="small muted">${productName(s.productId)}${s.sizeCode ? ` · ${s.sizeCode}` : ''}</span></div>` : ''}
+    <div class="field"><label>Fault found</label>${micInput(`ff_${k}`, f.fault)}</div>
+    <div class="field"><label>Action needed</label>${micInput(`fa_${k}`, f.action)}</div>
+    <div class="field"><label>Priority</label><span class="chips prio">${priorityOptions().map(o => html`<label class="chip p-${o.value}"><input type="radio" name="fp_${k}" value="${o.value}" ${o.value === f.priority ? 'checked' : ''}><span>${o.label}</span></label>`)}</span></div>
+  </div>`;
+}
+function askRow(r, site, used, shutters) {
   const k = r.key, linked = r.linkIds || [];
   const fresh = (Number(r.qty) || 1) - linked.length; // new products this row records for the customer
   const mine = (site?.shutters || []).filter(s => linked.includes(s.id) || (s.status !== 'Inactive' && !used.has(s.id) && s.productId === r.productId));
@@ -35,7 +47,7 @@ function askRow(r, site, used) {
           <span class="small muted measure">or W <input type="number" step="0.01" min="0" name="pw_${k}" value="${r.width ?? ''}"> × H <input type="number" step="0.01" min="0" name="ph_${k}" value="${r.height ?? ''}"> m</span></div></div>` : ''}
       ${mine.length ? html`<div class="field spanall"><label>Already a customer product? Tap it</label><div class="chips">${mine.map(s => html`<label class="chip"><input type="checkbox" data-link="${k}" value="${s.id}" ${linked.includes(s.id) ? 'checked' : ''}><span>${s.tag} ${s.location} · ${s.sizeCode}</span></label>`)}</div></div>` : ''}
     </div>` : ''}
-    <div class="with-mic"><input type="text" name="asknote_${k}" placeholder="${isProductRow(r) ? 'Fault found (optional)' : 'Note (optional)'}" value="${r.note || ''}"><button type="button" class="mic" data-mic="asknote_${k}" title="Voice input">${MIC}</button></div>
+    <div class="finds">${isProductRow(r) ? shutters.filter(s => s.rowKey === k).map(s => findRow(r, s.key, s)) : findRow(r, k)}</div>
   </div>`;
 }
 
@@ -43,20 +55,21 @@ const step2 = {
   title: 'Job scope',
   render: rep => {
     const rows = jobScope(rep).asked;
+    const shutters = reportShutters(rep, rows);
     const { site } = findSite(rep.siteId);
     const usedBy = r => new Set(rows.filter(x => x !== r).flatMap(x => x.linkIds || []));
     return html`
     <div class="checks" style="grid-template-columns:1fr 1fr">${check('s2_supplyInstall', 'Supply & install', rep.s2.supplyInstall)}${check('s2_repair', 'Repair', rep.s2.repair)}
       ${check('s2_replace', 'Replace component', rep.s2.replace)}${check('s2_motor', 'Motor / control works', rep.s2.motor)}
       ${check('s2_dismantle', 'Dismantle / removal', rep.s2.dismantle)}${check('s2_servicing', 'Servicing / maintenance', rep.s2.servicing)}</div>
-    <div class="m-section">What the customer asked for <span class="tag info">screen only</span></div>
-    <p class="small muted" style="margin:0 0 6px">From the enquiry. Tick each one once you have checked it on site. Products are recorded as the customer's products when you submit.</p>
-    <div class="asked">${rows.map(r => askRow(r, site, usedBy(r)))}</div>
+    <div class="stack" style="margin-top:8px">${field({ name: 's2_other', label: 'Other', value: rep.s2.other })}</div>
+    <div class="m-section">Products and findings <span class="tag info">printed as Customer Complaint / Findings</span></div>
+    <p class="small muted" style="margin:0 0 6px">From the enquiry. Tick each line once you have checked it on site, and give each product its fault, the action needed and a priority. New products are recorded as the customer's products when you submit.</p>
+    <div class="asked">${rows.map(r => askRow(r, site, usedBy(r), shutters))}</div>
     <button type="button" class="add-dashed" id="addProd" style="margin-top:6px">+ Add product</button>
     <div class="stack" style="margin-top:10px">
-      ${field({ name: 's2_other', label: 'Other', value: rep.s2.other })}
       ${field({ name: 's2_description', label: 'Job Scope / Description of Work', type: 'textarea', value: rep.s2.description, mic: true })}
-      ${field({ name: 's2_findings', label: 'Customer Complaint / Findings', type: 'textarea', value: rep.s2.findings, mic: true, hint: 'Pre-filled from the enquiry, one line per enquiry line' })}
+      ${field({ name: 's2_otherFindings', label: 'Other findings', value: otherFindings(rep), mic: true, placeholder: 'Anything not about one product' })}
     </div>
     <div class="m-section">Photos <span class="tag info">attached, not printed on the form</span></div>
     <div class="photos">${rep.photos.map(p => html`<div class="photo"><img data-media="${p}" alt="Site photo"><button type="button" class="del" data-delphoto="${p}" aria-label="Remove photo">×</button></div>`)}</div>
@@ -67,7 +80,9 @@ const step2 = {
     const has = k => Object.prototype.hasOwnProperty.call(d, k);
     const asked = (rep.asked || []).map(a => {
       const k = a.key;
-      const r = { ...a, done: a.added || (d[`ask_${k}`] ?? a.done), note: d[`asknote_${k}`] ?? a.note };
+      const r = { ...a, done: a.added || (d[`ask_${k}`] ?? a.done) };
+      const keys = $$(`[data-of="${k}"]`, body).map(e => e.dataset.fk);
+      if (keys.length) r.found = { ...a.found, ...Object.fromEntries(keys.map(fk => [fk, { fault: d[`ff_${fk}`] ?? '', action: d[`fa_${fk}`] ?? '', priority: d[`fp_${fk}`] || findingOf(a, fk).priority }])) };
       if (!isProductRow(a)) return r;
       r.productId = d[`pt_${k}`] || a.productId;
       r.qty = Math.max(1, Math.round(d[`pq_${k}`] ?? a.qty ?? 1), (a.linkIds || []).length);
@@ -78,7 +93,11 @@ const step2 = {
       if (a.added && /^\d+ × /.test(a.text)) r.text = `${r.qty} × ${productName(r.productId)}`;
       return r;
     });
-    return { s2: readSection(body, 's2', rep.s2), asked, shutters: reportShutters(rep, asked) };
+    const shutters = reportShutters(rep, asked);
+    const s2 = readSection(body, 's2', rep.s2);
+    s2.otherFindings ??= otherFindings(rep);
+    s2.findings = findingsText(findingRows(rep, asked, shutters), s2.otherFindings); // the same findings as one text, for the estimate
+    return { s2, asked, shutters };
   },
   bind(body, rep, ctx) {
     // Adding, removing or linking a product, or a new qty or type, draws the rows again.

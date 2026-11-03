@@ -12,15 +12,21 @@ import { approveJobTerm, confirmLeave } from '../core/jobs.js';
 import { renewContract, declineRenewal, contractProgress } from '../core/contracts.js';
 import { invoiceForJob, balanceOf } from '../core/billing.js';
 import { bindMics } from '../core/capture.js';
+import { remindLater, dropLaterWork, quoteLaterWork } from '../core/later-work.js';
+import { prioPill } from './later-work.js';
 import { pageHead } from './shell.js';
 import { render } from '../app.js';
 
 const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const sel = { id: '' };
+// What each button did, for the message after it.
+const DONE = { return: 'returned with your comment', confirm: 'the technician may leave the site', renew: 'renewal enquiry and estimate created', decline: 'marked as not renewing',
+  snooze: 'you will be reminded again', notWanted: 'later items marked not wanted', quoteRest: 'enquiry and estimate made from the later items' };
 
 export function taskLabel(t) {
   if (t.kind === 'leaveSite') return 'Leave site';
   if (t.kind === 'renewal') return 'AMC renewal';
+  if (t.kind === 'laterWork') return 'Later work';
   return t.docType === 'job' ? 'Payment term' : t.level > 1 ? `Approval level ${t.level}` : 'Counter-check';
 }
 
@@ -48,6 +54,16 @@ export function taskDetail(t, { compact = false } = {}) {
       <p>${c.no} for ${c.customer} ends on <b>${fmtDate(c.end)}</b>. ${p.done} of ${p.visits} visits done; ${cur} ${m2(p.paid)} paid of ${m2(c.total)}.</p>
       <p class="small muted">Renew creates a renewal enquiry with an estimate pre-filled from this contract (same sites, shutters and visits, today's rates). It then goes to the quotation and the counter-check.</p>
       <div class="apr-foot"><a class="btn" href="#/contracts/${c.id}">Open ${c.no}</a><span class="grow"></span><button class="btn" data-do="decline">Not renewing</button><button class="btn primary" data-do="renew">⟳ Renew now</button></div></div>`;
+  }
+  if (t.kind === 'laterWork') {
+    const e = store.get('enquiries', t.docId);
+    const lw = e.laterWork;
+    return html`<div class="card"><div class="card-head"><h2>${t.title}</h2></div>
+      <table class="tbl"><tbody>${lw.items.map(i => html`<tr><td class="wrap">${i.tag ? html`<b>${i.tag}</b> ${i.location}` : i.description}</td><td class="wrap">${i.action || i.fault}</td><td>${prioPill(i.priority)}</td><td class="num">${m2(i.amount)}</td></tr>`)}</tbody></table>
+      <p class="small muted" style="margin:8px 0">${compact ? e.no : html`<a href="#/enquiries/${e.id}">${e.no}</a>`} · ${e.contactName}${e.mobile ? html` · <a href="tel:${e.mobile.replace(/\s/g, '')}">${e.mobile}</a>` : ''} · from ${lw.quotationNo}</p>
+      <div class="apr-foot" style="${compact ? 'flex-direction:column;align-items:stretch' : 'flex-wrap:wrap'}"><input type="text" class="grow" name="comment" placeholder="Note (optional)">
+        <label class="small">Remind again on <input type="date" name="snooze"></label><button class="btn" data-do="snooze">Remind again</button>
+        <button class="btn" data-do="notWanted">Not wanted</button>${compact ? html`<span class="small muted">Quote the rest on the web.</span>` : html`<button class="btn primary" data-do="quoteRest">Quote the rest</button>`}</div></div>`;
   }
   if (t.docType === 'job') {
     const j = store.get('jobs', t.docId);
@@ -78,11 +94,19 @@ export function taskDetail(t, { compact = false } = {}) {
 const decision = (compact = false, t = null) => cannotDecide(t) ? html`<div class="note warn small" style="margin-top:10px">${cannotDecide(t)}</div>` : html`<div class="apr-foot" style="${compact ? 'flex-direction:column;align-items:stretch' : ''}"><div class="with-mic grow"><textarea name="comment" placeholder="Comment (needed to return)" style="min-height:58px"></textarea><button type="button" class="mic" data-mic="comment" title="Voice input">${MIC}</button></div>
   <div style="display:flex;flex-direction:column;gap:6px"><button class="btn primary" data-do="approve">✓ Approve</button><button class="btn danger" data-do="return">↩ Return</button></div></div>`;
 
-// Carry out a decision; returns an error text or ''.
-export function actOnTask(t, action, comment) {
+// Carry out a decision; returns an error text or ''. extra: the "Remind again on" date of a later-work task.
+export function actOnTask(t, action, comment, extra = '') {
   if (!myTasks().some(x => x.id === t.id)) return 'This task is not for your role.';
   if (cannotDecide(t)) return cannotDecide(t);
   if (action === 'return' && !comment.trim()) return 'Write a comment to say what needs changing.';
+  if (t.kind === 'laterWork') {
+    if (action === 'snooze') { if (!extra) return 'Pick the date for the next reminder.'; remindLater(t.docId, extra, comment); return ''; }
+    if (action === 'notWanted') { dropLaterWork(t.docId, 'NOT_NEEDED', comment); return ''; }
+    const r = quoteLaterWork(t.docId);
+    if (!r) return 'Nothing left to quote.';
+    go(`estimates/${r.estimate.id}`);
+    return '';
+  }
   if (t.kind === 'leaveSite') { confirmLeave(t.id, comment); return ''; }
   if (t.kind === 'renewal' && action === 'decline') { declineRenewal(t.docId, comment); return ''; }
   if (t.kind === 'renewal') { const r = renewContract(t.docId); go(`estimates/${r.estimate.id}`); return ''; }
@@ -105,7 +129,7 @@ export function renderTasks(el, openId) {
       { key: 'ok', label: 'Approved or confirmed today', count: doneToday.filter(x => x.status === 'Done').length }], 'open')}
     ${list.length ? html`<div class="apr">
       <div>${list.map(x => html`<div class="task ${x.id === sel.id ? 'on' : ''}" data-task="${x.id}"><div class="row"><b>${x.docNo}</b><span class="grow"></span><span class="small muted">${fmtDuration(Date.now() - new Date(x.createdAt))} ago</span></div>
-        <div>${x.customer}</div><div class="row small"><span class="pill ${x.kind === 'leaveSite' ? 'amber' : x.kind === 'renewal' ? 'purple' : 'blue'}">${taskLabel(x)}</span>${x.rules?.some(r => r.code === 'PAY_TERM') && x.docType === 'quotation' ? pill('Payment term', 'purple') : ''}<span class="grow"></span>${x.amount != null ? html`<b>${auth.company().currency} ${m2(x.amount)}</b>` : ''}</div></div>`)}</div>
+        <div>${x.customer}</div><div class="row small"><span class="pill ${['leaveSite', 'laterWork'].includes(x.kind) ? 'amber' : x.kind === 'renewal' ? 'purple' : 'blue'}">${taskLabel(x)}</span>${x.rules?.some(r => r.code === 'PAY_TERM') && x.docType === 'quotation' ? pill('Payment term', 'purple') : ''}<span class="grow"></span>${x.amount != null ? html`<b>${auth.company().currency} ${m2(x.amount)}</b>` : ''}</div></div>`)}</div>
       <div id="detail">${t.docType === 'quotation' ? html`<div class="row" style="justify-content:flex-end;gap:6px;margin-bottom:8px"><a class="btn small" href="#/quotations/${t.docId}">Open the quotation</a>
         <a class="btn small" href="#/quotations/${t.docId}/print" target="_blank">⎙ Open print preview</a></div>` : ''}${taskDetail(t)}</div>
     </div>` : html`<div class="card"><div class="empty">Nothing is waiting for you.</div></div>`}
@@ -116,10 +140,10 @@ export function renderTasks(el, openId) {
     if (tb) { sel.id = tb.dataset.task; renderTasks(el); return; }
     const b = e.target.closest('[data-do]');
     if (!b) return;
-    const err = actOnTask(t, b.dataset.do, $('[name="comment"]', el)?.value || '');
+    const err = actOnTask(t, b.dataset.do, $('[name="comment"]', el)?.value || '', $('[name="snooze"]', el)?.value || '');
     if (err) { toast(err, 'bad'); return; }
-    toast(`${t.docNo}: ${b.dataset.do === 'return' ? 'returned with your comment' : b.dataset.do === 'confirm' ? 'the technician may leave the site' : b.dataset.do === 'renew' ? 'renewal enquiry and estimate created' : b.dataset.do === 'decline' ? 'marked as not renewing' : 'approved'}`);
+    toast(`${t.docNo}: ${DONE[b.dataset.do] || 'approved'}`);
     sel.id = '';
-    if (b.dataset.do !== 'renew') render();
+    if (!['renew', 'quoteRest'].includes(b.dataset.do)) render();
   };
 }

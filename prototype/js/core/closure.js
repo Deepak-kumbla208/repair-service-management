@@ -38,7 +38,10 @@ export function estimatedVsActual(job) {
   const q = store.get('quotations', job.quotationId);
   if (!saved) return null;
   // A General Servicing estimate (AMC tabs) is read through the same rows as a repair estimate.
-  const est = saved.kind === 'AMC' ? { ...saved, ...amcRows(saved) } : saved;
+  const full = saved.kind === 'AMC' ? { ...saved, ...amcRows(saved) } : saved;
+  // Accepted in part: only the lines the customer took now (core/later-work.js).
+  const inJob = r => !q?.split || !r.lineKey || q.split.keys.includes(r.lineKey);
+  const est = q?.split ? { ...full, labour: full.labour.filter(inJob), materials: full.materials.filter(inJob) } : full;
   const persons = 2 + (job.crew?.extra || 0);
   const teamRate = saved.kind === 'AMC' ? saved.matrix.team.rate : est.labour[0]?.rate || 0;
   const estHours = Number(job.workHours) || 0;
@@ -53,7 +56,7 @@ export function estimatedVsActual(job) {
   const other = est.transport.reduce((t, r) => t + r.hrs * r.rate, 0) + est.equipment.reduce((t, r) => t + r.qty * r.duration * r.rate, 0);
   const estDirect = estLabour + estParts + other;
   const actDirect = (actLabour ?? estLabour) + (actParts ?? estParts) + other;
-  const sell = q?.subtotal || 0;
+  const sell = (q?.split || q)?.subtotal || 0;
   return {
     persons, rows: [
       { label: 'Team hours on site', est: estHours, act: actHours, hours: true },

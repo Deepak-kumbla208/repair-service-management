@@ -153,6 +153,18 @@ export const latestReport = enq => {
   const rep = insp?.reportId ? store.get('siteReports', insp.reportId) : null;
   return rep?.status === 'Submitted' ? rep : null;
 };
+// "Quote the rest" (core/later-work.js): the first enquiry's site report, cut down to the products and parts left for later.
+export const laterReport = enq => {
+  const l = enq?.laterOf;
+  const rep = l?.reportId ? store.get('siteReports', l.reportId) : null;
+  if (!rep) return null;
+  const keys = l.shutterKeys || [];
+  const shutters = rep.shutters.filter(s => keys.includes(s.key));
+  // Its findings are those of the later products only; the description comes from the new enquiry's lines.
+  const findings = shutters.map(s => `${s.tag} ${productName(s.productId)}: ${s.finding}`).join('\n');
+  return { ...rep, shutters, s2: { ...rep.s2, findings, description: '' },
+    s5: { ...rep.s5, rows: [...rep.s5.rows.filter(r => r.shutterKey && keys.includes(r.shutterKey)), ...(l.parts || []).map(p => ({ spec: '', ...p, shutterKey: '' }))] } };
+};
 
 // The current (latest) estimate revision of an enquiry.
 export const currentEstimate = enqId => store.list('estimates', e => e.enquiryId === enqId && e.status !== 'Superseded').sort((a, b) => b.rev - a.rev)[0] || null;
@@ -168,7 +180,7 @@ export function createEstimate(enqId, opts = {}) {
   const existing = currentEstimate(enqId);
   if (existing) return existing;
   const no = store.nextNumber('EST');
-  const data = enq.type === 'REPAIR' ? prefill(enq, latestReport(enq)) : amcPrefill(enq, opts);
+  const data = enq.type === 'REPAIR' ? prefill(enq, latestReport(enq) || laterReport(enq)) : amcPrefill(enq, opts);
   const est = store.insert('estimates', { no, rev: 1, ...data, quotationId: '', prevId: '', returnNote: null },
     { status: 'Draft', note: `${no} Rev 1 pre-filled from ${enq.no}` });
   store.setStatus('enquiries', enqId, 'Estimating', `${no} Rev 1`);

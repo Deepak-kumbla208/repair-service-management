@@ -42,15 +42,17 @@ export function createInvoice(jobId, { post = false, note = '' } = {}) {
   const q = store.get('quotations', job.quotationId);
   const customer = store.get('customers', job.customerId);
   const notDone = (job.workDone?.rows || []).filter(r => r.status !== 'DONE');
-  const rows = q.rows.map(r => ({ ...r, flag: notDone.find(n => n.key === r.lineKey) ? 'Marked not fully done on the Work Done form' : '' }));
+  // A quotation accepted in part bills only what the customer took now, at the quoted prices (core/later-work.js).
+  const src = q.split || q;
+  const rows = src.rows.map(r => ({ ...r, flag: notDone.find(n => n.key === r.lineKey) ? 'Marked not fully done on the Work Done form' : '' }));
   const flagNote = q.costingLevel === 'JOB' && notDone.length ? `Work Done form: ${notDone.map(n => `"${n.description}" ${n.status === 'PARTLY' ? 'partly done' : 'not done'}`).join('; ')}` : '';
   const date = today();
   const inv = store.insert('invoices', {
     no: '', jobId, jobNo: job.no, quotationId: q.id, quotationNo: `${q.no} Rev ${q.rev}`, enquiryId: job.enquiryId, customerId: job.customerId,
     customer: job.customer, billingAddress: customer?.address || job.address, contact: job.contact, phone: job.phone, site: job.site, siteAddress: job.address,
     poNo: q.acceptance?.poNo || '', date, paymentTerm: job.paymentTerm, dueDate: dueFor(job, job.paymentTerm, date),
-    costingLevel: q.costingLevel, description: q.description, findings: q.findings, rows, flagNote,
-    subtotal: q.subtotal, taxLabel: q.taxLabel, taxRate: q.taxRate, tax: q.tax, total: q.total, terms: invoiceTerms(), preparedBy: store.currentActor(),
+    costingLevel: q.costingLevel, description: q.split ? job.subject : q.description, findings: q.findings, rows, flagNote,
+    subtotal: src.subtotal, taxLabel: q.taxLabel, taxRate: q.taxRate, tax: src.tax, total: src.total, terms: invoiceTerms(), preparedBy: store.currentActor(),
   }, { status: 'Draft', note: `Invoice for ${job.no} ${note}`.trim() });
   store.update('jobs', jobId, { invoiceId: inv.id }, false);
   return post ? postInvoice(inv.id) : inv;

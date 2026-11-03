@@ -5,13 +5,14 @@
 import * as store from './store.js';
 import * as auth from './auth.js';
 import { findSite, withCompany } from './lookups.js';
-import { estimateSummary, reviseEstimate, txDefaults, companyTax } from './estimates.js';
+import { estimateSummary, reviseEstimate, txDefaults, companyTax, laterReport } from './estimates.js';
 import { startApproval, levelsFor, openLevel, closeTask, cancelTasksFor, registerFacts } from './workflow.js';
 import { createJobFromQuotation, createGsJob, openTermTask } from './jobs.js';
 import { createContractFromQuotation } from './contracts.js';
 import { amcChecks } from './amc-estimates.js';
 import { letterhead, termsFor, termTexts } from './setup.js';
 import { qtyRate } from './costing.js';
+import { splitOf, recordLater } from './later-work.js';
 
 const isoDate = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 export const todayIso = () => isoDate(new Date());
@@ -204,11 +205,15 @@ export function markSent(id, via) {
   return store.get('quotations', id);
 }
 
-// Accept (flow step 6). lineKeys: the accepted lines (Line costing); fewer than all = partial acceptance, which
-// revises the estimate without the other lines and returns the next quotation revision for the counter-check.
-export function accept(id, { method, poNo, poDate, contact, attachments = [], paymentTerm, lineKeys }) {
+// Accept (flow step 6). Repair in Line costing: decisions = { lineKey: 'NOW' | 'LATER' | 'NO' }; the "Now" lines become
+// the job at their quoted prices and the rest wait on the enquiry (core/later-work.js). AMC: lineKeys = the accepted
+// sites; fewer than all revises the estimate without the others and returns the next revision for the counter-check.
+export function accept(id, { method, poNo, poDate, contact, attachments = [], paymentTerm, lineKeys, decisions, reasons, followUp }) {
   const q = store.get('quotations', id);
   if (q.status !== 'Sent') return { error: 'Only a counter-checked quotation that was sent can be accepted.', quotation: q };
+  const parts = decisions && q.type === 'REPAIR' ? Object.values(decisions) : [];
+  if (parts.length && !parts.includes('NOW')) return { error: 'Choose "Now" for at least one item. If the customer wants everything later, leave the quotation as sent.', quotation: q };
+  const split = parts.some(v => v !== 'NOW') ? { ...splitOf(q, decisions), decisions, reasons: reasons || {} } : null;
   const priced = q.rows.filter(r => r.lineKey && !r.isShared).map(r => r.lineKey);
   const rejected = lineKeys ? priced.filter(k => !lineKeys.includes(k)) : [];
   if (rejected.length && rejected.length < priced.length) {
@@ -222,13 +227,16 @@ export function accept(id, { method, poNo, poDate, contact, attachments = [], pa
   const enq = store.get('enquiries', q.enquiryId);
   // An AMC keeps the payment term approved at the counter-check (activation is not gated by a second approval).
   const termChanged = enq.type !== 'AMC' && paymentTerm && paymentTerm !== q.paymentTerm;
+  const nowCount = split ? parts.filter(v => v === 'NOW').length : 0;
   store.update('quotations', id, {
     acceptance: { at: new Date().toISOString(), by: store.currentActor(), method, poNo, poDate, contact, attachments },
+    ...(split ? { split } : {}),
     ...(termChanged ? { paymentTerm, termApproved: false } : {}),
-  }, `${q.no} Rev ${q.rev} accepted by ${method}${poNo ? ` (PO ${poNo})` : ''}`);
-  store.setStatus('quotations', id, 'Accepted', poNo ? `PO ${poNo}` : method);
+  }, `${q.no} Rev ${q.rev} accepted by ${method}${poNo ? ` (PO ${poNo})` : ''}${split ? `: ${nowCount} of ${parts.length} items now` : ''}`);
+  store.setStatus('quotations', id, 'Accepted', `${poNo ? `PO ${poNo}` : method}${split ? ` · ${nowCount} of ${parts.length} items now` : ''}`);
   store.update('enquiries', q.enquiryId, { stage: 'Won' }, false);
-  store.setStatus('enquiries', q.enquiryId, 'Won', `${q.no} Rev ${q.rev} accepted`);
+  store.setStatus('enquiries', q.enquiryId, 'Won', `${q.no} Rev ${q.rev} accepted${split ? ' in part' : ''}`);
+  if (split) recordLater(store.get('quotations', id), { decisions, reasons, followUp });
   if (enq.type === 'AMC') {
     const contract = createContractFromQuotation(store.get('quotations', id));
     store.update('quotations', id, { contractId: contract.id }, false);
@@ -260,7 +268,8 @@ export function refreshExpiry() {
 export function autoChecks(q) {
   const est = store.get('estimates', q.estimateId);
   const enq = store.get('enquiries', q.enquiryId);
-  const rep = est?.reportId ? store.get('siteReports', est.reportId) : null;
+  // Later work ("Quote the rest") is checked against the part of the first site report it was made from.
+  const rep = enq.laterOf ? laterReport(enq) : est?.reportId ? store.get('siteReports', est.reportId) : null;
   const out = [];
   const add = (ok, text) => out.push({ tone: ok ? 'ok' : 'warn', text });
   if (est.kind === 'AMC') amcChecks(q, est, add);

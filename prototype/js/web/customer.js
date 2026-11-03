@@ -7,6 +7,7 @@ import { zones, zoneLabel, products, productName, sizes, vsOptions, vsDefault } 
 import { nextCode, findDuplicates, primaryContact, shutterCount, nextShutterTag } from '../core/customers.js';
 import { classifySize, toMetres } from '../core/costing.js';
 import { pageHead } from './shell.js';
+import { openLater } from '../core/later-work.js';
 
 export function renderCustomerList(el) {
   const state = { q: '', status: '' };
@@ -94,6 +95,13 @@ export function renderCustomerForm(el, id) {
   }
   function paintSites() {
     const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+    // Work the customer put off (later) or did not want, from quotations accepted in part (core/later-work.js).
+    const owed = new Map();
+    store.list('enquiries', e => e.customerId === draft.id).forEach(e => {
+      (e.notWanted || []).filter(i => i.shutterKey).forEach(i => owed.set(i.shutterKey, { ...i, how: 'not wanted' }));
+      (openLater(e)?.items || []).filter(i => i.shutterKey).forEach(i => owed.set(i.shutterKey, { ...i, how: 'later work' }));
+    });
+    const owedPill = sh => { const o = owed.get(sh.id); return o ? html` ${pill(o.priority === 'URGENT' ? `Urgent · ${o.how}` : o.how, o.priority === 'URGENT' ? 'red' : 'amber')}` : ''; };
     const shMatch = sh => terms.every(t => [sh.tag, sh.location, productName(sh.productId), sh.serial, sh.motor, sh.sizeCode].join(' ').toLowerCase().includes(t));
     const siteMatch = s => terms.every(t => [s.name, s.address, s.blockUnit, zoneLabel(s.zoneId)].join(' ').toLowerCase().includes(t));
     const parts = draft.sites.map((s, i) => {
@@ -106,7 +114,7 @@ export function renderCustomerForm(el, id) {
           <div class="field"><label>Zone</label><select data-site="${i}" data-f="zoneId" ${editable ? '' : 'disabled'}><option value="">Not set</option>${zones().map(z => html`<option value="${z.id}" ${z.id === s.zoneId ? 'selected' : ''}>${z.code} · ${z.name}</option>`)}</select></div>
           ${inp('postal', 'Postal code')}${inp('access', 'Access notes')}</div>
         <div class="tbl-wrap" style="max-height:none;margin-top:8px"><table class="tbl"><thead><tr><th>Tag</th><th>Location</th><th>Type</th><th>Width × height</th><th>Size</th><th>Motor</th><th>Serial</th><th>Install date</th><th>Added from</th><th>Status</th>${editable ? html`<th></th>` : ''}</tr></thead><tbody>
-          ${list.length ? html`${list.map(sh => html`<tr><td class="lnk">${sh.tag}</td><td>${sh.location}</td><td>${productName(sh.productId)}</td>
+          ${list.length ? html`${list.map(sh => html`<tr><td class="lnk">${sh.tag}${owedPill(sh)}</td><td>${sh.location}</td><td>${productName(sh.productId)}</td>
             <td>${sh.width && sh.height ? html`${fmtNum(sh.width)} × ${fmtNum(sh.height)} ${sh.unit}${sh.unit === 'ft' ? html` <span class="muted small">(${fmtNum(sh.widthM)} × ${fmtNum(sh.heightM)} m)</span>` : ''}` : '—'}</td>
             <td><b>${sh.sizeCode}</b>${sh.fireRated ? html` <span class="tag">fire</span>` : ''}</td><td>${sh.motor}</td><td>${sh.serial}</td><td>${sh.installDate}</td><td class="small">${sh.source}</td><td>${sh.outOfService ? pill('Out of service', 'red') : pill(sh.status)}</td>
             ${editable ? html`<td><button type="button" class="btn link small" data-edsh="${i}:${sh.id}">Edit</button></td>` : ''}</tr>`)}` : emptyRow(11, terms.length ? 'No product matches.' : 'No customer products recorded at this site yet.')}

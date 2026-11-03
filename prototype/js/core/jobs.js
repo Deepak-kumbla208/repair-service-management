@@ -37,20 +37,23 @@ export function createJobFromQuotation(q) {
   const enq = store.get('enquiries', q.enquiryId);
   const { site } = findSite(q.siteId);
   const zone = store.get('zones', site?.zoneId || enq.zoneId);
-  const teamRows = est.labour.filter(r => r.team === 1 && !/additional/i.test(r.trade));
-  const extra = Math.max(0, ...est.labour.filter(r => /additional/i.test(r.trade)).map(r => Number(r.team) || 0));
+  // Accepted in part (core/later-work.js): only the "Now" lines, their labour and parts; shared rows (transport) stay.
+  const inJob = key => !q.split || !key || q.split.keys.includes(key);
+  const labour = est.labour.filter(r => inJob(r.lineKey));
+  const teamRows = labour.filter(r => r.team === 1 && !/additional/i.test(r.trade));
+  const extra = Math.max(0, ...labour.filter(r => /additional/i.test(r.trade)).map(r => Number(r.team) || 0));
   // The quotation's wording; a row that shows its own qty ("Tension spring: worn · 2 Nos") gets the count back.
-  const lines = q.costingLevel === 'LINE' ? q.rows.filter(r => !r.isShared).map(r => ({ key: r.lineKey, description: rowText(r) }))
+  const lines = q.costingLevel === 'LINE' ? (q.split?.rows || q.rows).filter(r => !r.isShared).map(r => ({ key: r.lineKey, description: rowText(r) }))
     : est.lines.map(l => ({ key: l.key, description: l.description }));
   const no = store.nextNumber('JOB');
   const job = store.insert('jobs', {
     no, type: 'REPAIR', enquiryId: q.enquiryId, enquiryNo: q.enquiryNo, quotationId: q.id, quotationNo: `${q.no} Rev ${q.rev}`, estimateId: est.id,
     customerId: q.customerId, customer: q.customer, contact: q.contact, phone: q.phone, siteId: q.siteId, site: q.site, address: q.address, zoneId: zone?.id || '',
-    tags: est.shutters.map(s => s.tag), subject: q.description, lines,
+    tags: est.shutters.filter(s => inJob(s.key)).map(s => s.tag), subject: q.split ? lines.map(l => l.description).join('; ') : q.description, lines,
     crew: { team: 1, extra, label: `Team 1+1${extra ? ` + ${extra} extra worker${extra > 1 ? 's' : ''}` : ''}` },
     workHours: round2(teamRows.reduce((t, r) => t + (Number(r.hrs) || 0) + (Number(r.otHrs) || 0), 0)), travelHours: Number(zone?.roundTripHours) || 0,
-    parts: est.materials.map(m => ({ key: m.key, itemId: m.itemId, name: m.name, qty: m.qty, unit: m.unit, leadDays: m.leadDays, ready: !m.leadDays })),
-    paymentTerm: q.paymentTerm, termApproved: q.paymentTerm === 'IMMEDIATE' || !!q.termApproved, total: q.total,
+    parts: est.materials.filter(m => inJob(m.lineKey)).map(m => ({ key: m.key, itemId: m.itemId, name: m.name, qty: m.qty, unit: m.unit, leadDays: m.leadDays, ready: !m.leadDays })),
+    paymentTerm: q.paymentTerm, termApproved: q.paymentTerm === 'IMMEDIATE' || !!q.termApproved, total: q.split?.total ?? q.total,
     technicianId: '', helperIds: [], start: null, end: null, invoiceId: '', steps: {}, photosBefore: [], photosAfter: [], workDone: null, leaveSite: null,
   }, { status: 'To schedule', note: `${no} created from ${q.no} Rev ${q.rev}` });
   return job;

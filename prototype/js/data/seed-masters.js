@@ -27,6 +27,8 @@ const VALUE_SETS = [
   ['WORK_DONE', 'Work Done Status', 'System', [['DONE', 'Done'], ['PARTLY', 'Partly done'], ['NOT_DONE', 'Not done']]],
   // Site viewing report findings: Urgent = not safe to use. The third item marks the default.
   ['FINDING_PRIORITY', 'Finding Priority', 'System', [['URGENT', 'Urgent', false], ['NORMAL', 'Normal', true], ['LATER', 'Can wait', false]]],
+  // Why a quotation line is not wanted (Record acceptance, later work).
+  ['NOT_WANTED_REASON', 'Not Wanted Reason', 'Extensible', [['PRICE', 'Price too high'], ['OTHER_CO', 'Another company'], ['NOT_NEEDED', 'Not needed'], ['OTHER', 'Other']]],
 ];
 
 // inactive: value codes switched off for this company (e.g. PayNow outside Singapore).

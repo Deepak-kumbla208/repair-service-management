@@ -31,9 +31,9 @@ export function mTask(page, id) {
   page.body.onclick = e => {
     const b = e.target.closest('[data-do]');
     if (!b) return;
-    const err = actOnTask(t, b.dataset.do, $('[name="comment"]', page.body)?.value || '');
+    const err = actOnTask(t, b.dataset.do, $('[name="comment"]', page.body)?.value || '', $('[name="snooze"]', page.body)?.value || '');
     if (err) { toast(err, 'bad'); return; }
-    toast(`${t.docNo}: ${b.dataset.do === 'return' ? 'returned' : b.dataset.do === 'confirm' ? 'technician may leave' : 'approved'}`);
+    toast(`${t.docNo}: ${{ return: 'returned', confirm: 'technician may leave', snooze: 'reminder moved', notWanted: 'marked not wanted' }[b.dataset.do] || 'approved'}`);
     go('m/tasks');
   };
 }

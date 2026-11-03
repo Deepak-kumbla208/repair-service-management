@@ -1,6 +1,6 @@
-// Inside an enquiry, stacked like the form: Customer · Site · Enquiry in a header folded to one line, then
-// "What the customer needs", attachments, Next step (with the site inspection), the register's automatic columns
-// and the activity; plus the Workflow popup.
+// Inside an enquiry, stacked like the form: Customer · Site · Enquiry in a header folded to one line, then Later work
+// (items the customer will do later; web/later-work.js), "What the customer needs", attachments, Next step (with the
+// site inspection), the register's automatic columns and the activity; plus the Workflow popup.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, fmtDateTime, pill, openModal, foldHeader } from '../core/ui.js';
@@ -15,6 +15,8 @@ import { jobForEnquiry } from '../core/jobs.js';
 import { contractFor } from '../core/contracts.js';
 import { linesTable } from './enquiry-parts.js';
 import { trailHtml } from './doc-trail.js';
+import { laterCard, bindLater } from './later-work.js';
+import { openLater } from '../core/later-work.js';
 
 const row = (label, value) => html`<div class="field"><div class="field-label">${label}</div><div class="ro">${value || html`<span class="muted">—</span>`}</div></div>`;
 export const channelText = e => (e.channel === 'OTHER' && e.channelOther ? `Other: ${e.channelOther}` : vsLabel('ENQ_CHANNEL', e.channel));
@@ -62,7 +64,7 @@ export function renderEnquiryView(el, id) {
   el.innerHTML = String(html`<div class="page" style="max-width:1400px">
     <div class="page-head"><div class="grow">
       <div class="crumb"><a href="#/enquiries">Enquiry register</a> › ${e.no}</div>
-      <h1>${e.no} · ${e.customerName} ${pill(e.status)}</h1>
+      <h1>${e.no} · ${e.customerName} ${pill(e.status)}${openLater(e) ? html` ${pill(`${e.laterWork.items.length} item${e.laterWork.items.length > 1 ? 's' : ''} later`, 'amber')}` : ''}</h1>
       <div class="page-meta">${vsLabel('ENQ_TYPE', e.type)} · received ${fmtDateTime(e.receivedAt)} by ${channelText(e)} · recorded by <b>${auth.userName(e.recordedBy)}</b>${stage ? html` · <b style="color:var(--blue-600)">now at: ${stage.name}</b>` : ''}</div></div>
       <div class="row">
         <button class="btn soft" id="wfBtn">⇶ Workflow</button>
@@ -93,6 +95,7 @@ export function renderEnquiryView(el, id) {
         ${row('Enquiry Status', vsLabel('ENQ_STATUS', e.enquiryStatus))}
         ${row('Priority', vsLabel('PRIORITY', e.priority))}</div>
       </div>` })}
+        ${laterCard(e)}
         <div class="card"><div class="card-head"><h2>What the customer needs</h2></div>${linesTable(e.lines)}
           ${e.remarks ? html`<div class="form-lines" style="margin-top:8px;max-width:720px">${row('Remarks', e.remarks)}</div>` : ''}</div>
         <div class="card"><div class="card-head"><h2>Attachments</h2></div>${(e.attachments || []).length
@@ -112,6 +115,7 @@ export function renderEnquiryView(el, id) {
   </div>`);
 
   el.querySelector('#wfBtn').onclick = () => openWorkflow(e);
+  bindLater(el, e, () => renderEnquiryView(el, id));
   el.querySelector('#mkEst')?.addEventListener('click', () => { const x = createEstimate(e.id); location.hash = `#/estimates/${x.id}`; });
   el.querySelectorAll('[data-open]').forEach(a => a.addEventListener('click', async ev => { ev.preventDefault(); const u = await getUrl(a.dataset.open); if (u) window.open(u, '_blank'); }));
 }

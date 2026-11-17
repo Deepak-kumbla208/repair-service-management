@@ -38,7 +38,7 @@ function askRow(r, site, used, shutters) {
   const mine = (site?.shutters || []).filter(s => linked.includes(s.id) || (s.status !== 'Inactive' && !used.has(s.id) && s.productId === r.productId));
   return html`<div class="ask ${r.done ? 'on' : ''}">
     ${r.added ? html`<div class="row"><b class="grow">${r.n}. ${r.text}</b><span class="tag">added on site</span><button type="button" class="btn link small" data-droprow="${k}">Remove</button></div>`
-      : html`<label class="check"><input type="checkbox" name="ask_${k}" ${r.done ? 'checked' : ''}> <b>${r.n}.</b> ${r.text}</label>`}
+      : html`<label class="check"><input type="checkbox" name="ask_${k}" data-auto="${r.done && r.autoTick ? 1 : ''}" ${r.done ? 'checked' : ''}> <b>${r.n}.</b> ${r.text}</label>`}
     ${isProductRow(r) ? html`<div class="grid g2 ask-prod">
       <div class="field spanall"><label>Product</label><select name="pt_${k}">${products().map(p => html`<option value="${p.id}" ${p.id === r.productId ? 'selected' : ''}>${p.name}</option>`)}</select></div>
       <div class="field"><label>Qty</label><input type="number" min="1" step="1" name="pq_${k}" value="${r.qty || 1}"></div>
@@ -64,7 +64,7 @@ const step2 = {
       ${check('s2_dismantle', 'Dismantle / removal', rep.s2.dismantle)}${check('s2_servicing', 'Servicing / maintenance', rep.s2.servicing)}</div>
     <div class="stack" style="margin-top:8px">${field({ name: 's2_other', label: 'Other', value: rep.s2.other })}</div>
     <div class="m-section">Products and findings <span class="tag info">printed as Customer Complaint / Findings</span></div>
-    <p class="small muted" style="margin:0 0 6px">From the enquiry. Tick each line once you have checked it on site, and give each product its fault, the action needed and a priority. New products are recorded as the customer's products when you submit.</p>
+    <p class="small muted" style="margin:0 0 6px">From the enquiry. Tick each line once you have checked it on site (writing its fault or action ticks it), and give each product its fault, the action needed and a priority. New products are recorded as the customer's products when you submit.</p>
     <div class="asked">${rows.map(r => askRow(r, site, usedBy(r), shutters))}</div>
     <button type="button" class="add-dashed" id="addProd" style="margin-top:6px">+ Add product</button>
     <div class="stack" style="margin-top:10px">
@@ -80,7 +80,8 @@ const step2 = {
     const has = k => Object.prototype.hasOwnProperty.call(d, k);
     const asked = (rep.asked || []).map(a => {
       const k = a.key;
-      const r = { ...a, done: a.added || (d[`ask_${k}`] ?? a.done) };
+      const cb = $(`[name="ask_${k}"]`, body);
+      const r = { ...a, done: a.added || (d[`ask_${k}`] ?? a.done), autoTick: cb ? cb.checked && cb.dataset.auto === '1' : !!a.autoTick };
       const keys = $$(`[data-of="${k}"]`, body).map(e => e.dataset.fk);
       if (keys.length) r.found = { ...a.found, ...Object.fromEntries(keys.map(fk => [fk, { fault: d[`ff_${fk}`] ?? '', action: d[`fa_${fk}`] ?? '', priority: d[`fp_${fk}`] || findingOf(a, fk).priority }])) };
       if (!isProductRow(a)) return r;
@@ -110,7 +111,20 @@ const step2 = {
       return { ...r, linkIds, qty: Math.max(r.qty || 1, linkIds.length) };
     }))));
     $$('[name^="pq_"], [name^="pt_"]', body).forEach(i => i.addEventListener('change', () => change(rows => rows)));
-    $$('[name^="ask_"]', body).forEach(cb => cb.addEventListener('change', () => cb.closest('.ask').classList.toggle('on', cb.checked)));
+    // A tick tapped by hand stays, even with nothing written ("checked, nothing wrong").
+    const setTick = (cb, on, auto) => { cb.checked = on; cb.dataset.auto = auto ? '1' : ''; cb.closest('.ask').classList.toggle('on', on); };
+    $$('[name^="ask_"]', body).forEach(cb => cb.addEventListener('change', () => setTick(cb, cb.checked, false)));
+    // Writing a fault or an action (typed or by voice) ticks its line; clearing them all unticks it again, but only when
+    // the writing made the tick. Text already there when the report opens ticks nothing.
+    body.addEventListener('input', e => {
+      if (!/^f[fa]_/.test(e.target.name || '')) return;
+      const k = e.target.closest('[data-of]')?.dataset.of;
+      const cb = k && $(`[name="ask_${k}"]`, body);
+      if (!cb) return; // a row added on site is always ticked
+      const written = $$(`[data-of="${k}"] input[name^="ff_"], [data-of="${k}"] input[name^="fa_"]`, body).some(i => i.value.trim());
+      if (written && !cb.checked) setTick(cb, true, true);
+      else if (!written && cb.checked && cb.dataset.auto === '1') setTick(cb, false, false);
+    });
     // Measuring picks the size; tapping a size clears the measurement.
     body.addEventListener('input', e => {
       const k = e.target.name?.match(/^p[wh]_(.+)$/)?.[1];

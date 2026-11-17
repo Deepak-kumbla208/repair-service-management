@@ -31,8 +31,11 @@ const ceilHalf = h => Math.ceil(h * 2) / 2;
 export const seesJob = j => auth.scope('job') !== 'own' || j.technicianId === auth.user()?.employeeId;
 export const jobDuration = j => ceilHalf((Number(j.workHours) || 0) + (Number(j.travelHours) || 0));
 
-// Create the job from the accepted quotation: lines, crew, hours and parts come from the estimate.
-export function createJobFromQuotation(q) {
+const crewOf = extra => ({ team: 1, extra, label: `Team 1+1${extra ? ` + ${extra} extra worker${extra > 1 ? 's' : ''}` : ''}` });
+const EMPTY_RUN = { technicianId: '', helperIds: [], start: null, end: null, invoiceId: '', steps: {}, photosBefore: [], photosAfter: [], workDone: null, leaveSite: null };
+
+// A repair job's details from the accepted quotation (nothing saved): lines, crew, hours and parts from the estimate.
+function repairFields(q) {
   const est = store.get('estimates', q.estimateId);
   const enq = store.get('enquiries', q.enquiryId);
   const { site } = findSite(q.siteId);
@@ -45,45 +48,60 @@ export function createJobFromQuotation(q) {
   // The quotation's wording; a row that shows its own qty ("Tension spring: worn · 2 Nos") gets the count back.
   const lines = q.costingLevel === 'LINE' ? (q.split?.rows || q.rows).filter(r => !r.isShared).map(r => ({ key: r.lineKey, description: rowText(r) }))
     : est.lines.map(l => ({ key: l.key, description: l.description }));
-  const no = store.nextNumber('JOB');
-  const job = store.insert('jobs', {
-    no, type: 'REPAIR', enquiryId: q.enquiryId, enquiryNo: q.enquiryNo, quotationId: q.id, quotationNo: `${q.no} Rev ${q.rev}`, estimateId: est.id,
+  return {
+    type: 'REPAIR', enquiryId: q.enquiryId, enquiryNo: q.enquiryNo, quotationId: q.id, quotationNo: `${q.no} Rev ${q.rev}`, estimateId: est.id,
     customerId: q.customerId, customer: q.customer, contact: q.contact, phone: q.phone, siteId: q.siteId, site: q.site, address: q.address, zoneId: zone?.id || '',
     tags: est.shutters.filter(s => inJob(s.key)).map(s => s.tag), subject: q.split ? lines.map(l => l.description).join('; ') : q.description, lines,
-    crew: { team: 1, extra, label: `Team 1+1${extra ? ` + ${extra} extra worker${extra > 1 ? 's' : ''}` : ''}` },
+    crew: crewOf(extra),
     workHours: round2(teamRows.reduce((t, r) => t + (Number(r.hrs) || 0) + (Number(r.otHrs) || 0), 0)), travelHours: Number(zone?.roundTripHours) || 0,
     parts: est.materials.filter(m => inJob(m.lineKey)).map(m => ({ key: m.key, itemId: m.itemId, name: m.name, qty: m.qty, unit: m.unit, leadDays: m.leadDays, ready: !m.leadDays })),
     paymentTerm: q.paymentTerm, termApproved: q.paymentTerm === 'IMMEDIATE' || !!q.termApproved, total: q.split?.total ?? q.total,
-    technicianId: '', helperIds: [], start: null, end: null, invoiceId: '', steps: {}, photosBefore: [], photosAfter: [], workDone: null, leaveSite: null,
-  }, { status: 'To schedule', note: `${no} created from ${q.no} Rev ${q.rev}` });
-  return job;
+  };
 }
 
-// A General Servicing job from its accepted quotation: the covered shutters, their AMC servicing hours, crew and travel
-// from the estimate (one site, one visit, no contract).
-export function createGsJob(q) {
+// Create the job from the accepted quotation.
+export function createJobFromQuotation(q) {
+  const no = store.nextNumber('JOB');
+  return store.insert('jobs', { no, ...repairFields(q), ...EMPTY_RUN }, { status: 'To schedule', note: `${no} created from ${q.no} Rev ${q.rev}` });
+}
+
+// A General Servicing job's details (one site, one visit, no contract): the covered shutters, their AMC servicing
+// hours, crew and travel from the estimate.
+function gsFields(q, shutters) {
   const est = store.get('estimates', q.estimateId);
   const enq = store.get('enquiries', q.enquiryId);
   const s = est.sites[0];
   const { site } = findSite(s.siteId);
   const zone = store.get('zones', s.zoneId || enq.zoneId);
   const r = amcSiteRow(s, est.matrix);
-  // Typed counts (no shutter register yet) are added to the register now, so the check list has its shutters.
-  const shutters = snapshot(s.siteId, s.typed ? registerCounts(q.customerId, s.siteId, s.counts, `general servicing ${q.no}`) : s.shutterIds || []);
   const extra = Math.max(0, ...est.matrix.sizes.filter(z => Number(s.counts?.[z.code]) > 0).map(z => Number(z.extraWorkers) || 0));
   const lines = q.costingLevel === 'LINE' ? q.rows.filter(x => !x.isShared).map(x => ({ key: x.lineKey, description: x.description })) : [{ key: 'gs', description: q.description }];
-  const no = store.nextNumber('JOB');
-  return store.insert('jobs', {
-    no, type: 'GS', enquiryId: q.enquiryId, enquiryNo: q.enquiryNo, quotationId: q.id, quotationNo: `${q.no} Rev ${q.rev}`, estimateId: est.id,
+  return {
+    type: 'GS', enquiryId: q.enquiryId, enquiryNo: q.enquiryNo, quotationId: q.id, quotationNo: `${q.no} Rev ${q.rev}`, estimateId: est.id,
     customerId: q.customerId, customer: q.customer, contact: q.contact, phone: q.phone, siteId: s.siteId, site: s.name, address: [site?.address, site?.blockUnit].filter(Boolean).join(', '), zoneId: zone?.id || '',
     tags: shutters.map(x => x.tag), subject: q.description, lines, shutters, checklist: {}, safeIsolation: false,
-    crew: { team: 1, extra, label: `Team 1+1${extra ? ` + ${extra} extra worker${extra > 1 ? 's' : ''}` : ''}` },
-    workHours: round2(r.hrsVisit), travelHours: Number(zone?.roundTripHours) || 0,
+    crew: crewOf(extra), workHours: round2(r.hrsVisit), travelHours: Number(zone?.roundTripHours) || 0,
     parts: (est.materials || []).map(m => ({ key: m.key, itemId: m.itemId, name: m.name, qty: m.qty, unit: m.unit, leadDays: m.leadDays || 0, ready: !m.leadDays })),
     paymentTerm: q.paymentTerm, termApproved: q.paymentTerm === 'IMMEDIATE' || !!q.termApproved, total: q.total,
-    technicianId: '', helperIds: [], start: null, end: null, invoiceId: '', steps: {}, photosBefore: [], photosAfter: [], workDone: null, leaveSite: null,
-  }, { status: 'To schedule', note: `${no} (general servicing) created from ${q.no} Rev ${q.rev}` });
+  };
 }
+
+export function createGsJob(q) {
+  const s = store.get('estimates', q.estimateId).sites[0];
+  // Typed counts (no shutter register yet) are added to the register now, so the check list has its shutters.
+  const shutters = snapshot(s.siteId, s.typed ? registerCounts(q.customerId, s.siteId, s.counts, `general servicing ${q.no}`) : s.shutterIds || []);
+  const no = store.nextNumber('JOB');
+  return store.insert('jobs', { no, ...gsFields(q, shutters), ...EMPTY_RUN }, { status: 'To schedule', note: `${no} (general servicing) created from ${q.no} Rev ${q.rev}` });
+}
+
+// The job a quotation would make, before it exists (Record acceptance's "Assign technician now"): hours, crew, parts,
+// zone and term, with the "Now" items of a split and the payment term chosen in the popup. Nothing is saved.
+export function jobDraft(q, { split = null, paymentTerm = q.paymentTerm } = {}) {
+  const src = { ...q, split, paymentTerm, termApproved: paymentTerm === q.paymentTerm && !!q.termApproved };
+  return { id: '', ...EMPTY_RUN, ...(q.type === 'GS' ? gsFields(src, []) : repairFields(src)) };
+}
+// A non-immediate term that an approval rule stops before scheduling (changed at acceptance; rule JOB_TERM).
+export const termBlocks = job => job.paymentTerm !== 'IMMEDIATE' && !job.termApproved && levelsFor('job', job).length > 0;
 
 // ---------- Parts and the earliest date (flow step 7: confirm spare parts availability) ----------
 export function setPartReady(jobId, key, ready) {
@@ -133,6 +151,16 @@ export function suggestSlot(job, days = 14) {
   }
   return null;
 }
+// One technician's first free slot for the job (from the day the parts are ready), or null within `days` working days.
+export function firstFree(job, techId, days = 14) {
+  const hours = jobDuration(job);
+  let d = new Date(`${earliestDate(job)}T00:00`);
+  for (let i = 0; i < days; i++, d = nextWorkday(d)) {
+    const start = freeStart(techId, dstr(d), hours, job.id);
+    if (start != null) return { technicianId: techId, date: dstr(d), start, end: start + hours, hours };
+  }
+  return null;
+}
 export const helpers = () => store.list('employees', e => e.type === 'Helper' && e.status !== 'Inactive');
 export const defaultHelper = techId => { const t = store.get('employees', techId); return helpers().find(h => h.mainZoneId === t?.mainZoneId) || helpers()[0] || null; };
 
@@ -152,13 +180,13 @@ export function scheduleProblems(job, slot) {
 }
 
 // Schedule (or move) the job. With immediate payment the invoice is raised now, so the technician can collect.
-export function scheduleJob(jobId, { technicianId, helperIds = [], date, start, hours }) {
+export function scheduleJob(jobId, { technicianId, helperIds = [], date, start, hours, via = '' }) {
   const job = store.get('jobs', jobId);
   const problems = scheduleProblems(job, { technicianId, date, start, hours });
   if (problems.length) return { problems };
   const first = job.status === 'To schedule';
   store.update('jobs', jobId, { technicianId, helperIds, start: toIso(date, start), end: toIso(date, start + hours) },
-    `${first ? 'Scheduled' : 'Moved'}: ${empName(technicianId)}, ${fmtDate(date)} ${fmtHour(start)}–${fmtHour(start + hours)}`);
+    `${first ? 'Scheduled' : 'Moved'}${via ? ` ${via}` : ''}: ${empName(technicianId)}, ${fmtDate(date)} ${fmtHour(start)}–${fmtHour(start + hours)}`);
   if (first) store.setStatus('jobs', jobId, 'Scheduled', empName(technicianId));
   let invoice = invoiceForJob(jobId);
   if (job.paymentTerm === 'IMMEDIATE' && !invoice) invoice = createInvoice(jobId, { post: true, note: 'raised at scheduling (payment immediate)' });

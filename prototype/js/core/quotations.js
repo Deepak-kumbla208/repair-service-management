@@ -7,7 +7,7 @@ import * as auth from './auth.js';
 import { findSite, withCompany } from './lookups.js';
 import { estimateSummary, reviseEstimate, txDefaults, companyTax, laterReport } from './estimates.js';
 import { startApproval, levelsFor, openLevel, closeTask, cancelTasksFor, registerFacts } from './workflow.js';
-import { createJobFromQuotation, createGsJob, openTermTask } from './jobs.js';
+import { createJobFromQuotation, createGsJob, openTermTask, scheduleJob } from './jobs.js';
 import { createContractFromQuotation } from './contracts.js';
 import { amcChecks } from './amc-estimates.js';
 import { letterhead, termsFor, termTexts } from './setup.js';
@@ -208,7 +208,8 @@ export function markSent(id, via) {
 // Accept (flow step 6). Repair in Line costing: decisions = { lineKey: 'NOW' | 'LATER' | 'NO' }; the "Now" lines become
 // the job at their quoted prices and the rest wait on the enquiry (core/later-work.js). AMC: lineKeys = the accepted
 // sites; fewer than all revises the estimate without the others and returns the next revision for the counter-check.
-export function accept(id, { method, poNo, poDate, contact, attachments = [], paymentTerm, lineKeys, decisions, reasons, followUp }) {
+// schedule = { technicianId, helperIds, date, start, hours } books the new job at once (Repair and General Servicing).
+export function accept(id, { method, poNo, poDate, contact, attachments = [], paymentTerm, lineKeys, decisions, reasons, followUp, schedule = null }) {
   const q = store.get('quotations', id);
   if (q.status !== 'Sent') return { error: 'Only a counter-checked quotation that was sent can be accepted.', quotation: q };
   const parts = decisions && q.type === 'REPAIR' ? Object.values(decisions) : [];
@@ -246,7 +247,9 @@ export function accept(id, { method, poNo, poDate, contact, attachments = [], pa
   store.update('quotations', id, { jobId: job.id }, false);
   // A term changed at acceptance needs its own approval before scheduling (flow step 6).
   if (job.paymentTerm !== 'IMMEDIATE' && !job.termApproved) openTermTask(job);
-  return { partial: false, quotation: store.get('quotations', id), job };
+  // "Assign technician now" in the popup: book the job straight away, with the scheduling board's checks.
+  const booked = schedule ? scheduleJob(job.id, { ...schedule, via: 'at acceptance' }) : null;
+  return { partial: false, quotation: store.get('quotations', id), job: store.get('jobs', job.id), booked };
 }
 
 export function reject(id, reason) {

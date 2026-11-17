@@ -81,6 +81,10 @@ textarea { min-height: 64px; resize: vertical; }
 .spanall { grid-column: 1 / -1; }
 .check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .check input { width: 16px; height: 16px; margin: 0; accent-color: var(--blue-600); }
+/* Record acceptance: the optional "Assign technician now" tick (web/accept-tech.js) */
+.assign-now { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line-soft); font-weight: 600; color: var(--navy-800); }
+.assign-now .check:has(input:disabled) { opacity: .5; cursor: default; }
+#techOff { margin: 4px 0 0 22px; }
 .checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px 14px; }
 .with-mic { position: relative; }
 .with-mic textarea, .with-mic input { padding-right: 34px; }

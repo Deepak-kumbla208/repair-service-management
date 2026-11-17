@@ -16,6 +16,7 @@ import { priorityLabel } from '../core/inspections.js';
 import { rowText } from '../core/enquiries.js';
 import { openWorkflow } from './enquiry-view.js';
 import { trailHtml } from './doc-trail.js';
+import { canAssign, techBlock, bindTech, bookedText } from './accept-tech.js';
 
 const row = (label, value) => html`<div class="field"><div class="field-label">${label}</div><div class="ro">${value || html`<span class="muted">—</span>`}</div></div>`;
 const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -192,7 +193,8 @@ function acceptDialog(el, q) {
   const split = q.type === 'REPAIR' && q.costingLevel === 'LINE' && priced.length > 1;
   const oneJob = q.type === 'REPAIR' && q.costingLevel === 'JOB' && (est?.lines || []).length > 1;
   const pre = q.pendingAcceptance || {};
-  let files = [];
+  const decisionsOf = d => Object.fromEntries(priced.map(r => [r.lineKey, d[`dec_${r.lineKey}`] || 'NOW']));
+  let files = [], techOf = null;
   openModal({
     title: `Customer accepts ${q.no} Rev ${q.rev}`, wide: true,
     body: html`<form class="form-lines" onsubmit="return false">
@@ -207,23 +209,33 @@ function acceptDialog(el, q) {
       ${split ? splitBlock(q, priced) : oneJob ? html`<div class="sub" style="margin-top:6px">One price for the whole job (Job costing). To do only some items now, revise the estimate to Line costing and send it again.</div>`
         : priced.length > 1 ? html`<div class="form-sec">Accepted lines</div>${priced.map(r => html`<label class="check" style="display:flex;margin:4px 0"><input type="checkbox" name="line_${r.lineKey}" checked> ${r.description} · ${m2(r.amount)}</label>`)}
         <div class="sub">Untick a line the customer does not want: the estimate is revised without it, shared costs are re-spread, and the next revision goes for the counter-check.</div>` : ''}
+      ${canAssign(q) ? techBlock() : ''}
     </form>`,
-    onOpen: b => { $('#po', b).addEventListener('change', e => { files = [...e.target.files]; }); if (split) bindSplit(b, q, priced); },
+    onOpen: b => {
+      $('#po', b).addEventListener('change', e => { files = [...e.target.files]; });
+      if (split) bindSplit(b, q, priced);
+      if (canAssign(q)) techOf = bindTech(b, q, () => { const d = readForm(b); return { decisions: split ? decisionsOf(d) : null, paymentTerm: d.paymentTerm,
+        linesCut: !split && priced.length > 1 && priced.some(r => !d[`line_${r.lineKey}`]) }; });
+    },
     actions: [{ label: 'Cancel' }, { label: 'Accept', kind: 'primary', onClick: async b => {
       const d = readForm(b);
       if (d.method === 'PO' && !markInvalid(b, d.poNo ? [] : ['poNo'], 'Enter the PO number')) return false;
+      const tech = techOf?.();
+      if (tech?.problems.length) { toast(tech.problems[0], 'bad'); return false; }
       const attachments = [...(pre.attachments || [])];
       for (const f of files) attachments.push(await saveBlob(f, { name: f.name, kind: 'po' }));
       const lineKeys = !split && priced.length > 1 ? priced.filter(r => d[`line_${r.lineKey}`]).map(r => r.lineKey) : null;
       if (lineKeys && !lineKeys.length) { toast('Tick at least one line, or use "Customer rejected".', 'bad'); return false; }
-      const decisions = split ? Object.fromEntries(priced.map(r => [r.lineKey, d[`dec_${r.lineKey}`] || 'NOW'])) : null;
+      const decisions = split ? decisionsOf(d) : null;
       const reasons = split ? Object.fromEntries(priced.filter(r => decisions[r.lineKey] === 'NO').map(r => [r.lineKey, d[`why_${r.lineKey}`]])) : null;
-      const r = accept(q.id, { method: d.method, poNo: d.poNo, poDate: d.poDate, contact: d.contact, attachments, paymentTerm: d.paymentTerm, lineKeys, decisions, reasons, followUp: d.followUp });
+      const r = accept(q.id, { method: d.method, poNo: d.poNo, poDate: d.poDate, contact: d.contact, attachments, paymentTerm: d.paymentTerm, lineKeys, decisions, reasons, followUp: d.followUp, schedule: tech?.slot || null });
       if (r.error) { toast(r.error, 'bad'); return false; }
-      if (r.quotation.split) { const n = Object.values(decisions).filter(v => v !== 'NOW').length; toast(`${q.no} accepted in part · ${r.job.no} for the "Now" items · ${n} item(s) kept on ${enq.no}`); go(`jobs/${r.job.id}`); return true; }
+      const booked = bookedText(r, tech?.slot);
+      const tone = r.booked?.problems?.length ? 'bad' : undefined;
+      if (r.quotation.split) { const n = Object.values(decisions).filter(v => v !== 'NOW').length; toast(`${q.no} accepted in part · ${r.job.no} for the "Now" items${booked} · ${n} item(s) kept on ${enq.no}`, tone); go(`jobs/${r.job.id}`); return true; }
       if (r.partial) { toast(`Partial acceptance: ${r.quotation.no} Rev ${r.quotation.rev} made without the other lines`); go(`quotations/${r.quotation.id}`); return true; }
       if (r.contract) { toast(`${q.no} accepted · ${r.contract.no} created: check the start date and activate`); go(`contracts/${r.contract.id}`); return true; }
-      toast(`${q.no} accepted · ${r.job.no} is waiting to be scheduled`);
+      toast(`${q.no} accepted · ${r.job.no}${booked || ' is waiting to be scheduled'}`, tone);
       go(`jobs/${r.job.id}`);
       return true;
     } }],

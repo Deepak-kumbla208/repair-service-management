@@ -82,7 +82,7 @@ export function mEnquiryForm(page, id) {
   }
   const zoneNow = () => (st.newCustomer || st.newSite ? st.siteZone : store.get('customers', st.customerId)?.sites?.find(s => s.id === st.siteId)?.zoneId || '');
   function linesPart() {
-    const choices = itemChoices();
+    const choices = itemChoices(st.lines.map(l => l.itemRef));
     return html`${st.lines.map((l, i) => html`<div class="m-line" data-line="${i}">
       <div class="row"><select data-c="item" class="grow" aria-label="Product"><option value="">No product</option>${choices.map(g => html`<optgroup label="${g.group}">${g.options.map(o => html`<option value="${o.value}" ${o.value === l.itemRef ? 'selected' : ''}>${o.label}</option>`)}</optgroup>`)}</select>
         <button type="button" class="btn small" data-rm="${i}" aria-label="Remove this line">－</button></div>

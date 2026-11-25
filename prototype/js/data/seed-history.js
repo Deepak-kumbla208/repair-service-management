@@ -7,7 +7,7 @@ import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { openTaskFor } from '../core/workflow.js';
 import { decideQuotation, reject } from '../core/quotations.js';
-import { onMyWay, checkIn, saveJob, completeWorkDone, requestLeave, confirmLeave, checkOut, jobDuration, freeStart, scheduleJob, defaultHelper } from '../core/jobs.js';
+import { onMyWay, checkIn, saveJob, completeWorkDone, requestLeave, confirmLeave, checkOut, jobDuration, freeJobStart, scheduleJob, defaultHelper } from '../core/jobs.js';
 import { invoiceForJob, postInvoice, recordPayment, balanceOf } from '../core/billing.js';
 import { markDocumented } from '../core/closure.js';
 import { todayStr, addDays } from '../core/contracts.js';
@@ -101,8 +101,8 @@ function serviceStory(k, startDay) {
   at(on(addDays(d0, 4), '09:30'), () => {
     as('ops');
     const j = store.get('jobs', job.id), hours = jobDuration(j);
-    ds = workingDays(addDays(d0, 6), 6).find(x => freeStart(tech, x, hours, j.id) != null);
-    if (ds) scheduleJob(j.id, { technicianId: tech, helperIds: [defaultHelper(tech)?.id].filter(Boolean), date: ds, start: freeStart(tech, ds, hours, j.id), hours });
+    ds = workingDays(addDays(d0, 6), 6).find(x => freeJobStart(tech, x, j, hours) != null);
+    if (ds) scheduleJob(j.id, { technicianId: tech, helperIds: [defaultHelper(tech)?.id].filter(Boolean), date: ds, start: freeJobStart(tech, ds, j, hours), hours });
   });
   if (!ds || ds >= todayStr()) return;
   at(on(ds, '09:05'), () => {
@@ -115,7 +115,7 @@ function serviceStory(k, startDay) {
 }
 
 export async function buildHistory() {
-  // Log in to Demo Shutters: tax, letterhead, terms and the working week come from the logged-in company.
+  // Log in to Demo Engineering: tax, letterhead, terms and the working week come from the logged-in company.
   auth.login('usr_co_dsh_ops', 'web');
   useTenant('co_dsh'); useAmcTenant('co_dsh');
   pics = { tech: await signature(5), cust: await signature(6), stamp: await stamp('Customer'), before: await photo('Before', '#7E93A8'), after: await photo('After', '#5E8A5A'), fail: await photo('Fault', '#A86A5E') };

@@ -30,9 +30,24 @@ export const fmtHour = h => `${pad(Math.floor(h))}:${pad(Math.round((h % 1) * 60
 const ceilHalf = h => Math.ceil(h * 2) / 2;
 
 export const seesJob = j => auth.scope('job') !== 'own' || j.technicianId === auth.user()?.employeeId;
-export const jobDuration = j => ceilHalf((Number(j.workHours) || 0) + (Number(j.travelHours) || 0));
+// A job longer than a working day runs over the next working days, as an AMC visit does: each day books its share of
+// the work hours plus the round trip. Its days: the site report's days (the estimate's trips), or more when the hours
+// do not fit (12.25 h work + 2 h travel = 2 days of 8.5 h).
+const dayLength = () => dayEnd() - dayStart() - 0.5;
+const fitDays = (work, travel) => { for (let n = 1; n < 30; n++) if (ceilHalf(work / n + travel) <= dayLength() + 0.01) return n; return 30; };
+export const jobDays = j => Math.max(Number(j.days) || 1, fitDays(Number(j.workHours) || 0, Number(j.travelHours) || 0));
+// The hours the job books on each of its days.
+export const jobDuration = j => Math.min(ceilHalf((Number(j.workHours) || 0) / jobDays(j) + (Number(j.travelHours) || 0)), dayLength());
+export function workingDays(ds, n) {
+  const out = [];
+  let d = new Date(`${ds}T00:00`);
+  if (!isWorkday(d)) d = nextWorkday(d);
+  while (out.length < n) { out.push(dstr(d)); d = nextWorkday(d); }
+  return out;
+}
 
-const crewOf = extra => ({ team: 1, extra, label: `Team 1+1${extra ? ` + ${extra} extra worker${extra > 1 ? 's' : ''}` : ''}` });
+const crewOf = (extra, teams = 1) => ({ team: teams, extra,
+  label: `${teams > 1 ? `${teams} teams of 1+1` : 'Team 1+1'}${extra ? ` + ${extra} extra worker${extra > 1 ? 's' : ''}` : ''}` });
 const EMPTY_RUN = { technicianId: '', helperIds: [], start: null, end: null, invoiceId: '', steps: {}, photosBefore: [], photosAfter: [], workDone: null, leaveSite: null };
 
 // A repair job's details from the accepted quotation (nothing saved): lines, crew, hours and parts from the estimate.
@@ -44,7 +59,10 @@ function repairFields(q) {
   // Accepted in part (core/later-work.js): only the "Now" lines, their labour and parts; shared rows (transport) stay.
   const inJob = key => !q.split || !key || q.split.keys.includes(key);
   const labour = est.labour.filter(r => inJob(r.lineKey));
-  const teamRows = labour.filter(r => r.team === 1 && !/additional/i.test(r.trade));
+  // Every team row counts (a row whose Team was changed from 1 too): its hours are the time the teams work.
+  const teamRows = labour.filter(r => Number(r.team) > 0 && !/additional/i.test(r.trade));
+  const teams = Math.max(1, ...teamRows.map(r => Number(r.team) || 1));
+  const trips = Math.max(1, ...est.transport.filter(t => inJob(t.lineKey)).map(t => Number(t.trips) || 1));
   const extra = Math.max(0, ...labour.filter(r => /additional/i.test(r.trade)).map(r => Number(r.team) || 0));
   // The quotation's wording; a row that shows its own qty ("Tension spring: worn · 2 Nos") gets the count back.
   const lines = q.costingLevel === 'LINE' ? (q.split?.rows || q.rows).filter(r => !r.isShared).map(r => ({ key: r.lineKey, description: rowText(r) }))
@@ -57,7 +75,7 @@ function repairFields(q) {
     customerId: q.customerId, customer: q.customer, contact: q.contact, phone: q.phone, siteId: q.siteId, site: q.site, address: q.address, zoneId: zone?.id || '',
     tags: est.shutters.filter(s => inJob(s.key) && s.tag).map(s => s.tag), subject: q.split ? lines.map(l => l.description).join('; ') : q.description, lines,
     groups: groupsOf(est.shutters.filter(s => inJob(s.key)).map(s => s.productId)), noVisit,
-    crew: crewOf(extra),
+    crew: crewOf(extra, teams), days: trips,
     workHours: round2(teamRows.reduce((t, r) => t + (Number(r.hrs) || 0) + (Number(r.otHrs) || 0), 0)), travelHours: Number(zone?.roundTripHours) || 0,
     parts: est.materials.filter(m => inJob(m.lineKey)).map(m => ({ key: m.key, itemId: m.itemId, name: m.name, qty: m.qty, unit: m.unit, leadDays: m.leadDays, ready: !m.leadDays })),
     paymentTerm: q.paymentTerm, termApproved: q.paymentTerm === 'IMMEDIATE' || !!q.termApproved, total: q.split?.total ?? q.total,
@@ -125,8 +143,10 @@ export const partsReadyBy = (job, ds) => earliestDate(job) <= ds;
 
 // ---------- The board: what each technician already has on a day ----------
 export function bookings(techId, ds, exceptJobId = '') {
-  const jobs = store.list('jobs', j => j.technicianId === techId && j.id !== exceptJobId && j.start && sameDay(j.start, ds) && j.status !== 'Cancelled')
-    .map(j => ({ kind: 'job', id: j.id, no: j.no, title: j.customer, zoneId: j.zoneId, from: hoursOf(j.start), to: hoursOf(j.end), status: j.status }));
+  const jobs = store.list('jobs', j => j.technicianId === techId && j.id !== exceptJobId && j.start && j.status !== 'Cancelled'
+    && (j.blocks?.length ? j.blocks.some(b => b.date === ds) : sameDay(j.start, ds)))
+    .flatMap(j => (j.blocks?.length ? j.blocks.filter(b => b.date === ds).map((b, i) => ({ from: b.from, to: b.to, day: j.blocks.indexOf(b) + 1, of: j.blocks.length })) : [{ from: hoursOf(j.start), to: hoursOf(j.end) }])
+      .map(b => ({ kind: 'job', id: j.id, no: b.of > 1 ? `${j.no} (day ${b.day} of ${b.of})` : j.no, title: j.customer, zoneId: j.zoneId, from: b.from, to: b.to, status: j.status })));
   const insp = store.list('inspections', i => i.technicianId === techId && i.visitAt && sameDay(i.visitAt, ds) && i.status !== 'Cancelled')
     .map(i => { const e = store.get('enquiries', i.enquiryId); return { kind: 'inspection', id: i.id, no: e?.no || '', title: e?.customerName || '', zoneId: i.zoneId, from: hoursOf(i.visitAt), to: hoursOf(i.visitAt) + INSPECTION_HOURS, status: i.status }; });
   const amc = store.list('amcVisits', v => v.technicianId === techId && v.id !== exceptJobId && v.status !== 'Cancelled' && (v.blocks || []).some(b => b.date === ds))
@@ -143,6 +163,15 @@ export function freeStart(techId, ds, hours, exceptJobId = '') {
   }
   return t + hours <= dayEnd() + 0.01 ? t : null;
 }
+const clashOn = (techId, ds, from, hours, exceptJobId) => bookings(techId, ds, exceptJobId).find(b => b.from < from + hours - 0.01 && b.to > from + 0.01);
+// The job's days from ds, and the hours booked on each: the first day from its start, the next days from the start of the day.
+export const jobBlocks = (job, ds, start, hours = jobDuration(job)) => workingDays(ds, jobDays(job)).map((x, j) => { const from = j ? dayStart() + 0.5 : start; return { date: x, from, to: from + hours }; });
+// First free start on ds for the whole job (every one of its days free), or null.
+export function freeJobStart(techId, ds, job, hours = jobDuration(job)) {
+  const start = freeStart(techId, ds, hours, job.id);
+  if (start == null || !isWorkday(new Date(`${ds}T00:00`))) return null;
+  return jobBlocks(job, ds, start, hours).slice(1).every(b => !clashOn(techId, b.date, b.from, hours, job.id)) ? start : null;
+}
 // Suggest a technician (one who works on the job's product groups, then zone first, then free time) and the first day
 // the parts are ready.
 export function suggestSlot(job, days = 14) {
@@ -151,8 +180,8 @@ export function suggestSlot(job, days = 14) {
   let d = new Date(`${earliestDate(job)}T00:00`);
   for (let i = 0; i < days; i++, d = nextWorkday(d)) {
     for (const { t } of techs) {
-      const start = freeStart(t.id, dstr(d), hours, job.id);
-      if (start != null) return { technicianId: t.id, date: dstr(d), start, end: start + hours, hours };
+      const start = freeJobStart(t.id, dstr(d), job, hours);
+      if (start != null) return { technicianId: t.id, date: dstr(d), start, end: start + hours, hours, days: jobDays(job) };
     }
   }
   return null;
@@ -162,8 +191,8 @@ export function firstFree(job, techId, days = 14) {
   const hours = jobDuration(job);
   let d = new Date(`${earliestDate(job)}T00:00`);
   for (let i = 0; i < days; i++, d = nextWorkday(d)) {
-    const start = freeStart(techId, dstr(d), hours, job.id);
-    if (start != null) return { technicianId: techId, date: dstr(d), start, end: start + hours, hours };
+    const start = freeJobStart(techId, dstr(d), job, hours);
+    if (start != null) return { technicianId: techId, date: dstr(d), start, end: start + hours, hours, days: jobDays(job) };
   }
   return null;
 }
@@ -178,9 +207,14 @@ export function scheduleProblems(job, slot) {
   if (slot.date < dstr(new Date())) p.push('Pick today or a later date.');
   else if (slot.start != null && slot.start < earliestStart(slot.date) - 0.01) p.push('That start time has already passed.');
   if (!partsReadyBy(job, slot.date)) p.push(`Parts are not ready before ${earliestDate(job)}. Tick "In stock" or pick a later date.`);
-  if (slot.technicianId && slot.start != null && slot.hours) {
-    const clash = bookings(slot.technicianId, slot.date, job.id).find(b => b.from < slot.start + slot.hours - 0.01 && b.to > slot.start + 0.01);
-    if (clash) p.push(`${empName(slot.technicianId)} already has ${clash.kind === 'job' ? clash.no : 'a site inspection'} ${fmtHour(clash.from)}–${fmtHour(clash.to)} that day.`);
+  if (slot.technicianId && slot.date && slot.start != null && slot.hours) {
+    const blocks = jobBlocks(job, slot.date, slot.start, slot.hours);
+    if (blocks[0].date !== slot.date) p.push(`${fmtDate(slot.date)} is not a working day.`);
+    blocks.forEach((b, i) => {
+      const clash = clashOn(slot.technicianId, b.date, b.from, slot.hours, job.id);
+      const what = clash?.kind === 'job' ? clash.no : clash?.kind === 'amc' ? `AMC visit ${clash.no}` : 'a site inspection';
+      if (clash) p.push(`${empName(slot.technicianId)} already has ${what} ${fmtHour(clash.from)}–${fmtHour(clash.to)} ${i ? `on ${fmtDate(b.date)} (day ${i + 1} of the job)` : 'that day'}.`);
+    });
   }
   return p;
 }
@@ -191,8 +225,10 @@ export function scheduleJob(jobId, { technicianId, helperIds = [], date, start, 
   const problems = scheduleProblems(job, { technicianId, date, start, hours });
   if (problems.length) return { problems };
   const first = job.status === 'To schedule';
-  store.update('jobs', jobId, { technicianId, helperIds, start: toIso(date, start), end: toIso(date, start + hours) },
-    `${first ? 'Scheduled' : 'Moved'}${via ? ` ${via}` : ''}: ${empName(technicianId)}, ${fmtDate(date)} ${fmtHour(start)}–${fmtHour(start + hours)}`);
+  const blocks = jobBlocks(job, date, start, hours);
+  const last = blocks[blocks.length - 1];
+  store.update('jobs', jobId, { technicianId, helperIds, blocks, start: toIso(date, start), end: toIso(last.date, last.to) },
+    `${first ? 'Scheduled' : 'Moved'}${via ? ` ${via}` : ''}: ${empName(technicianId)}, ${fmtDate(date)} ${fmtHour(start)}–${fmtHour(start + hours)}${blocks.length > 1 ? ` (${blocks.length} days)` : ''}`);
   if (first) store.setStatus('jobs', jobId, 'Scheduled', empName(technicianId));
   let invoice = invoiceForJob(jobId);
   if (job.paymentTerm === 'IMMEDIATE' && !invoice) invoice = createInvoice(jobId, { post: true, note: 'raised at scheduling (payment immediate)' });

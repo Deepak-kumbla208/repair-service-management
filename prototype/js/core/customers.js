@@ -60,10 +60,6 @@ export function makeShutter({ tag, location, productId, width, height, unit = 'm
 
 // The next tag for a product at a site (RS-4, BP-1 …).
 export const productTag = (site, productId) => tagMaker(site)(productId);
-export function nextShutterTag(site, prefix = 'RS-') {
-  const nums = (site.shutters || []).map(s => parseInt(String(s.tag).replace(/\D/g, ''), 10)).filter(n => !isNaN(n));
-  return `${prefix}${(nums.length ? Math.max(...nums) : 0) + 1}`;
-}
 
 export function addShutters(customerId, siteId, shutters, note) {
   const c = store.get('customers', customerId);

@@ -74,9 +74,9 @@ export function serviceSheet(d, coll, company) {
   const lists = [];
   (d.shutters || []).forEach(sh => {
     const st = shutterState(d, sh);
-    const code = st.items[0]?.list || 'GENERAL';
+    const code = st.items[0]?.list || '';
     let g = lists.find(x => x.code === code);
-    if (!g) lists.push(g = { code, name: vsLabel('CHECK_LIST', code) || code, items: checkItems().filter(i => i.list === code), rows: [] });
+    if (!g) lists.push(g = { code, name: code ? vsLabel('CHECK_LIST', code) || code : 'No check list', items: checkItems().filter(i => code && i.list === code), rows: [] });
     g.rows.push({ sh, st });
   });
   const mark = r => (r === 'P' ? '✓' : r === 'F' ? '✗' : '–');

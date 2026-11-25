@@ -6,13 +6,13 @@ import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { saveNewEnquiry } from '../core/enquiries.js';
 import { createEstimate, saveEstimate } from '../core/estimates.js';
-import { addSiteTo, describe } from '../core/amc-estimates.js';
+import { addSiteTo, describe, setCovered } from '../core/amc-estimates.js';
 import { createFromEstimate, submitForCheck, decideQuotation, markSent, accept } from '../core/quotations.js';
 import { openTaskFor } from '../core/workflow.js';
 import { activateContract, refreshAmc, visitsOf, addMonths, addDays, todayStr } from '../core/contracts.js';
 import { postInvoice, recordPayment } from '../core/billing.js';
 import { scheduleVisit, confirmVisitDate, startTravel, arrive, saveSvc, allPass, setItem, finishService, leaveSite, fileVisit, workingDays } from '../core/visits.js';
-import { freeStart, nextWorkday, scheduleJob, jobDuration, defaultHelper } from '../core/jobs.js';
+import { freeStart, freeJobStart, nextWorkday, scheduleJob, jobDuration, defaultHelper } from '../core/jobs.js';
 import { signature, stamp, photo } from './seed-demo-flow.js';
 
 let T = '';
@@ -119,7 +119,7 @@ function doVisits(c, siteKey, tech, upTo, pics, failsOn = {}) {
   });
 }
 
-async function demoShuttersAmc() {
+async function singaporeAmc() {
   T = 'co_dsh';
   const pics = { tech: await signature(2), cust: await signature(5), stamp: await stamp('Customer stamp'), fail: await photo('Failed item', '#8A5A44') };
   const t = todayStr();
@@ -181,8 +181,8 @@ async function demoShuttersAmc() {
   at(ago(1, '16:00'), () => {
     as('ops');
     const j = store.get('jobs', j10.id), hours = jobDuration(j);
-    const date = workingDays(next, 5).find(ds => freeStart(TECH.A, ds, hours, j.id) != null);
-    scheduleJob(j.id, { technicianId: TECH.A, helperIds: [defaultHelper(TECH.A)?.id].filter(Boolean), date, start: freeStart(TECH.A, date, hours, j.id), hours });
+    const date = workingDays(next, 5).find(ds => freeJobStart(TECH.A, ds, j, hours) != null);
+    scheduleJob(j.id, { technicianId: TECH.A, helperIds: [defaultHelper(TECH.A)?.id].filter(Boolean), date, start: freeJobStart(TECH.A, date, j, hours), hours });
   });
 
   // 11. GS job done: draft invoice to post; one failed item became a repair enquiry (Demo Retail, 15 days).
@@ -191,8 +191,30 @@ async function demoShuttersAmc() {
   at(ago(18, '14:00'), () => { approveAll(q11); send(q11); });
   const j11 = at(ago(16, '10:00'), () => win(q11, 'DR-PO-0077').job);
   const d11 = addDays(t, -8);
-  at(ago(10, '15:00'), () => { as('ops'); const j = store.get('jobs', j11.id), hours = jobDuration(j); scheduleJob(j.id, { technicianId: TECH.B, helperIds: [], date: d11, start: freeStart(TECH.B, d11, hours, j.id) ?? 9, hours }); });
+  at(ago(10, '15:00'), () => { as('ops'); const j = store.get('jobs', j11.id), hours = jobDuration(j); scheduleJob(j.id, { technicianId: TECH.B, helperIds: [], date: d11, start: freeJobStart(TECH.B, d11, j, hours) ?? 9, hours }); });
   at(on(d11, '09:05'), () => serve('jobs', j11.id, pics, [['RS-1', 'GUIDES', 'Left guide rail bent at the bottom', 'ITM-005']]));
+
+  // Products of the other trades (user, 25 Nov 2026), at Demo Towers.
+  // 12. Active for 2 months, quarterly: pump, DB panel, surge device, earth pits, aircon and the car park gate, each with
+  // its own check list; visit 1 found an earth pit above 10 Ω (repair enquiry made); instalment 1 paid.
+  const s12 = addMonths(t, -2);
+  const c12 = contract('CUS-0010', { start: s12, visits: 4, billing: 'QUARTERLY', po: 'DTM-PO-0412',
+    text: 'Quarterly maintenance of the booster pump, DB panel, surge protection, earth pits, aircon and the car park gate.' });
+  doVisits(c12, c12.sites[0].key, TECH.A, 1, pics, { 1: [['EP-2', 'E_RES', 'Earth resistance 14 Ω (limit 10 Ω)', 'ITM-050']] });
+  bill(c12, 1, 20);
+  // 13. General Servicing of the two aircon units only: quotation sent, waiting for the customer.
+  const e13 = at(ago(4, '09:30'), () => enquiry('CUS-0010', 'GS', 'General servicing of the two aircon units before the hot season.'));
+  const q13 = at(ago(3, '10:00'), () => {
+    as('ops');
+    const est = createEstimate(e13.id);
+    const { site } = { site: store.get('customers', est.customerId).sites[0] };
+    const ac = site.shutters.filter(sh => store.get('products', sh.productId)?.code === 'AC').map(sh => sh.id);
+    const draft = setCovered(est, est.sites[0].key, ac);
+    draft.header = { ...draft.header, description: describe(draft) };
+    saveEstimate(est.id, draft);
+    return quote(store.get('estimates', est.id));
+  });
+  at(ago(2, '14:00'), () => { approveAll(q13); send(q13); });
 
   at(new Date(), () => { as('ops'); refreshAmc(); });
 }
@@ -208,7 +230,7 @@ function gulfAmc() {
 // The logged-in company decides tax and defaults (Company Setup), so each company's stories run under its own login.
 export async function buildAmcSamples() {
   auth.login('usr_co_dsh_ops', 'web');
-  await demoShuttersAmc();
+  await singaporeAmc();
   auth.login('usr_co_gdd_gadmin', 'web');
   gulfAmc();
 }

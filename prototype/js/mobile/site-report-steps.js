@@ -3,7 +3,7 @@
 import { html, $, $$, field, readForm, toast, MIC, icon } from '../core/ui.js';
 import { zones, items, products, productName, findSite, vsLabel } from '../core/lookups.js';
 import { manHours } from '../core/costing.js';
-import { productOf, isPhysical, keeps, setOfProduct, sizesOf, isTwoFigure, classifyFor, unitOfProduct, sizeText, wholeUnit } from '../core/products.js';
+import { productOf, isPhysical, keeps, setOfProduct, sizesOf, isTwoFigure, classifyFor, unitOfProduct, sizeText, wholeUnit, likelyProduct } from '../core/products.js';
 import { removeBlob } from '../core/media.js';
 import { savePhotos, signaturePad } from '../core/capture.js';
 import { isProductRow, reportShutters, jobScope, newProductRow, findingOf, findingRows, findingsText, otherFindings, priorityOptions } from '../core/inspections.js';
@@ -124,7 +124,10 @@ const step2 = {
   bind(body, rep, ctx) {
     // Adding, removing or linking a product, or a new qty or type, draws the rows again.
     const change = fn => { const cur = step2.read(body, rep); const asked = fn(cur.asked); ctx.save({ s2: cur.s2, asked, shutters: reportShutters(rep, asked) }); ctx.repaint(); };
-    $('#addProd', body).addEventListener('click', () => change(rows => [...rows, newProductRow(rows, products().find(isPhysical)?.id)]));
+    // A product added on site starts as the report's own products (else the site's most common, else the first by name).
+    const startWith = rows => likelyProduct(rows.map(r => r.productId).filter(Boolean), findSite(rep.siteId).site)
+      || products().filter(isPhysical).sort((a, b) => a.name.localeCompare(b.name))[0]?.id;
+    $('#addProd', body).addEventListener('click', () => change(rows => [...rows, newProductRow(rows, startWith(rows))]));
     $$('[data-droprow]', body).forEach(b => b.addEventListener('click', () => change(rows => rows.filter(r => r.key !== b.dataset.droprow).map((r, i) => ({ ...r, n: i + 1 })))));
     $$('[data-link]', body).forEach(cb => cb.addEventListener('change', () => change(rows => rows.map(r => {
       if (r.key !== cb.dataset.link) return r;

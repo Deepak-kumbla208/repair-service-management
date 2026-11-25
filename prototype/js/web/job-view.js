@@ -19,7 +19,7 @@ import { render } from '../app.js';
 
 const row = (label, value) => html`<div class="field"><div class="field-label">${label}</div><div class="ro">${value || html`<span class="muted">—</span>`}</div></div>`;
 const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const when = j => (j.start ? `${fmtDate(j.start)} ${fmtHour(new Date(j.start).getHours() + new Date(j.start).getMinutes() / 60)}–${fmtHour(new Date(j.end).getHours() + new Date(j.end).getMinutes() / 60)}` : '');
+const when = j => (j.start ? `${fmtDate(j.start)} ${fmtHour(new Date(j.start).getHours() + new Date(j.start).getMinutes() / 60)}–${fmtHour(j.blocks?.[0]?.to ?? new Date(j.end).getHours() + new Date(j.end).getMinutes() / 60)}${j.blocks?.length > 1 ? ` (${j.blocks.length} days, to ${fmtDate(j.end)})` : ''}` : '');
 
 export function renderJobList(el) {
   renderDocList(el, {

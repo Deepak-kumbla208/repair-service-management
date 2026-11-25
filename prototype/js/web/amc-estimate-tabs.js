@@ -97,7 +97,8 @@ function shuttersTab(est, ctx, s, more) {
   const rows = est.matrix.sizes;
   const key = z => z.key || z.code;
   const anyTyped = est.sites.some(x => x.typed);
-  const shown = rows.filter(z => anyTyped || est.sites.some(x => num(x.counts?.[key(z)]) > 0));
+  const counted = z => est.sites.some(x => num(x.counts?.[key(z)]) > 0);
+  const shown = rows.filter(z => counted(z) || (anyTyped && !z.inactive));
   const tot = z => est.sites.reduce((t, x) => t + num(x.counts?.[key(z)]), 0);
   const multi = ctx.editable && est.sites.length > 1;
   return html`<table class="tbl edit"><thead><tr><th>Sl</th><th>Site / Location</th><th>Zone</th><th class="num">Visits ${gs ? '' : 'per Year'}</th>
@@ -178,8 +179,8 @@ export function amcTabHtml(tab, est, ctx, s, more = 0) {
 export function newAmcRow(kind, est) {
   if (kind === 'overheads') return { key: rid(), name: 'Overhead item', basis: 'PCT', value: 0 };
   if (kind === 'equipment') { const e = store.list('equipment', x => x.status !== 'Inactive')[0]; return { key: rid(), equipmentId: e?.id || '', name: e?.name || '', ownership: e?.ownership || '', basis: e?.basis || '', qty: 1, duration: 1, siteKey: est.sites[0]?.key || '', rate: num(e?.rate) }; }
-  const it = items().find(i => i.category === 'Consumable') || items()[0];
-  return { key: rid(), itemId: it?.id || '', name: it?.name || '', spec: it?.spec || '', unit: it?.unit || '', qty: 1, wastage: num(it?.wastage), rate: num(it?.rate), siteKey: '' };
+  // A new material row starts empty: pick it from the master (no product's parts are the default).
+  return { key: rid(), itemId: '', name: '', spec: '', unit: '', qty: 1, wastage: 0, rate: 0, siteKey: '' };
 }
 
 // After a value changed: follow-on values (hourly rate from a monthly cost, master data of a picked item).

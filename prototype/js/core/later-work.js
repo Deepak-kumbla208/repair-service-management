@@ -8,7 +8,8 @@ import { productName, vsOptions } from './lookups.js';
 import { openTask, closeTask } from './workflow.js';
 import { taxTotals, round2 } from './costing.js';
 import { saveNewEnquiry, rowText } from './enquiries.js';
-import { createEstimate, currentEstimate } from './estimates.js';
+import { createEstimate, currentEstimate, saveEstimate, syncProductLabour } from './estimates.js';
+import { productOf, repairLabour } from './products.js';
 import { fmtDate } from './ui.js';
 
 const pad = n => String(n).padStart(2, '0');
@@ -32,15 +33,26 @@ export function lineInfo(q, lineKey) {
   const m = sh ? null : est?.materials.find(x => x.lineKey === lineKey);
   // A fixed-price product (a submission) keeps its product, qty and unit.
   const f = sh || m ? null : (est?.fixed || []).find(x => x.lineKey === lineKey);
+  // A product with its own qty and unit (work by the metre, or picked on an enquiry line) keeps them; so does its size,
+  // and the parts fitted to it.
+  const own = sh && (sh.notKept || sh.fromLine);
   return { shutterKey: sh?.key || '', tag: sh?.tag || '', productId: sh?.productId || f?.productId || '', location: sh?.location || '', sizeCode: sh?.sizeCode || '',
-    qty: sh?.notKept ? sh.qty : f ? f.qty : 1, uom: sh?.notKept ? sh.uom : f ? f.unit : 'Nos', fixed: !!f,
+    qty: own ? sh.qty : f ? f.qty : 1, uom: own ? sh.uom : f ? f.unit : 'Nos', fixed: !!f, fromLine: !!sh?.fromLine,
     fault: found?.finding || sh?.fault || '', action: found?.action || '', priority: found?.priority || 'NORMAL',
-    part: m ? { itemId: m.itemId, name: m.name, qty: m.qty, unit: m.unit, remarks: m.remarks || '' } : null };
+    part: m ? { itemId: m.itemId, name: m.name, qty: m.qty, unit: m.unit, remarks: m.remarks || '' } : null,
+    parts: sh ? (est.materials || []).filter(x => x.lineKey === lineKey).map(x => ({ itemId: x.itemId, name: x.name, qty: x.qty, unit: x.unit, remarks: x.remarks || '', shutterKey: sh.key })) : [] };
 }
 
 // The part of a quotation the customer takes now: its "Now" lines and the shared line, tax worked out on their subtotal.
+// When every "Now" line is a fixed price (a submission), there is no visit: the shared line
+// (transport) stays with the later work.
 export function splitOf(q, decisions) {
-  const rows = q.rows.filter(r => r.isShared || decisions[r.lineKey] === 'NOW');
+  const est = store.get('estimates', q.estimateId);
+  const fixedKeys = new Set((est?.fixed || []).map(f => f.lineKey));
+  // The same rule as the job's "no site visit" (core/jobs.js).
+  const now = q.rows.filter(r => r.lineKey && !r.isShared && decisions[r.lineKey] === 'NOW').map(r => r.lineKey);
+  const visit = !now.length || now.some(k => !fixedKeys.has(k));
+  const rows = q.rows.filter(r => (r.isShared && visit) || decisions[r.lineKey] === 'NOW');
   const t = taxTotals(round2(rows.reduce((s, r) => s + r.amount, 0)), q.taxRate);
   return { rows, keys: rows.map(r => r.lineKey), subtotal: t.subtotal, tax: t.tax, total: t.total };
 }
@@ -106,17 +118,36 @@ export function quoteLaterWork(enqId) {
   const done = lw.enquiryId && store.get('enquiries', lw.enquiryId);
   if (done && !['Lost', 'Cancelled'].includes(done.status)) return { enquiry: done, estimate: currentEstimate(done.id) || createEstimate(done.id) };
   if (lw.status !== 'Open') return null;
-  const lines = lw.items.map(i => (i.part ? { itemRef: i.part.itemId ? `itm:${i.part.itemId}` : '', itemName: i.part.name, qty: i.part.qty, unit: i.part.unit, description: i.part.remarks }
-    : i.productId ? { itemRef: `prd:${i.productId}`, itemName: productName(i.productId), qty: i.qty || 1, unit: i.uom || 'Nos',
-      description: i.fixed ? String(i.description || '').split(': ').slice(1).join(': ') : `${[i.tag, i.location].filter(Boolean).join(' ')}: ${i.action || i.fault}`.trim() }
-      : { itemRef: '', itemName: '', qty: null, description: i.description }));
+  const who = i => [i.tag, i.location].filter(Boolean).join(' ');
+  const lines = lw.items.flatMap(i => (i.part ? [{ itemRef: i.part.itemId ? `itm:${i.part.itemId}` : '', itemName: i.part.name, qty: i.part.qty, unit: i.part.unit, description: i.part.remarks }]
+    : i.productId ? [{ itemRef: `prd:${i.productId}`, itemName: productName(i.productId), qty: i.qty || 1, unit: i.uom || 'Nos',
+      description: i.fixed ? String(i.description || '').split(': ').slice(1).join(': ') : [who(i), i.action || i.fault].filter(Boolean).join(': ') },
+      // With no site report to carry them, the parts fitted to a product come as part lines.
+      ...(lw.reportId ? [] : (i.parts || []).map(p => ({ itemRef: p.itemId ? `itm:${p.itemId}` : '', itemName: p.name, qty: p.qty, unit: p.unit, description: `${i.tag ? `${i.tag}: ` : ''}${p.remarks || `for ${productName(i.productId)}`}` })))]
+      : [{ itemRef: '', itemName: '', qty: null, description: i.description }]));
   const enq = saveNewEnquiry({
     receivedAt: new Date().toISOString(), channel: 'OTHER', channelOther: `Later work from ${e.no}`, type: 'REPAIR', enquiryStatus: 'WARM', priority: 'MEDIUM', siteInspection: 'NO',
     recordedBy: store.currentActor(), remarks: '', attachments: [], customerId: e.customerId, contactId: e.contactId, contactName: e.contactName, mobile: e.mobile, email: e.email, siteId: e.siteId, lines,
   });
+  // Every part the later work needs: part lines, and (with a report) the parts fitted to the later products.
+  const productParts = lw.items.every(i => Array.isArray(i.parts));
   store.update('enquiries', enq.id, { laterOf: { enquiryId: e.id, enquiryNo: e.no, reportId: lw.reportId, shutterKeys: lw.items.filter(i => i.shutterKey).map(i => i.shutterKey),
-    parts: lw.items.filter(i => i.part).map(i => i.part) } }, false);
-  const est = createEstimate(enq.id);
+    parts: [...lw.items.filter(i => i.part).map(i => i.part), ...(productParts && lw.reportId ? lw.items.flatMap(i => i.parts) : [])], productParts } }, false);
+  let est = createEstimate(enq.id);
+  // With no site report, a product's size picked in the first estimate comes back with it (and its hours).
+  const pool = lw.items.filter(i => i.productId && i.sizeCode && i.fromLine);
+  if (pool.length) {
+    const d = structuredClone(est);
+    d.shutters.forEach(s => {
+      const k = !s.sizeCode ? pool.findIndex(i => i.productId === s.productId) : -1;
+      if (k < 0) return;
+      s.sizeCode = pool.splice(k, 1)[0].sizeCode;
+      Object.assign(s, repairLabour(productOf(s.productId), s.sizeCode, s.qty));
+      syncProductLabour(d, s);
+    });
+    saveEstimate(est.id, d);
+    est = store.get('estimates', est.id);
+  }
   if (lw.taskId) closeTask(lw.taskId, 'approve', `Quoted: ${enq.no}`);
   store.update('enquiries', e.id, { laterWork: { ...lw, status: 'Quoted', enquiryId: enq.id, taskId: '' } }, `Later work quoted: ${enq.no}, ${est.no}`);
   return { enquiry: store.get('enquiries', enq.id), estimate: est };

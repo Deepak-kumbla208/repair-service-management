@@ -11,7 +11,7 @@ import { startReport, saveReport, submitReport, jobScope, reportShutters, findin
 import { createEstimate, saveEstimate } from '../core/estimates.js';
 import { createFromEstimate, saveWording, submitForCheck, decideQuotation, markSent, accept, reject } from '../core/quotations.js';
 import { openTaskFor } from '../core/workflow.js';
-import { setPartReady, earliestDate, freeStart, jobDuration, nextWorkday, scheduleJob, defaultHelper, onMyWay, checkIn, saveJob, completeWorkDone, requestLeave, confirmLeave, checkOut } from '../core/jobs.js';
+import { setPartReady, earliestDate, freeJobStart, jobBlocks, jobDuration, nextWorkday, scheduleJob, defaultHelper, onMyWay, checkIn, saveJob, completeWorkDone, requestLeave, confirmLeave, checkOut } from '../core/jobs.js';
 import { invoiceForJob, postInvoice, recordPayment, addFollowUp } from '../core/billing.js';
 import { markDocumented } from '../core/closure.js';
 import { buildAmcSamples } from './seed-demo-flow-amc.js';
@@ -88,7 +88,7 @@ let T = '';
 // The Gulf company has only an Admin, who then does every step.
 const userOf = login => (T === 'co_gdd' ? 'usr_co_gdd_gadmin' : `usr_${T}_${login}`);
 export const as = login => store.setContext({ tenantId: T, userId: userOf(login) });
-// The 12-month history (data/seed-history.js) reuses these story steps for Demo Shutters.
+// The 12-month history (data/seed-history.js) reuses these story steps for Demo Engineering.
 export const useTenant = t => { T = t; };
 const cust = code => store.findOne('customers', c => c.code === code);
 const item = code => store.findOne('items', i => i.code === code);
@@ -139,17 +139,24 @@ export function win(q, po, term) {
   const r = accept(q.id, { method: 'PO', poNo: po, poDate: dstr(new Date()), contact: store.get('quotations', q.id).contact, attachments: [], paymentTerm: term });
   return r.job;
 }
+// A booked job moved to the moment s: its start, its day blocks (a long job runs over the next working days) and its end.
+function placed(j, s, hours) {
+  const blocks = jobBlocks(j, dstr(s), s.getHours() + s.getMinutes() / 60, hours);
+  const last = blocks[blocks.length - 1];
+  const end = new Date(`${last.date}T00:00`); end.setMinutes(Math.round(last.to * 60));
+  return { start: s.toISOString(), end: end.toISOString(), blocks };
+}
 // Schedule with the given technician on the first free day; then place it exactly at "days" from today, 09:00.
 export function book(job, tech, { partsReady = true, days, at = '09:00' } = {}) {
   as('ops');
   if (partsReady) store.get('jobs', job.id).parts.forEach(p => setPartReady(job.id, p.key, true));
   const j = store.get('jobs', job.id), hours = jobDuration(j);
   let d = new Date(`${earliestDate(j)}T00:00`), start = null;
-  for (let i = 0; i < 20 && start == null; i++) { start = freeStart(tech, dstr(d), hours, j.id); if (start == null) d = nextWorkday(d); }
+  for (let i = 0; i < 20 && start == null; i++) { start = freeJobStart(tech, dstr(d), j, hours); if (start == null) d = nextWorkday(d); }
   scheduleJob(j.id, { technicianId: tech, helperIds: [defaultHelper(tech)?.id].filter(Boolean), date: dstr(d), start, hours });
   return { hours, place: days == null ? null : () => {
-    const s = when(days, at), e = new Date(s.getTime() + hours * 3600000);
-    setRaw('jobs', job.id, { start: s.toISOString(), end: e.toISOString() });
+    const s = when(days, at);
+    setRaw('jobs', job.id, placed(store.get('jobs', job.id), s, hours));
     const inv = invoiceForJob(job.id);
     if (inv?.status === 'Posted' && inv.paymentTerm === 'IMMEDIATE') setRaw('invoices', inv.id, { dueDate: dstr(s) });
   } };
@@ -271,7 +278,7 @@ async function demoShutters() {
   job = phase({ days: -2, at: '09:00' }, () => win(q, 'Signed quotation'));
   phase({ hoursAgo: 5 }, () => book(job, B));
   const st = new Date(Date.now() - 3.5 * 3600000);
-  setRaw('jobs', job.id, { start: st.toISOString(), end: new Date(st.getTime() + jobDuration(store.get('jobs', job.id)) * 3600000).toISOString() });
+  setRaw('jobs', job.id, placed(store.get('jobs', job.id), st, jobDuration(store.get('jobs', job.id))));
   setRaw('invoices', invoiceForJob(job.id).id, { dueDate: dstr(st) });
   await visit(job, B, 0, { now: true, pay: ['CASH', 'Cash received'], confirm: false, checkout: false, comments: 'Gate runs smoothly now.' });
 
@@ -322,9 +329,10 @@ async function gulf() {
 }
 
 // Products of the new trades (user, 25 Nov 2026): a new enquiry at Demo Towers with a shutter, a pump and lightning tape
-// by the metre (site inspection still to assign: no technician works on all three groups), and one for a sanitary plan
-// submission and a BIM model (fixed prices, no site inspection) at Demo Food Factory.
-function mixedSamples() {
+// by the metre (site inspection still to assign: no technician works on all three groups), one for a sanitary plan
+// submission and a BIM model (fixed prices, no site inspection) at Demo Food Factory, and a DB panel repair at Demo
+// Towers inspected by Technician B and quoted, waiting for the counter-check.
+async function mixedSamples() {
   T = 'co_dsh';
   as('ops');
   const prd = code => store.findOne('products', p => p.code === code);
@@ -336,6 +344,13 @@ function mixedSamples() {
   if (towers) saveNewEnquiry(base(towers, 'YES', [line('RS', 1, 'Car park shutter jammed half-way'), line('BP', 1, 'Pump trips; low water pressure on the upper floors'),
     line('LPT', 15, 'Tape corroded on the roof, near the water tank')]));
   if (food) saveNewEnquiry(base(food, 'NO', [line('PUB', 1, 'New staff toilets on level 2'), line('BIM', 2, 'Model of levels 1 and 2')]));
+  if (towers) {
+    const sigT = await signature(3), sigC = await signature(4);
+    const e = newEnquiry('CUS-0010', 'emp_co_dsh_4', 'DB-1 trips at night; burning smell at the level 1 riser.', 'HIGH');
+    fileReport(e, 'emp_co_dsh_4', { picks: [['DB-1', 'Burnt neutral terminal; RCCB does not trip on test']], mats: [['ITM-037', 1, 'DB-1'], ['ITM-040', 1, 'DB-1']],
+      desc: 'Replace the RCCB and the burnt terminal on DB-1, then a thermal scan of the board.' }, sigT, sigC);
+    makeQuote(e, { line: true });
+  }
 }
 
 export async function buildDemoFlow() {
@@ -348,7 +363,7 @@ export async function buildDemoFlow() {
     await buildAmcSamples();
     await buildHistory();
     auth.login('usr_co_dsh_ops', 'web');
-    mixedSamples();
+    await mixedSamples();
   } finally {
     auth.logout();
     store.holdWrites(false);

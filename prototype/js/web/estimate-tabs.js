@@ -1,12 +1,12 @@
 // The estimate's Excel tabs as editable tables (same columns and formulas as the team lead's Repair estimator):
 // Products to repair, Labour, Transport, Materials, Equipment, Overhead & Margin. Every pre-filled value stays
 // editable. "For" (which line a row belongs to) shows only with Line costing; a row with no line is a shared cost.
-import { syncPartLine } from '../core/estimates.js';
+import { syncPartLine, syncProductLabour, setLineQty } from '../core/estimates.js';
 import * as store from '../core/store.js';
 import { html, fmtNum } from '../core/ui.js';
 import { zones, items, vsOptions } from '../core/lookups.js';
 import { labourRow, materialRow, transportRow, equipmentRow, fixedRow, hourlyRate, otRate, round2 } from '../core/costing.js';
-import { productOf, repairLabour, costingOf, sizeText } from '../core/products.js';
+import { productOf, repairLabour, costingOf, sizeText, sizesOf } from '../core/products.js';
 
 const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const rid = () => store.uid('r_');
@@ -33,13 +33,20 @@ const total = (cols, value, before = 0) => html`<tr class="sum"><td colspan="${b
 function shuttersTab(est, ctx) {
   const labourFor = key => est.labour.filter(r => r.lineKey === key).reduce((t, r) => t + labourRow(r).total, 0);
   const fixed = est.fixed || [];
-  const size = s => (costingOf(productOf(s.productId)) === 'SIZE' ? sizeText(s, { none: '' }) || html`<span class="muted">not sized</span>` : html`<span class="muted">no size</span>`);
+  // A product with a size set: its size from the site report; with no report, picked here (the hours follow it).
+  const size = (s, i) => {
+    const p = productOf(s.productId);
+    if (costingOf(p) !== 'SIZE') return html`<span class="muted">no size</span>`;
+    const measured = s.width || s.measure;
+    if (measured || !ctx.editable) return sizeText(s, { none: '' }) || html`<span class="muted">not sized</span>`;
+    return html`<select data-t="shutters" data-i="${i}" data-f="sizeCode" class="${s.sizeCode ? '' : 'invalid'}" title="Pick the size: the hours follow it"><option value="">Pick size</option>${sizesOf(p).map(z => html`<option value="${z.code}" ${z.code === s.sizeCode ? 'selected' : ''}>${z.code} – ${z.name}</option>`)}</select>`;
+  };
   const products = est.shutters.length ? html`<table class="tbl"><thead><tr><th>Tag / Location</th><th>Product</th><th class="num">Qty</th><th>Unit</th><th>Size</th><th>Fault Reported</th><th class="num">Team hrs</th><th class="num">Extra workers × hrs</th><th class="num">Labour Amount</th></tr></thead><tbody>
     ${est.shutters.map((s, i) => html`<tr><td><b>${s.tag || ''}</b> ${s.location}</td><td>${s.typeName}</td>
-      <td class="num">${inp(ctx, 'shutters', i, 'qty', s.qty, { w: 56 })}</td><td>${s.uom || 'Nos'}</td><td>${size(s)}</td><td class="wrap">${inp(ctx, 'shutters', i, 'fault', s.fault, { type: 'text', w: 210 })}</td>
+      <td class="num">${inp(ctx, 'shutters', i, 'qty', s.qty, { w: 56 })}</td><td>${s.uom || 'Nos'}</td><td>${size(s, i)}</td><td class="wrap">${inp(ctx, 'shutters', i, 'fault', s.fault, { type: 'text', w: 210 })}</td>
       <td class="num">${fmtNum(s.teamHrs)}</td><td class="num">${s.extraWorkers ? `${s.extraWorkers} × ${fmtNum(s.extraHrs)}` : '—'}</td><td class="num">${m2(labourFor(s.key))}</td></tr>`)}
-  </tbody></table><p class="mini-note">From the products in the site report's Job scope. Hours: by size, the Product Size master's repair hours × qty; with no size, the product's standard hours × qty. They fill the Labour tab, so labour is counted once.</p>`
-    : fixed.length ? '' : html`<div class="muted">No products in a site report's Job scope. Add labour rows in the Labour tab.</div>`;
+  </tbody></table><p class="mini-note">From the site report's Job scope, or from the enquiry's lines when there was no site inspection (pick each size there). Hours: by size, the Product Size master's repair hours × qty; with no size, the product's standard hours × qty. They fill the Labour tab, so labour is counted once.</p>`
+    : fixed.length ? '' : html`<div class="muted">No products: the enquiry and the site report name none. Add labour rows in the Labour tab.</div>`;
   const fixedTable = fixed.length ? html`<h3 style="margin:14px 0 6px">Fixed-price products</h3><table class="tbl"><thead><tr><th>Product</th><th class="num">Qty</th><th>Unit</th><th class="num">Price</th><th class="num">Amount</th></tr></thead><tbody>
     ${fixed.map((f, i) => html`<tr><td>${f.name}</td><td class="num">${inp(ctx, 'fixed', i, 'qty', f.qty, { w: 56 })}</td><td>${f.unit}</td><td class="num">${inp(ctx, 'fixed', i, 'price', f.price, { w: 86 })}</td><td class="num">${m2(fixedRow(f))}</td></tr>`)}
   </tbody></table><p class="mini-note">Prices from the Product master. They go to the quotation as they are: no overhead or markup is added, and no shared cost is spread onto them.</p>` : '';
@@ -66,6 +73,7 @@ function transportTab(est, ctx) {
       <td class="num">${inp(ctx, 'transport', i, 'trips', r.trips, { w: 50, step: 1 })}</td><td class="num">${inp(ctx, 'transport', i, 'hrs', r.hrs, { w: 56 })}</td><td class="num">${inp(ctx, 'transport', i, 'rate', r.rate, { w: 70 })}</td><td class="num">${m2(transportRow(r))}</td>${del(ctx, 'transport', i)}</tr>`)}
     ${total(ctx.editable ? 1 : 0, html`<td class="num"><b>${m2(est.transport.reduce((t, r) => t + transportRow(r), 0))}</b></td>`, est.costingLevel === 'LINE' ? 8 : 7)}
   </tbody></table>${addBtn(ctx, 'transport', 'Add a trip or zone')}
+  ${!est.transport.length && (est.shutters.length || est.materials.length) ? html`<p class="note" style="margin-top:8px">No transport yet: the site has no zone. Set the zone on the customer's site, or add a trip here.</p>` : ''}
   <p class="mini-note">The site's zone with its Repair rate. No. of Hrs = trips × the zone's travel hours per trip ("Trips" is a screen helper).</p>`;
 }
 
@@ -152,15 +160,13 @@ export function applyChange(est, t, i, f) {
     if (e) Object.assign(r, { name: e.name, ownership: e.ownership, basis: e.basis, rate: Number(e.rate) || 0 });
   }
   // A fixed-price product's qty is its line's qty on the quotation.
-  if (t === 'fixed' && f === 'qty') { const l = est.lines.find(x => x.key === r.lineKey); if (l) l.qty = Number(r.qty) || 1; }
-  if (t === 'shutters' && f === 'qty') {
+  if (t === 'fixed' && f === 'qty') { const l = est.lines.find(x => x.key === r.lineKey); if (l) setLineQty(l, r.qty); }
+  // A product's qty or size: its hours again, and the Labour tab follows (rows made when a size is first picked, removed
+  // when there are no hours left).
+  if (t === 'shutters' && (f === 'qty' || f === 'sizeCode')) {
     Object.assign(r, repairLabour(productOf(r.productId), r.sizeCode, r.qty));
     const line = est.lines.find(x => x.key === r.key);
-    if (line && r.notKept) line.qty = Number(r.qty) || 1;
-    est.labour.filter(x => x.lineKey === r.key).forEach(x => {
-      const extra = /additional/i.test(x.trade);
-      const h = extra ? r.extraHrs : r.teamHrs;
-      if (Number(x.otHrs) && !Number(x.hrs)) x.otHrs = h; else x.hrs = h;
-    });
+    if (line && (r.notKept || r.fromLine)) setLineQty(line, r.qty);
+    syncProductLabour(est, r);
   }
 }

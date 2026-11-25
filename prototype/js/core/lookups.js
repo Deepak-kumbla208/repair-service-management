@@ -32,15 +32,17 @@ export const sizes = () => store.list('sizes');
 
 // Choices for an enquiry item line: products (Product master) under their group's heading, then parts and materials
 // (Material/Item master). The value keeps the source: "prd:<id>" or "itm:<id>".
-export function itemChoices() {
+// keep: refs already on the lines, offered even when switched off since (so editing never drops them).
+export function itemChoices(keep = []) {
   const groups = vsOptions('PRODUCT_GROUP');
-  const all = products().sort((a, b) => a.name.localeCompare(b.name));
+  const kept = (coll, prefix) => keep.filter(r => r?.startsWith(prefix)).map(r => store.get(coll, r.slice(4))).filter(x => x && x.status === 'Inactive');
+  const all = [...products(), ...kept('products', 'prd:')].sort((a, b) => a.name.localeCompare(b.name));
   const heads = [...groups.map(g => ({ code: g.value, label: g.label })), { code: '', label: 'Products' }];
   const out = heads.map(g => ({ group: g.label, options: all.filter(p => (p.groupCode || '') === g.code || (!g.code && !groups.some(x => x.value === p.groupCode)))
     .map(p => ({ value: `prd:${p.id}`, label: p.name })) })).filter(g => g.options.length);
   // Parts and materials under their group too ("Parts · Plumbing & sanitary"); a part with no group comes last.
   const parts = [...groups.map(g => ({ code: g.value, label: `Parts · ${g.label}` })), { code: '', label: 'Parts & materials' }]
-    .map(g => ({ group: g.label, options: items().filter(i => (i.groupCode || '') === g.code || (!g.code && !groups.some(x => x.value === i.groupCode))).sort((a, b) => a.name.localeCompare(b.name))
+    .map(g => ({ group: g.label, options: [...items(), ...kept('items', 'itm:')].filter(i => (i.groupCode || '') === g.code || (!g.code && !groups.some(x => x.value === i.groupCode))).sort((a, b) => a.name.localeCompare(b.name))
       .map(i => ({ value: `itm:${i.id}`, label: i.name })) })).filter(g => g.options.length);
   return [...out, ...parts];
 }

@@ -68,10 +68,13 @@ function askedFrom(enq, site) {
   const taken = new Set();
   return cleanLines(enq.lines).map((l, i) => {
     const row = { key: store.uid('ask_'), n: i + 1, text: lineText(l), desc: l.description || '', done: false, note: '' };
-    const named = namedIn(l, site, taken);
-    named.forEach(s => taken.add(s.id));
+    // A part or a fixed-price product stays a plain line, even when it names a tag ("Tension spring × 2: RS-2 jammed").
     const picked = l.itemRef.startsWith('prd:') ? l.itemRef.slice(4) : '';
-    const productId = picked ? (isPhysical(productOf(picked)) ? picked : '') : named[0]?.productId || '';
+    if (l.itemRef.startsWith('itm:') || (picked && !isPhysical(productOf(picked)))) return row;
+    // A product picked on the line links only its own customer products ("Booster pump: beside RS-1" is the pump).
+    const named = namedIn(l, site, taken).filter(s => !picked || s.productId === picked);
+    named.forEach(s => taken.add(s.id));
+    const productId = picked || named[0]?.productId || '';
     if (!productId) return row;
     return { ...row, productId, qty: Math.max(l.qty || 1, named.length), uom: (picked && l.unit) || unitOfProduct(productOf(productId)), location: '', sizeCode: '', width: null, height: null, unit: 'm', measure: null, linkIds: named.map(s => s.id) };
   });
@@ -201,7 +204,7 @@ export function reportDraft(inspId, { fromOffice = true } = {}) {
     asked, shutters,
     s2: { supplyInstall: false, repair: enq.type === 'REPAIR', replace: false, motor: false, dismantle: false, servicing: enq.type !== 'REPAIR', other: '', description: '',
       findings: findingsText(findingRows({}, asked, shutters)), otherFindings: '' },
-    s3: { zoneId: enq.zoneId, persons: 2, days: 1, hoursPerDay: null, remarks: '', normal: true, afterHours: false, weekend: false, phased: false },
+    s3: { zoneId: enq.zoneId || site?.zoneId || '', persons: 2, days: 1, hoursPerDay: null, remarks: '', normal: true, afterHours: false, weekend: false, phased: false },
     s4: { ladder: false, scaffolding: false, scaffoldSets: '', scissor: false, scissorNos: '', boom: false, hoist: false, welding: false, grinding: false, powerTools: false, other: '', maxHeight: null, providedBy: '', rentalDuration: '', others: '' },
     s5: { rows: materialRows(enq), consumables: '' },
     s6: { normalAccess: true, restricted: false, permit: false, safetyDocs: false, protection: false, barricade: false, remarks: '' },

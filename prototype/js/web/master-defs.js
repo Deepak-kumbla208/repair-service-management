@@ -4,7 +4,7 @@
 import * as store from '../core/store.js';
 import { zones, zoneLabel, zoneCode, vsOptions, vsLabel, unitOptions } from '../core/lookups.js';
 import { hourlyRate, otRate, round2 } from '../core/costing.js';
-import { sizeSets, uoms } from '../core/products.js';
+import { sizeSets, uoms, productUses } from '../core/products.js';
 
 const zoneOptions = () => zones().map(z => ({ value: z.id, label: `${z.code} · ${z.name}` }));
 const YES_NO = ['Yes', 'No'];
@@ -81,11 +81,11 @@ export const DEFS = {
     fields: [
       { name: 'code', label: 'Code', required: true }, { name: 'name', label: 'Product', required: true },
       { name: 'groupCode', label: 'Group', type: 'select', options: () => vsOptions('PRODUCT_GROUP'), required: true },
-      { name: 'costedBy', label: 'Costed by', type: 'select', options: () => vsOptions('COSTING_METHOD'), required: true, blank: false },
+      { name: 'costedBy', label: 'Costed by', type: 'select', options: () => vsOptions('COSTING_METHOD'), required: true },
       { name: 'sizeSetId', label: 'Size set', type: 'select', options: () => sizeSets().map(z => ({ value: z.id, label: `${z.name}${z.unit ? ` (${z.unit})` : ''}` })), required: true, showIf: d => d.costedBy === 'SIZE' },
       { name: 'unit', label: 'Unit', type: 'select', options: () => unitOptions(), required: true, blank: false },
       { name: 'repairHrs', label: 'Repair hours per unit (team of 2)', type: 'number', step: '0.05', required: true, showIf: d => d.costedBy === 'HOURS' },
-      { name: 'servHrs', label: 'Servicing hours per visit (AMC, General Servicing)', type: 'number', step: '0.05', showIf: d => d.costedBy === 'HOURS' },
+      { name: 'servHrs', label: 'Servicing hours per visit (AMC, General Servicing)', type: 'number', step: '0.05', showIf: d => d.costedBy === 'HOURS', requiredIf: d => d.keep !== 'No' },
       { name: 'extraWorkers', label: 'Repair: extra workers', type: 'number', showIf: d => d.costedBy === 'HOURS' },
       { name: 'extraHrs', label: 'Repair: hours per extra worker, per unit', type: 'number', step: '0.05', showIf: d => d.costedBy === 'HOURS' },
       { name: 'price', label: 'Price per unit', type: 'number', money: true, required: true, showIf: d => d.costedBy === 'FIXED', hint: 'Charged as it is: no overhead or markup on top' },
@@ -93,7 +93,11 @@ export const DEFS = {
       { name: 'checklist', label: 'AMC check list', type: 'select', options: () => vsOptions('CHECK_LIST'), showIf: d => d.costedBy !== 'FIXED' },
       { name: 'description', label: 'Description', type: 'textarea', cls: 'spanall' },
     ],
-    defaults: () => ({ costedBy: 'SIZE', sizeSetId: sizeSets()[0]?.id || '', unit: 'Nos', keep: 'Yes', checklist: 'GENERAL' }),
+    // A new product starts with nothing chosen for how it is costed or checked (no product kind is the default).
+    defaults: () => ({ unit: 'Nos', keep: 'Yes' }),
+    // Once used, how it is costed cannot change: make a new product instead (the old one can be made inactive).
+    lockWhenUsed: { fields: ['costedBy', 'sizeSetId', 'keep'], uses: r => productUses(r.id),
+      note: u => `In use (${[u.reg && `${u.reg} customer product${u.reg > 1 ? 's' : ''}`, u.est && `${u.est} estimate${u.est > 1 ? 's' : ''}`, u.enq && `${u.enq} enquir${u.enq > 1 ? 'ies' : 'y'}`].filter(Boolean).join(', ')}): Costed by, Size set and Customer product are locked, so nothing already priced changes. To change them, make a new product and make this one inactive.` },
     columns: [['code', 'Code'], ['name', 'Product'], [r => vsLabel('COSTING_METHOD', r.costedBy || 'SIZE'), 'Costed by'], [(r, c) => costText(r, c), 'Size set / hours / price'],
       ['unit', 'Unit'], [r => (r.costedBy === 'FIXED' ? 'No' : r.keep || 'Yes'), 'Customer product'], [r => vsLabel('CHECK_LIST', r.checklist), 'Check list']],
     groupBy: { label: r => vsLabel('PRODUCT_GROUP', r.groupCode) || 'No group', order: () => vsOptions('PRODUCT_GROUP').map(o => o.label) },

@@ -7,7 +7,7 @@ import { html, $, $$, go, on, debounce, fmtNum, pill, toast, openModal, chipGrou
 import { vsOptions, zoneLabel, productName, findSite } from '../core/lookups.js';
 import { sizeText } from '../core/products.js';
 import { estimateSummary, canEdit, saveEstimate, reviseEstimate, estimateProblems, revisions, canRevise as mayRevise } from '../core/estimates.js';
-import { describe, addSiteTo, removeSiteFrom, setCovered, otherSites, isRenewal } from '../core/amc-estimates.js';
+import { describe, addSiteTo, removeSiteFrom, setCovered, otherSites, isRenewal, keyedMatrix } from '../core/amc-estimates.js';
 import { createFromEstimate } from '../core/quotations.js';
 import { AMC_TABS, amcTabHtml, newAmcRow, applyAmcChange, setPath } from './amc-estimate-tabs.js';
 import { openWorkflow } from './enquiry-view.js';
@@ -29,7 +29,7 @@ function kpiHtml(est, s, cur, sees) {
 
 export function renderAmcEstimate(el, id) {
   const saved = store.get('estimates', id);
-  const est = structuredClone(saved);
+  const est = keyedMatrix(structuredClone(saved)); // a matrix saved before size sets reads with today's keys
   const enq = store.get('enquiries', est.enquiryId);
   const q = est.quotationId ? store.get('quotations', est.quotationId) : null;
   const ctx = { editable: canEdit(est) };

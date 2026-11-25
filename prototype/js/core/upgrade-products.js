@@ -9,11 +9,16 @@
 // - the AMC check list items get their check list, plus the drafts of the new lists;
 // - Menu Access: each role gets the Unit of Measure master with the rights it has on Product Size;
 // - technicians get the product groups they work on; the AMC term about "the shutters listed" says "products".
-// The company record keeps productsData: 2 once done (fresh demo data starts with it).
+// Then (productsData 3): the demo company is "Demo Engineering Pte Ltd" (user, 25 Nov 2026; documents already issued
+// keep the letterhead they were issued with) and the check list of shutters and doors is called "Shutters & doors".
+// Then (productsData 4): AMC and General Servicing estimates saved before size sets get today's Labour_Matrix keys
+// ("S" → "WH:S", same numbers), so editing them later keeps their counts (flaw audit #1).
+// The company record keeps the step reached; fresh demo data starts at 4.
 import * as store from './store.js';
 import * as auth from './auth.js';
 import { sizeSets as seedSets, oneFigureSizes, uoms as seedUoms, valueSets as seedValueSets, tradeProducts, tradeItems, PRODUCT_DEFAULTS } from '../data/seed-masters.js';
 import { valueSets as amcValueSets } from '../data/seed-amc.js';
+import { keyedMatrix, needsKeying } from './amc-estimates.js';
 
 const strip = ({ id, tenantId, createdAt, updatedAt, status, ...r }) => r;
 const quiet = { status: 'Active', silent: true };
@@ -25,7 +30,23 @@ const MOVED = { SPD: ['LPS', 'SPS'], PUB: ['SUB', 'PUB'], BIM: ['SUB', 'BIM'] };
 
 export function upgradeProducts() {
   const co = auth.company();
-  if (!co || co.productsData >= 2) return;
+  if (!co || co.productsData >= 4) return;
+  if (!(co.productsData >= 2)) addProductMasters(co);
+  if (!(co.productsData >= 3)) rename(co);
+  store.list('estimates', e => e.kind === 'AMC' && needsKeying(e)).forEach(e => { const k = keyedMatrix(e); store.update('estimates', e.id, { matrix: k.matrix, sites: k.sites }, false); });
+  store.update('companies', co.id, { productsData: 4 }, false);
+}
+
+const OLD_NAME = 'Demo Shutters Pte Ltd', NEW_NAME = 'Demo Engineering Pte Ltd';
+function rename(co) {
+  const mail = v => (typeof v === 'string' ? v.replaceAll('demo-shutters.example', 'demo-engineering.example') : v);
+  if (co.name === OLD_NAME) store.update('companies', co.id, { name: NEW_NAME, email: mail(co.email), dpo: mail(co.dpo) }, `Company renamed ${NEW_NAME}`);
+  store.list('employees', e => /demo-shutters\.example/.test(e.email || '')).forEach(e => store.update('employees', e.id, { email: mail(e.email) }, false));
+  const cl = store.findOne('valueSets', v => v.code === 'CHECK_LIST');
+  if (cl?.values.some(v => v.code === 'GENERAL' && v.label === 'General')) store.update('valueSets', cl.id, { values: cl.values.map(v => (v.code === 'GENERAL' && v.label === 'General' ? { ...v, label: 'Shutters & doors' } : v)) }, false);
+}
+
+function addProductMasters(co) {
   const t = co.id;
   const singapore = co.country === 'Singapore';
 
@@ -101,6 +122,4 @@ export function upgradeProducts() {
   });
 
   store.list('terms', x => /maintenance of the shutters listed/.test(x.text || '')).forEach(x => store.update('terms', x.id, { text: x.text.replace('maintenance of the shutters listed', 'maintenance of the products listed') }, false));
-
-  store.update('companies', co.id, { productsData: 2 }, false);
 }

@@ -6,7 +6,7 @@ import * as auth from '../core/auth.js';
 import { html, toast, tiles, openModal, readForm, field } from '../core/ui.js';
 import { zoneCode, technicians, empName, vsLabel } from '../core/lookups.js';
 import { missingGroups } from '../core/products.js';
-import { suggestSlot, earliestDate, bookings, jobDuration, setPartReady, scheduleJob, scheduleProblems, freeStart, helpers, defaultHelper, nextWorkday, isWorkday, dayStart, fmtHour, seesJob, INSPECTION_HOURS } from '../core/jobs.js';
+import { suggestSlot, earliestDate, bookings, jobDuration, jobDays, setPartReady, scheduleJob, scheduleProblems, freeJobStart, helpers, defaultHelper, nextWorkday, isWorkday, dayStart, fmtHour, seesJob, INSPECTION_HOURS } from '../core/jobs.js';
 import { pageHead } from './shell.js';
 import { render } from '../app.js';
 
@@ -31,7 +31,7 @@ function jobCard(j, sug) {
     ${j.parts.length ? html`<ul class="parts">${j.parts.map(p => html`<li><label class="check"><input type="checkbox" data-part="${j.id}|${p.key}" ${p.ready ? 'checked' : ''} ${auth.can('job', 'edit') ? '' : 'disabled'}> ${p.qty} × ${p.name}</label>
       <span class="muted small">${p.ready ? 'in stock' : `order · ${p.leadDays} days`}</span></li>`)}</ul>
       <div class="small muted">Parts ready from <b>${ready}</b></div>` : ''}
-    ${sug && !blocked ? html`<div class="note" style="margin-top:8px;padding:6px 9px"><b>Suggested:</b> ${empName(sug.technicianId)} · ${sug.date} ${fmtHour(sug.start)}–${fmtHour(sug.end)}</div>` : ''}
+    ${sug && !blocked ? html`<div class="note" style="margin-top:8px;padding:6px 9px"><b>Suggested:</b> ${empName(sug.technicianId)} · ${sug.date} ${fmtHour(sug.start)}–${fmtHour(sug.end)}${sug.days > 1 ? ` (${sug.days} days)` : ''}</div>` : ''}
     ${auth.can('job', 'edit') && !blocked ? html`<div class="row" style="margin-top:8px"><a class="btn small" href="#/jobs/${j.id}">Details</a><span class="grow"></span><button class="btn primary small" data-sched="${j.id}">Schedule</button></div>` : ''}
   </div>`;
 }
@@ -45,7 +45,7 @@ function calendar(days, sel, sug) {
       ${days.map(d => {
         const ds = dstr(d);
         const items = bookings(t.id, ds);
-        const free = sel && freeStart(t.id, ds, jobDuration(sel), sel.id) != null && ds >= earliestDate(sel) && ds >= today;
+        const free = sel && freeJobStart(t.id, ds, sel) != null && ds >= earliestDate(sel) && ds >= today;
         const isSug = sug && sug.technicianId === t.id && sug.date === ds;
         return html`<div class="day ${free ? 'free' : ''}" ${free ? html`data-slot="${t.id}|${ds}" title="Place ${sel.no} here"` : ''}>
           ${items.map(b => html`<a class="blk ${zc(b.zoneId)} ${b.kind === 'amc' ? 'amc' : ''}" href="#/${{ job: 'jobs', amc: 'amc-visits', inspection: 'inspections' }[b.kind]}/${b.id}" style="top:${(b.from - dayStart()) * PX}px;height:${Math.max(28, (b.to - b.from) * PX - 2)}px">
@@ -99,7 +99,7 @@ export function renderJobBoard(el) {
     const sched = t.closest('[data-sched]');
     if (sched) { const j = store.get('jobs', sched.dataset.sched); const s = suggestSlot(j); return scheduleDialog(el, j, s ? { technicianId: s.technicianId, date: s.date, start: s.start } : {}); }
     const slot = t.closest('[data-slot]');
-    if (slot && sel) { const [techId, ds] = slot.dataset.slot.split('|'); return scheduleDialog(el, sel, { technicianId: techId, date: ds, start: freeStart(techId, ds, jobDuration(sel), sel.id) }); }
+    if (slot && sel) { const [techId, ds] = slot.dataset.slot.split('|'); return scheduleDialog(el, sel, { technicianId: techId, date: ds, start: freeJobStart(techId, ds, sel) }); }
     const pick = t.closest('[data-pick]');
     if (pick && pick.dataset.pick !== state.sel) { state.sel = pick.dataset.pick; renderJobBoard(el); }
   };
@@ -127,7 +127,7 @@ export function scheduleDialog(el, job, slot) {
       ${field({ name: 'helperId', label: 'Helper', type: 'select', options: helpers().map(h => ({ value: h.id, label: h.name })), value: defaultHelper(tech)?.id, blankLabel: 'No helper' })}
       ${field({ name: 'date', label: 'Date', type: 'date', value: slot.date || earliestDate(job) })}
       ${field({ name: 'time', label: 'Start', type: 'time', value: fmtHour(slot.start ?? 9) })}
-      ${field({ name: 'hours', label: 'Hours', type: 'number', step: '0.5', value: hours, hint: `${job.workHours} h work + ${job.travelHours} h travel (from the estimate)` })}
+      ${field({ name: 'hours', label: jobDays(job) > 1 ? 'Hours per day' : 'Hours', type: 'number', step: '0.5', value: hours, hint: `${job.workHours} h work + ${job.travelHours} h travel (from the estimate)${jobDays(job) > 1 ? ` · ${jobDays(job)} working days` : ''}` })}
       <div class="field"><div class="field-label">Crew</div><div class="ro">${job.crew.label}</div></div>
       <div class="field"><div class="field-label">Parts</div><div class="ro">${job.parts.length ? job.parts.map(p => `${p.name}: ${p.ready ? 'in stock' : `order (${p.leadDays} days)`}`).join(' · ') : 'none'}<br><span class="muted small">Ready from ${earliestDate(job)}</span></div></div>
       ${job.paymentTerm === 'IMMEDIATE' ? html`<div class="note" style="margin-top:6px">Payment is immediate: the invoice is raised now, so the technician can collect ${auth.company().currency} ${Number(job.total).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} on site.</div>` : ''}

@@ -5,7 +5,7 @@
 import * as store from './store.js';
 import * as auth from './auth.js';
 import { technicians, valueSet } from './lookups.js';
-import { freeStart, nextWorkday, isWorkday, defaultHelper, bookings, fmtHour, toIso, dayStart, dayEnd, onMyWay, checkIn } from './jobs.js';
+import { freeStart, nextWorkday, isWorkday, defaultHelper, bookings, fmtHour, toIso, dayStart, dayEnd, onMyWay, checkIn, workingDays } from './jobs.js';
 import { createInvoice, invoiceForJob } from './billing.js';
 import { saveNewEnquiry } from './enquiries.js';
 import { todayStr, maybeCloseContract, BOOKABLE } from './contracts.js';
@@ -25,13 +25,7 @@ export const isOverdue = v => OPEN_VISIT.includes(v.status) && visitDate(v) < to
 export const seesVisit = v => auth.scope('amcExecution') !== 'own' || v.technicianId === auth.user()?.employeeId;
 // Hours a visit blocks on each of its days: its team-hours spread over its days plus the round trip (at most a working day).
 export const perDayHours = v => Math.min(ceilHalf((Number(v.workHours) || 0) / (v.days || 1) + (Number(v.travelHours) || 0)), dayEnd() - dayStart() - 0.5);
-export function workingDays(ds, n) {
-  const out = [];
-  let d = new Date(`${ds}T00:00`);
-  if (!isWorkday(d)) d = nextWorkday(d);
-  while (out.length < n) { out.push(dstr(d)); d = nextWorkday(d); }
-  return out;
-}
+export { workingDays };
 
 // Suggest a technician (the site's zone first, then free time) and a start that is free on every day of the visit.
 // A date the customer already agreed is kept; otherwise the planned date (or today, when it has passed) onwards.
@@ -138,8 +132,9 @@ export function arrive(coll, id) {
 // Each item belongs to one check list (General, Pump, DB panel …); each product names the check list it uses.
 export const checkItems = () => (valueSet('AMC_CHECKLIST')?.values || []).filter(v => v.active).sort((a, b) => a.order - b.order)
   .map(v => ({ code: v.code, label: v.label, hint: v.hint || '', applies: v.applies || 'ALL', list: v.list || 'GENERAL' }));
-// A product covered before check lists per product keeps the General list; its product's list today otherwise.
-const listOf = sh => sh.checklist || store.get('products', sh.productId)?.checklist || 'GENERAL';
+// The check list copied when the product was covered, else its product's list today; a product with none has no items
+// (items saved before check lists per product are the shutters & doors list, code GENERAL).
+const listOf = sh => sh.checklist || store.get('products', sh.productId)?.checklist || '';
 export const inList = (it, sh) => it.list === listOf(sh);
 export const appliesTo = (it, sh) => inList(it, sh) && (it.applies === 'ALL' || (it.applies === 'MOTOR' && sh.motorised) || (it.applies === 'FIRE' && sh.fireRated));
 

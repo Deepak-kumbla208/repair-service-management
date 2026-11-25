@@ -147,13 +147,16 @@ export function linePrices(est, subtotal) {
   return allocateCents(out, subtotal ?? round2(sum(out, l => l.price)));
 }
 
-// Round each line price to cents; any difference to the rounded total goes on the biggest line.
+// Round each line price to cents; any difference to the rounded total goes on the biggest line. A line that is only a
+// fixed price (a submission) keeps its price exactly, so the cent goes on the biggest line priced from cost.
 export function allocateCents(lines, total) {
   if (!lines.length) return [];
   const out = lines.map(l => ({ ...l, rounded: round2(l.price) }));
   const diff = round2(total - sum(out, l => l.rounded));
   if (diff) {
-    const big = out.reduce((b, l) => (l.price > b.price ? l : b), out[0]);
+    const costed = out.filter(l => !(l.fixedPrice && !l.direct && !l.shared));
+    const pool = costed.length ? costed : out;
+    const big = pool.reduce((b, l) => (l.price > b.price ? l : b), pool[0]);
     big.rounded = round2(big.rounded + diff);
   }
   return out;

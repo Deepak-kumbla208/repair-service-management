@@ -51,7 +51,7 @@ export function snapshot(siteId, ids) {
     const prd = store.get('products', s.productId);
     const twoFigure = isTwoFigure(setOfProduct(prd));
     return { shutterId: s.id, tag: s.tag, location: s.location, productId: s.productId, typeName: productName(s.productId), sizeCode: s.sizeCode, sizeText: sizeText(s, { none: '' }), heightM: s.heightM,
-      motorised: twoFigure && (prd?.code === 'MR' || !!s.motor), fireRated: !!s.fireRated, checklist: prd?.checklist || 'GENERAL' };
+      motorised: twoFigure && (prd?.code === 'MR' || !!s.motor), fireRated: !!s.fireRated, checklist: prd?.checklist || '' };
   });
 }
 

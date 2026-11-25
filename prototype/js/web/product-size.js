@@ -50,17 +50,17 @@ export function renderProductSize(el, id) {
         ${editable ? html`<button class="btn primary" id="save">Save</button>` : ''}</div>
       ${editable ? '' : html`<div class="note" style="margin:10px 12px 0">Read-only: your role can view this master but not change it.</div>`}
       <form class="form-lines" id="f" onsubmit="return false" style="padding:10px 12px"><div class="grid g4">
-        ${field({ name: 'code', label: 'Code', value: draft.code, required: true, readonly: !editable })}
+        ${field({ name: 'code', label: 'Code', value: draft.code, required: true, readonly: !editable || !!setRec, hint: setRec ? 'Fixed once saved' : '' })}
         ${field({ name: 'name', label: 'Size set', value: draft.name, required: true, readonly: !editable })}
         ${field({ name: 'measure', label: 'Measured by', type: 'select', options: MEASURES, value: draft.measure, blank: false, readonly: !editable || !!setRec })}
         ${two ? field({ name: 'unit', label: 'Unit', value: 'm', readonly: true }) : field({ name: 'unit', label: 'Unit', type: 'select', options: uoms().map(u => u.code), value: draft.unit, required: true, readonly: !editable })}
       </div></form>
       <div class="tbl-wrap" style="margin:0 12px 12px;max-height:none"><table class="tbl edit"><thead><tr>${c.map(x => html`<th>${x[1]}${x[0] === 'maxValue' && draft.unit ? ` (${draft.unit})` : ''}</th>`)}<th>Active</th></tr></thead><tbody>
-        ${rows.map((r, i) => html`<tr data-r="${i}">${c.map(([k, , type, w]) => html`<td><input type="${type}" data-c="${k}" value="${r[k] ?? ''}" style="width:${w}px" ${type === 'number' ? 'step="any" min="0"' : ''} ${editable ? '' : 'readonly'}></td>`)}
+        ${rows.map((r, i) => html`<tr data-r="${i}">${c.map(([k, , type, w]) => html`<td><input type="${type}" data-c="${k}" value="${r[k] ?? ''}" style="width:${w}px" ${type === 'number' ? 'step="any" min="0"' : ''} ${editable && !(k === 'code' && !r.isNew) ? '' : 'readonly'} ${k === 'code' && !r.isNew ? 'title="A saved size keeps its code: products and counts use it"' : ''}></td>`)}
           <td><input type="checkbox" data-c="active" ${r.status !== 'Inactive' ? 'checked' : ''} ${editable ? '' : 'disabled'}></td></tr>`)}
       </tbody></table>
       ${editable ? html`<button type="button" class="btn small" id="addRow" style="margin-top:6px">+ Add size</button>` : ''}
-      <p class="small muted" style="margin:6px 0 0">${two ? 'A product gets the smallest size whose width and height both fit; a blank limit means no limit (the largest size).' : 'A product gets the smallest size whose limit holds its measure; a blank limit means no limit (the largest size).'}</p></div>`);
+      <p class="small muted" style="margin:6px 0 0">A size switched off is no longer offered; products that already have it keep its hours. ${two ? 'A product gets the smallest size whose width and height both fit; a blank limit means no limit (the largest size).' : 'A product gets the smallest size whose limit holds its measure; a blank limit means no limit (the largest size).'}</p></div>`);
   }
   // Inputs back into the draft rows and set fields.
   const sync = () => {

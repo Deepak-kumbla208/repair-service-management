@@ -1,4 +1,4 @@
-// Masters for the two demo companies. Demo Shutters uses the team lead's sample rates and data
+// Masters for the two demo companies. Demo Engineering uses the team lead's sample rates and data
 // (company name, address and UEN are dummies); Gulf Demo Doors is made up.
 import { classifySize, toMetres } from '../core/costing.js';
 
@@ -8,7 +8,7 @@ const base = (tenantId, id, data) => ({ id, tenantId, status: 'Active', createdA
 // The client's business activities as product groups (plus doors and shutters), and the AMC check lists products use.
 export const PRODUCT_GROUPS = [['SHD', 'Shutters & doors'], ['PLB', 'Plumbing & sanitary'], ['MEW', 'M&E works'], ['ELP', 'LV/MV panels & switchgear'],
   ['LPS', 'Lightning protection'], ['SPS', 'Surge protection'], ['PUB', 'PUB submissions'], ['BIM', 'BIM services']];
-export const CHECK_LISTS = [['GENERAL', 'General'], ['PUMP', 'Pump'], ['DB', 'DB panel'], ['SPD', 'SPD'], ['EARTH', 'Earth pit'], ['TANK', 'Water tank'], ['VALVE', 'Valve'],
+export const CHECK_LISTS = [['GENERAL', 'Shutters & doors'], ['PUMP', 'Pump'], ['DB', 'DB panel'], ['SPD', 'SPD'], ['EARTH', 'Earth pit'], ['TANK', 'Water tank'], ['VALVE', 'Valve'],
   ['GREASE', 'Grease trap'], ['HEATER', 'Water heater'], ['AIRCON', 'Aircon'], ['FAN', 'Fan'], ['GEN', 'Generator'], ['MVSG', 'MV switchgear'], ['LPS', 'Lightning protection system']];
 
 // ---------- Value Set Master: the register's 7 lists plus the lists added in the plan review ----------
@@ -224,7 +224,8 @@ function warehouseShutters() {
 }
 
 // A made-up condominium with products of the new trades (user, 25 Nov 2026): a car park shutter (Width × height), a
-// booster pump (Motor power), a distribution board (Rated current), a surge protection device and three earth pits (no size).
+// booster pump (Motor power), a distribution board (Rated current), a surge protection device, three earth pits (no
+// size) and two aircon units (Cooling capacity).
 function mixedCustomer(t, sizeRows) {
   const c = customer(t, 'CUS-0010', { name: 'Demo Towers MCST', uen: '', taxRegistered: false, paymentTerm: 'D30', phone: '9890 1234', email: 'agent@demo-towers.example', address: '8 Demo Rise',
     contacts: [{ id: `con_${t}_10`, name: 'Managing Agent', designation: 'Condominium management', mobile: '9890 1234', email: 'agent@demo-towers.example', primary: true }] },
@@ -233,11 +234,12 @@ function mixedCustomer(t, sizeRows) {
   const p = (n, tag, location, code, sizeCode, measure, motor = '') => ({ id: `sht_${site.id}_${n}`, tag, location, productId: `prd_${t}_${code}`, width: null, height: null, unit: 'm', widthM: null, heightM: null,
     measure, sizeCode, motor, serial: '', installDate: '', status: 'Active', source: 'Sample data' });
   site.shutters.push(p(2, 'BP-1', 'Pump room, basement 1', 'BP', 'M', 5.5, 'AquaDemo CR5'), p(3, 'DB-1', 'Riser, level 1', 'DB', 'S', 100), p(4, 'SPD-1', 'Main switch room', 'SPD', '', null),
-    p(5, 'EP-1', 'Ground, east', 'EP', '', null), p(6, 'EP-2', 'Ground, west', 'EP', '', null), p(7, 'EP-3', 'Ground, south', 'EP', '', null));
+    p(5, 'EP-1', 'Ground, east', 'EP', '', null), p(6, 'EP-2', 'Ground, west', 'EP', '', null), p(7, 'EP-3', 'Ground, south', 'EP', '', null),
+    p(8, 'AC-1', 'Guard house', 'AC', 'S', 3.5), p(9, 'AC-2', 'Management office', 'AC', 'M', 7));
   return c;
 }
 
-// ---------- Demo Shutters Pte Ltd (Singapore) ----------
+// ---------- Demo Engineering Pte Ltd (Singapore) ----------
 export function singaporeMasters(t) {
   const sizeRows = sizes(t); // the Width × height set, used to size the sample register
   const zone = (code, name, distance, repairRate, amcRate, roundTripHours, ph = []) =>
@@ -250,8 +252,8 @@ export function singaporeMasters(t) {
       zone('D', 'Jurong Island', '', 30, 25, 4, ['roundTripHours']),
     ],
     employees: [
-      base(t, `emp_${t}_1`, { code: 'EMP-001', name: 'Operations Executive', designation: 'Operations Executive', type: 'Office', mainZoneId: '', extraZoneIds: [], skills: '', mobile: '8000 0001', email: 'ops@demo-shutters.example' }),
-      base(t, `emp_${t}_2`, { code: 'EMP-002', name: 'Approver', designation: 'Approver', type: 'Office', mainZoneId: '', extraZoneIds: [], skills: '', mobile: '8000 0002', email: 'approver@demo-shutters.example' }),
+      base(t, `emp_${t}_1`, { code: 'EMP-001', name: 'Operations Executive', designation: 'Operations Executive', type: 'Office', mainZoneId: '', extraZoneIds: [], skills: '', mobile: '8000 0001', email: 'ops@demo-engineering.example' }),
+      base(t, `emp_${t}_2`, { code: 'EMP-002', name: 'Approver', designation: 'Approver', type: 'Office', mainZoneId: '', extraZoneIds: [], skills: '', mobile: '8000 0002', email: 'approver@demo-engineering.example' }),
       base(t, `emp_${t}_3`, { code: 'EMP-003', name: 'Technician A', designation: 'Technician', type: 'Technician', mainZoneId: `zon_${t}_A`, extraZoneIds: [`zon_${t}_B`], skills: 'Rolling, motor work', groups: ['SHD', 'PLB', 'MEW'], mobile: '8000 0003', email: '' }),
       base(t, `emp_${t}_4`, { code: 'EMP-004', name: 'Technician B', designation: 'Technician', type: 'Technician', mainZoneId: `zon_${t}_C`, extraZoneIds: [`zon_${t}_D`], skills: 'Rolling, collapsible, sectional; LEW', groups: ['SHD', 'ELP', 'LPS', 'SPS'], mobile: '8000 0004', email: '' }),
       base(t, `emp_${t}_5`, { code: 'EMP-005', name: 'Management', designation: 'General Manager', type: 'Office', mainZoneId: '', extraZoneIds: [], skills: '', mobile: '8000 0005', email: '' }),

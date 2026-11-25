@@ -7,7 +7,7 @@ import * as auth from '../core/auth.js';
 import { html, $, readForm, field, fmtDate } from '../core/ui.js';
 import { technicians, empName, vsLabel } from '../core/lookups.js';
 import { missingGroups } from '../core/products.js';
-import { jobDraft, termBlocks, suggestSlot, firstFree, freeStart, scheduleProblems, jobDuration, earliestDate, helpers, defaultHelper, fmtHour, dayStart, dayEnd } from '../core/jobs.js';
+import { jobDraft, termBlocks, suggestSlot, firstFree, freeJobStart, scheduleProblems, jobDuration, jobDays, earliestDate, helpers, defaultHelper, fmtHour, dayStart, dayEnd } from '../core/jobs.js';
 import { splitOf } from '../core/later-work.js';
 
 // Repair and General Servicing make a job; an AMC makes a contract whose visits are scheduled from it.
@@ -56,7 +56,7 @@ export function bindTech(b, q, ctx) {
       ${field({ name: 'techId', label: 'Technician', type: 'select', options: opts, value: tech, blank: false })}
       ${field({ name: 'helperId', label: 'Helper', type: 'select', options: helpers().map(h => ({ value: h.id, label: h.name })), value: defaultHelper(tech)?.id, blankLabel: 'No helper' })}
       <div class="field"><label>Date / start</label><div class="row"><input type="date" name="jobDate" value="${sug?.date || earliestDate(d)}"><input type="time" name="jobTime" value="${fmtHour(sug?.start ?? dayStart() + 0.5)}" style="width:110px"></div></div>
-      ${field({ name: 'jobHours', label: 'Hours', type: 'number', step: '0.5', value: hours, hint: `${d.workHours} h work + ${d.travelHours} h travel · ${d.crew.label}` })}
+      ${field({ name: 'jobHours', label: jobDays(d) > 1 ? 'Hours per day' : 'Hours', type: 'number', step: '0.5', value: hours, hint: `${d.workHours} h work + ${d.travelHours} h travel · ${d.crew.label}${jobDays(d) > 1 ? ` · ${jobDays(d)} working days` : ''}` })}
       <div id="slotNote" style="margin-top:6px"></div>`);
   }
 
@@ -80,7 +80,7 @@ export function bindTech(b, q, ctx) {
     const end = slot.start + slot.hours;
     const ot = end > dayEnd() + 0.01 ? ` It ends at ${fmtHour(end)}, after the working day (${fmtHour(dayEnd())}): overtime.` : '';
     $('#slotNote', box).innerHTML = String(p.length ? html`<div class="note bad small">${p[0]}${p[0].startsWith('Pick') || p[0].includes('already has') ? ' Or untick "Assign technician now".' : ''}</div>`
-      : html`<div class="note ${ot ? 'warn' : ''} small">✓ Free: ${dayText(slot.date)}, ${fmtHour(slot.start)}–${fmtHour(end)} with ${empName(slot.technicianId)}.${ot}${later}${inv}</div>`);
+      : html`<div class="note ${ot ? 'warn' : ''} small">✓ Free: ${dayText(slot.date)}, ${fmtHour(slot.start)}–${fmtHour(end)}${jobDays(d) > 1 ? ` and the next ${jobDays(d) - 1} working day${jobDays(d) > 2 ? 's' : ''}` : ''} with ${empName(slot.technicianId)}.${ot}${later}${inv}</div>`);
   }
 
   function paint() {
@@ -106,7 +106,7 @@ export function bindTech(b, q, ctx) {
     if (name === 'techId') fill(readForm(box).techId); // that technician's first free time and helper
     else if (name === 'jobDate') {
       const s = read();
-      const free = s.technicianId && s.date ? freeStart(s.technicianId, s.date, s.hours, '') : null;
+      const free = s.technicianId && s.date ? freeJobStart(s.technicianId, s.date, st.draft, s.hours) : null;
       if (free != null) $('[name="jobTime"]', box).value = fmtHour(free);
     }
     check();

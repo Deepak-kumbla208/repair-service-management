@@ -5,7 +5,7 @@ import * as store from './store.js';
 import * as auth from './auth.js';
 import { findSite, zones, productName, withCompany } from './lookups.js';
 import { summarize, summarizeAmc, hourlyRate, otRate, round2 } from './costing.js';
-import { productOf, repairLabour, isFixed, costingOf, COSTING } from './products.js';
+import { productOf, repairLabour, isFixed, isPhysical, unitOfProduct, setOfProduct, sizeOf } from './products.js';
 import { cancelTasksFor } from './workflow.js';
 import { amcPrefill, amcProblems, describe } from './amc-estimates.js';
 import { cleanLines, lineText as enquiryLineText } from './enquiries.js';
@@ -36,38 +36,85 @@ function repairRates() {
 const findItem = (id, name) => store.get('items', id) || store.findOne('items', i => i.name.toLowerCase() === String(name || '').trim().toLowerCase());
 const equipmentByCode = code => store.findOne('equipment', e => e.code === code && e.status !== 'Inactive');
 
+// The count at the start of a line's text, as the quotation reads it: "3 × " for Nos, else "15 m ".
+const countOf = (q, u) => (u && u !== 'Nos' ? `${q} ${u} ` : `${q} × `);
+// A line's qty changed (the product or fixed-price product it is about): the count at the start of its text follows
+// ("15 m Lightning conductor tape" → "20 m …"). Text rewritten by hand (no count at the start) is left alone.
+export function setLineQty(l, qty, unit = l.unit) {
+  const was = countOf(l.qty || 1, l.unit);
+  Object.assign(l, { qty: Number(qty) || 1, unit: unit || 'Nos' });
+  if (String(l.description || '').startsWith(was)) l.description = countOf(l.qty, l.unit) + l.description.slice(was.length);
+}
 // Line text: the site report's action needed, else the fault: "RS-1 Front shop: replace the motor (parts: 1 × Motor 400 kg
 // single phase)"; a work-only product starts with its quantity: "15 m Lightning conductor tape, Roof: replace the tape".
 function lineText(s, mats) {
   const parts = mats.map(m => `${m.qty} × ${m.name}`).join(', ');
-  const who = s.notKept ? `${s.qty} ${s.uom || ''} ${s.typeName}${s.location ? `, ${s.location}` : ''}`.replace(/\s+/g, ' ') : `${s.tag} ${s.location}`;
+  const who = s.notKept ? `${countOf(s.qty, s.uom)}${s.typeName}${s.location ? `, ${s.location}` : ''}`.replace(/\s+/g, ' ') : `${s.tag} ${s.location}`;
   return `${who}: ${s.action || s.fault || 'repair'}${parts ? ` (parts: ${parts})` : ''}`;
 }
 // A fixed-price product (a submission, a design) is a line at its price: no labour, and no overhead, markup or shared cost.
 const fixedRow = (l, lineKey) => { const p = productOf(l.itemRef.slice(4)); return { key: rid(), lineKey, productId: p?.id || '', name: l.itemName, qty: Number(l.qty) || 1, unit: l.unit || p?.unit || 'Nos', price: Number(p?.price) || 0 }; };
 const isFixedLine = l => l.itemRef?.startsWith('prd:') && isFixed(productOf(l.itemRef.slice(4)));
+const escTag = t => String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// With no site report (repair without inspection), the enquiry's lines about products are the products to repair:
+// the customer's products a line names by tag ("RS-1 motor not working": their size is known), else the product
+// picked on the line with its qty (a product with a size set has its size picked in the estimate). A part, a
+// fixed-price product or a line with no product stays a line of its own. lineOf: the enquiry line it came from.
+const tagRe = (tag, tail = '') => new RegExp(`(?<![A-Za-z0-9-])${escTag(tag)}(?![A-Za-z0-9])${tail}`, 'i');
+// The part of a line about one tag: "RS-1 motor not working; RS-2 jammed" → "motor not working" for RS-1.
+function partFor(text, tag) {
+  const seg = String(text || '').split(/[;\n]/).map(x => x.trim()).find(x => tagRe(tag).test(x)) || String(text || '');
+  return seg.replace(tagRe(tag, '\\s*[:,–-]?\\s*'), '').trim() || seg;
+}
+// A product picked on the line links only its own customer products named by tag ("Booster pump: beside RS-1, noisy" is
+// the pump, not the shutter RS-1); the rest of its qty stays one entry, sized in the estimate ("3 × Rolling shutter:
+// RS-1 jammed" = RS-1 plus 2 more). A line with no product links any tag it names.
+function productsFromLines(enqLines, site) {
+  const reg = (site?.shutters || []).filter(s => s.status !== 'Inactive');
+  const taken = new Set();
+  return enqLines.flatMap(l => {
+    if (l.itemRef?.startsWith('itm:') || isFixedLine(l)) return [];
+    const pid = l.itemRef?.startsWith('prd:') ? l.itemRef.slice(4) : '';
+    const p = productOf(pid);
+    if (pid && !isPhysical(p)) return [];
+    const text = `${l.itemName || ''} ${l.description || ''}`;
+    const named = reg.filter(s => !taken.has(s.id) && (!pid || s.productId === pid) && tagRe(s.tag).test(text));
+    named.forEach(s => taken.add(s.id));
+    const out = named.map(s => ({ key: s.id, lineOf: l.key, shutterId: s.id, tag: s.tag, location: s.location, productId: s.productId, width: s.width, height: s.height, unit: s.unit,
+      measure: s.measure ?? null, sizeCode: s.sizeCode || '', qty: 1, uom: 'Nos', finding: partFor(l.description, s.tag) }));
+    const rest = pid ? (Number(l.qty) || 1) - named.length : 0;
+    if (rest > 0) {
+      out.push({ key: l.key, lineOf: l.key, fromLine: true, tag: '', location: '', productId: pid, width: null, height: null, unit: 'm', measure: null, sizeCode: '',
+        qty: round2(rest), uom: l.unit || unitOfProduct(p), finding: named.length ? '' : l.description || '' });
+    }
+    return out;
+  });
+}
 
 // Everything an estimate needs, pre-filled. rep may be null (repair without inspection).
 export function prefill(enq, rep) {
   const { site } = findSite(enq.siteId);
   const d = txDefaults();
   const rates = repairRates();
-  const zone = store.get('zones', rep?.s3?.zoneId || enq.zoneId);
+  // The report's zone, else the enquiry's, else the site's (a zone set on the customer's site after the enquiry was saved).
+  const zone = store.get('zones', rep?.s3?.zoneId || enq.zoneId || site?.zoneId);
   const ot = !!(rep?.s3?.afterHours || rep?.s3?.weekend);
   const days = Number(rep?.s3?.days) || 1;
 
   // A repair enquiry made from failed checklist items (AMC visit or GS job) brings its shutters and parts.
   const fromFails = !rep && (enq.failures || []).length ? failedShutters(enq, site) : null;
-  // Each product's repair hours: its size's hours (Product Size), or its standard hours × qty (a work-only product such
-  // as 15 m of tape keeps its qty and unit).
-  const shutters = (fromFails?.shutters || rep?.shutters || []).map(s => {
-    const qty = s.notKept ? Number(s.qty) || 1 : 1;
-    return { key: s.key, tag: s.tag, location: s.location, productId: s.productId, typeName: productName(s.productId), width: s.width, height: s.height, unit: s.unit, measure: s.measure ?? null,
-      qty, uom: s.notKept ? s.uom : 'Nos', notKept: !!s.notKept, fault: s.finding || '', action: s.action || '', sizeCode: s.sizeCode, ...repairLabour(productOf(s.productId), s.sizeCode, qty) };
-  });
-
-  // With no report, each enquiry product line becomes a line; a line naming a part or material brings its row.
+  // With no report, each enquiry line becomes a line; a line naming a part or material brings its row, and a line about
+  // a product brings that product (productsFromLines).
   const enqLines = rep || fromFails ? [] : cleanLines(enq.lines).map(l => ({ ...l, key: rid() }));
+  // Each product's repair hours: its size's hours (Product Size), or its standard hours × qty (a work-only product such
+  // as 15 m of tape keeps its qty and unit; so does a product picked on an enquiry line).
+  const source = fromFails?.shutters || rep?.shutters || productsFromLines(enqLines, site);
+  const shutters = source.map(s => {
+    const qty = s.notKept || s.fromLine ? Number(s.qty) || 1 : 1;
+    return { key: s.key, tag: s.tag, location: s.location, productId: s.productId, typeName: productName(s.productId), width: s.width, height: s.height, unit: s.unit, measure: s.measure ?? null,
+      qty, uom: s.notKept || s.fromLine ? s.uom : 'Nos', notKept: !!s.notKept, fromLine: !!s.fromLine, lineOf: s.lineOf || '', shutterId: s.shutterId || null,
+      fault: s.finding || '', action: s.action || '', sizeCode: s.sizeCode || '', ...repairLabour(productOf(s.productId), s.sizeCode, qty) };
+  });
   // Fixed-price products come from the enquiry lines, with or without a report.
   const fixedLines = rep ? cleanLines(enq.lines).filter(isFixedLine).map(l => ({ ...l, key: rid() })) : [];
   const fixed = [...fixedLines, ...enqLines.filter(isFixedLine)].map(l => fixedRow(l, l.key));
@@ -88,13 +135,20 @@ export function prefill(enq, rep) {
     m.lineKey = m.key;
     return { key: m.key, tag: '', qty: m.qty, unit: m.unit || 'Nos', partKey: m.key, description: enquiryLineText({ itemName: m.name, qty: m.qty, unit: m.unit, description: m.remarks }) };
   }) : [];
-  const lines = shutters.length || partLines.length || fixedLines.length
+  // With no report: one line per enquiry line, except a line naming customer products by tag, which gets one per product.
+  const lines = rep || fromFails
     ? [...shutters.map(s => ({ key: s.key, tag: s.tag, qty: s.qty, unit: s.uom, description: lineText(s, materials.filter(m => m.lineKey === s.key)) })), ...partLines,
       ...fixedLines.map(l => ({ key: l.key, tag: '', qty: l.qty || 1, unit: l.unit || 'Nos', description: enquiryLineText(l) }))]
-    : enqLines.map(l => ({ key: l.key, tag: '', qty: l.qty || 1, unit: l.unit || 'Nos', partKey: materials.find(m => m.lineKey === l.key)?.key || '', description: enquiryLineText(l) }));
+    : enqLines.flatMap(l => {
+      const tagged = shutters.filter(s => s.lineOf === l.key && s.tag);
+      if (!tagged.length) return [{ key: l.key, tag: '', qty: l.qty || 1, unit: l.unit || 'Nos', partKey: materials.find(m => m.lineKey === l.key)?.key || '', description: enquiryLineText(l) }];
+      const rest = shutters.find(s => s.lineOf === l.key && s.fromLine);
+      return [...tagged.map(s => ({ key: s.key, tag: s.tag, qty: 1, unit: 'Nos', description: `${s.tag} ${s.location}: ${s.fault || 'repair'}` })),
+        ...(rest ? [{ key: rest.key, tag: '', qty: rest.qty, unit: rest.uom, description: enquiryLineText({ ...l, qty: rest.qty, unit: rest.uom, description: `other than ${tagged.map(s => s.tag).join(', ')}` }) }] : [])];
+    });
 
   // Labour: one row per product for the team, plus one for extra workers (big sizes). Overtime or weekend → OT column.
-  // With no report, a product line with standard hours brings its hours × qty too (a size is known only from a report).
+  // A product whose size is not known yet (no site report) gets its labour when its size is picked in the estimate.
   const labour = [];
   const hrs = h => (ot ? { hrs: 0, otHrs: h } : { hrs: h, otHrs: 0 });
   const addLabour = (key, tag, x) => {
@@ -102,18 +156,17 @@ export function prefill(enq, rep) {
     if (x.extraWorkers && x.extraHrs) labour.push({ key: rid(), ...rates.extra, team: x.extraWorkers, ...hrs(x.extraHrs), lineKey: key, forTag: tag });
   };
   shutters.forEach(s => addLabour(s.key, s.tag, s));
-  enqLines.filter(l => l.itemRef?.startsWith('prd:') && costingOf(productOf(l.itemRef.slice(4))) === COSTING.HOURS)
-    .forEach(l => addLabour(l.key, '', repairLabour(productOf(l.itemRef.slice(4)), '', l.qty || 1)));
 
   // Transport: the site's zone; No. of Hrs = trips (site report days) × the zone's round trip; Repair rate. Only
   // fixed-price products (a submission, a design) need no visit, so no transport.
-  const visit = !!rep || !!fromFails || enqLines.some(l => !isFixedLine(l));
+  // "Quote the rest" of only fixed-price products (a submission put off for later) needs no visit either.
+  const visit = rep?.later ? rep.shutters.length > 0 || rep.s5.rows.length > 0 : !!rep || !!fromFails || enqLines.some(l => !isFixedLine(l));
   const transport = zone && visit ? [{ key: rid(), zoneId: zone.id, zoneLabel: `Zone ${zone.code} · ${zone.name}`, distance: zone.distance || '', vehicle: zone.vehicle || '',
     trips: days, roundTrip: Number(zone.roundTripHours) || 0, hrs: round2(days * (Number(zone.roundTripHours) || 0)), rate: Number(zone.repairRate) || 0, lineKey: '' }] : [];
 
   // Equipment: the ticks in site report section 4; nothing is charged when the customer provides it.
   const equipment = [];
-  const s4 = rep?.s4 || {};
+  const s4 = visit ? rep?.s4 || {} : {};
   const byCustomer = s4.providedBy === 'Customer';
   [['ladder', 'EQ-05', 1], ['scaffolding', 'EQ-03', Number(s4.scaffoldSets) || 1], ['scissor', 'EQ-01', Number(s4.scissorNos) || 1], ['boom', 'EQ-04', 1]].forEach(([flag, code, qty]) => {
     const e = s4[flag] && equipmentByCode(code);
@@ -151,18 +204,30 @@ function failedShutters(enq, site) {
   return { shutters, rows };
 }
 
+// The Labour tab rows of one product (its team row and its extra-workers row), made, updated or removed to match its
+// hours after its size or qty changed. Shared by the estimate page and "Quote the rest".
+export function syncProductLabour(est, r) {
+  const rates = repairRates();
+  const want = [[false, r.teamHrs ? 1 : 0, r.teamHrs, rates.team], [true, r.extraWorkers && r.extraHrs ? r.extraWorkers : 0, r.extraHrs, rates.extra]];
+  want.forEach(([extra, team, h, rate]) => {
+    const row = est.labour.find(x => x.lineKey === r.key && /additional/i.test(x.trade) === extra);
+    if (!team) { if (row) est.labour.splice(est.labour.indexOf(row), 1); return; }
+    if (row) { if (Number(row.otHrs) && !Number(row.hrs)) row.otHrs = h; else row.hrs = h; if (extra) row.team = team; return; }
+    est.labour.push({ key: rid(), ...rate, team, ...(est.afterHours ? { hrs: 0, otHrs: h } : { hrs: h, otHrs: 0 }), lineKey: r.key, forTag: r.tag || '' });
+  });
+}
+
 // A part line ("2 × Tension spring: worn") follows its material when the Materials tab changes its qty, unit or item:
 // the line's qty and unit, and the count at the start of its text.
 export function syncPartLine(est, materialKey) {
   const m = est.materials.find(x => x.key === materialKey);
   const l = m && est.lines.find(x => x.partKey === m.key);
   if (!l) return;
-  const count = (q, u) => (u && u !== 'Nos' ? `${q} ${u} ` : `${q} × `);
-  const was = count(l.qty || 1, l.unit);
+  const was = countOf(l.qty || 1, l.unit);
   // Text rewritten by hand (no count at the start) is left alone; the quotation then shows it as one lot.
   const rest = l.description.startsWith(was) ? l.description.slice(was.length) : null;
   Object.assign(l, { qty: Number(m.qty) || 1, unit: m.unit || 'Nos' });
-  if (rest !== null) l.description = `${count(l.qty, l.unit)}${m.name}${rest.includes(':') ? rest.slice(rest.indexOf(':')) : ''}`;
+  if (rest !== null) l.description = `${countOf(l.qty, l.unit)}${m.name}${rest.includes(':') ? rest.slice(rest.indexOf(':')) : ''}`;
 }
 
 export const latestReport = enq => {
@@ -179,8 +244,11 @@ export const laterReport = enq => {
   const shutters = rep.shutters.filter(s => keys.includes(s.key));
   // Its findings are those of the later products only; the description comes from the new enquiry's lines.
   const findings = shutters.map(s => `${s.tag} ${productName(s.productId)}: ${s.finding}`).join('\n');
-  return { ...rep, shutters, s2: { ...rep.s2, findings, description: '' },
-    s5: { ...rep.s5, rows: [...rep.s5.rows.filter(r => r.shutterKey && keys.includes(r.shutterKey)), ...(l.parts || []).map(p => ({ spec: '', ...p, shutterKey: '' }))] } };
+  // Parts: from the estimate (later work saved since 25 Nov 2026 lists every part, the ones fitted to a later product
+  // too); older later work: the report's rows of the later products plus its part lines.
+  const rows = l.productParts ? (l.parts || []).map(p => ({ spec: '', ...p, shutterKey: p.shutterKey || '' }))
+    : [...rep.s5.rows.filter(r => r.shutterKey && keys.includes(r.shutterKey)), ...(l.parts || []).map(p => ({ spec: '', ...p, shutterKey: '' }))];
+  return { ...rep, later: true, shutters, s2: { ...rep.s2, findings, description: '' }, s5: { ...rep.s5, rows } };
 };
 
 // The current (latest) estimate revision of an enquiry.
@@ -278,6 +346,9 @@ export function estimateProblems(est) {
   const s = estimateSummary(est);
   const p = [];
   if (!s.direct && !s.fixed) p.push('The estimate has no cost yet.');
+  // A product with a size set but no size (no site inspection) and no labour typed for it.
+  est.shutters.filter(x => setOfProduct(productOf(x.productId)) && (!x.sizeCode || !sizeOf(productOf(x.productId), x.sizeCode)) && !est.labour.some(r => r.lineKey === x.key))
+    .forEach(x => p.push(`Pick the size of ${x.tag ? `${x.tag} ` : ''}${x.typeName} (Products to repair tab), or add its labour.`));
   if (est.materials.some(m => m.noRate && !m.rate)) p.push('A material has no rate (not in the Material/Item master).');
   (est.fixed || []).filter(f => !(Number(f.price) > 0)).forEach(f => p.push(`${f.name} has no price (Products to repair tab).`));
   if (est.costingLevel === 'LINE' && !est.lines.length) p.push('Line costing needs at least one line.');

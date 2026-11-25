@@ -101,6 +101,10 @@ export function renderMasterForm(el, key, id) {
   const draft = rec ? { ...(def.defaults?.() || {}), ...structuredClone(rec) } : { ...(def.defaults?.() || {}), code: def.codePrefix ? nextCode(def.coll, def.codePrefix, def.codePad || 4) : '' };
   let readTable = null;
   const shows = (f, d) => !f.showIf || f.showIf(d);
+  const needed = (f, d) => (f.required || f.requiredIf?.(d)) && shows(f, d);
+  // Fields locked while the record is in use (a product's costing): shown, not changeable.
+  const uses = rec && def.lockWhenUsed ? def.lockWhenUsed.uses(rec) : null;
+  const locked = f => !!uses?.total && def.lockWhenUsed.fields.includes(f.name);
 
   // A field shown only when it applies (showIf) sits in a wrapper that hides with it.
   const fieldHtml = f => (f.showIf ? html`<div class="showif" data-show="${f.name}" ${shows(f, draft) ? '' : 'hidden'}>${fieldBody(f)}</div>` : fieldBody(f));
@@ -114,7 +118,7 @@ export function renderMasterForm(el, key, id) {
       return html`<div class="field ${f.cls || ''}"><div class="field-label">${label}</div><div class="checks">${opts.map(o => html`<label class="check"><input type="checkbox" data-multi="${f.name}" value="${o.value}" ${vals.includes(o.value) ? 'checked' : ''} ${editable ? '' : 'disabled'}> ${o.label}</label>`)}</div></div>`;
     }
     if (f.type === 'table') return html`<div class="field ${f.cls || ''}"><div class="field-label">${label}</div><div id="tbl-${f.name}"></div></div>`;
-    return field({ ...f, label, options: opts, value: draft[f.name], readonly: !editable, tag });
+    return field({ ...f, label, options: opts, value: draft[f.name], readonly: !editable || locked(f), tag });
   };
 
   el.innerHTML = String(html`<div class="page" style="max-width:1100px">
@@ -127,6 +131,7 @@ export function renderMasterForm(el, key, id) {
         ${editable ? html`<button class="btn primary" id="save">Save</button>` : ''}</div>`,
     })}
     ${editable ? '' : html`<div class="note" style="margin-bottom:10px">Read-only: your role can view this master but not change it.</div>`}
+    ${editable && uses?.total ? html`<div class="note" style="margin-bottom:10px">${def.lockWhenUsed.note(uses)}</div>`: ''}
     <form class="card form-lines" id="f" onsubmit="return false"><div class="grid g2">${def.fields.map(fieldHtml)}</div>
       ${def.computed && rec ? html`<div class="kv" style="margin-top:12px">${def.computed.map(([label, fn, o]) => html`<div><div class="k">${label} (calculated)</div><div class="v strong">${o?.money ? fmtMoney(fn(rec), company) : fn(rec)}</div></div>`)}</div>` : ''}
     </form>
@@ -157,7 +162,9 @@ export function renderMasterForm(el, key, id) {
     if (readTable) d[tableField.name] = readTable();
     // A field that does not apply is not asked for and not kept.
     def.fields.filter(f => !shows(f, d)).forEach(f => { d[f.name] = null; });
-    const missing = def.fields.filter(f => f.required && f.type !== 'table' && shows(f, d) && (d[f.name] === '' || d[f.name] == null)).map(f => f.name);
+    // Locked fields keep their saved value whatever the form says.
+    def.fields.filter(locked).forEach(f => { d[f.name] = rec[f.name]; });
+    const missing = def.fields.filter(f => f.type !== 'table' && needed(f, d) && (d[f.name] === '' || d[f.name] == null)).map(f => f.name);
     if (!markInvalid(form, missing)) { toast('Fill in the required fields', 'bad'); return; }
     if (store.list(def.coll).some(r => r.id !== rec?.id && String(r.code).toLowerCase() === String(d.code).toLowerCase())) {
       markInvalid(form, ['code'], 'This code is already used'); return;

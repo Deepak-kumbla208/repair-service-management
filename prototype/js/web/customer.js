@@ -6,7 +6,7 @@ import { html, $, $$, on, go, debounce, field, readForm, markInvalid, toast, ope
 import { zones, zoneLabel, products, productName, vsOptions, vsDefault } from '../core/lookups.js';
 import { nextCode, findDuplicates, primaryContact, shutterCount, productTag } from '../core/customers.js';
 import { toMetres } from '../core/costing.js';
-import { productOf, keeps, setOfProduct, sizesOf, isTwoFigure, classifyFor, costingOf, sizeText } from '../core/products.js';
+import { productOf, keeps, setOfProduct, sizesOf, isTwoFigure, classifyFor, costingOf, sizeText, likelyProduct } from '../core/products.js';
 // The Size column: size and measure (M · 4 × 3 m, M · 5.5 kW), or "No size" for a product without a size set.
 const sizeCell = sh => (setOfProduct(productOf(sh.productId)) ? html`<b>${sh.sizeCode || ''}</b>${sizeText(sh).replace(sh.sizeCode || '', '')}` : html`<span class="muted">No size</span>`);
 import { pageHead } from './shell.js';
@@ -133,12 +133,14 @@ export function renderCustomerForm(el, id) {
   function shutterDialog(siteIdx, shutterId) {
     const site = draft.sites[siteIdx];
     const kept = products().filter(keeps);
-    const first = kept[0]?.id;
-    const sh = shutterId ? site.shutters.find(x => x.id === shutterId) : { tag: productTag(site, first), location: '', productId: first, width: '', height: '', unit: 'm', measure: null, motor: '', serial: '', installDate: '', status: 'Active' };
+    // A new one starts as the product the site has most of; at a site with none yet, the user picks.
+    const first = likelyProduct([], site, keeps);
+    const sh = shutterId ? site.shutters.find(x => x.id === shutterId) : { tag: first ? productTag(site, first) : '', location: '', productId: first, width: '', height: '', unit: 'm', measure: null, motor: '', serial: '', installDate: '', status: 'Active' };
     const sizeOf = d => classifyFor(productOf(d.productId), { width: d.width, height: d.height, unit: d.unit, measure: d.measure });
     let tagTouched = !!shutterId;
     const sizePart = d => {
       const p = productOf(d.productId), set = setOfProduct(p);
+      if (!p) return '';
       if (!set) return html`<div class="field span2"><div class="hint">No size: ${costingOf(p) === 'HOURS' ? 'its hours are the product\'s standard hours' : 'not sized'}.</div></div>`;
       const codes = sizesOf(p).map(z => z.code);
       const size = field({ name: 'sizeCode', label: `Size (from the ${isTwoFigure(set) ? 'width × height' : set.name.toLowerCase()} when measured)`, type: 'select', options: codes, value: sizeOf(d) || (codes.includes(d.sizeCode) ? d.sizeCode : ''), required: true });
@@ -167,7 +169,7 @@ export function renderCustomerForm(el, id) {
           if (e.target.name !== 'productId') return;
           const d = readForm(body);
           $('#szbox', body).innerHTML = String(sizePart({ ...d, width: '', height: '', measure: null, sizeCode: '' }));
-          if (!tagTouched) $('[name="tag"]', body).value = productTag(site, d.productId);
+          if (!tagTouched) $('[name="tag"]', body).value = d.productId ? productTag(site, d.productId) : '';
         });
       },
       actions: [{ label: 'Cancel' }, { label: shutterId ? 'Update product' : 'Add product', kind: 'primary', onClick: body => {

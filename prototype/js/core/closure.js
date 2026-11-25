@@ -43,7 +43,7 @@ export function estimatedVsActual(job) {
   // Accepted in part: only the lines the customer took now (core/later-work.js).
   const inJob = r => !q?.split || !r.lineKey || q.split.keys.includes(r.lineKey);
   const est = q?.split ? { ...full, labour: full.labour.filter(inJob), materials: full.materials.filter(inJob) } : full;
-  const persons = 2 + (job.crew?.extra || 0);
+  const persons = 2 * (job.crew?.team || 1) + (job.crew?.extra || 0);
   const teamRate = saved.kind === 'AMC' ? saved.matrix.team.rate : est.labour[0]?.rate || 0;
   const estHours = Number(job.workHours) || 0;
   const s = job.steps || {};

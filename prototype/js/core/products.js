@@ -27,12 +27,15 @@ export const sizeSets = () => store.list('sizeSets').sort((a, b) => num(a.order)
 export const defaultSet = () => sizeSets()[0] || null;
 const setIdOf = z => z.setId || defaultSet()?.id || '';
 export const setSizes = setId => store.list('sizes', z => active(z) && setIdOf(z) === setId).sort((a, b) => num(a.order) - num(b.order));
+// Every size of a set, switched off ones too: a size switched off is no longer offered, but what already has it keeps
+// its hours.
+export const allSetSizes = setId => store.list('sizes', z => setIdOf(z) === setId).sort((a, b) => num(a.order) - num(b.order));
 export function setOfProduct(p) {
   if (!p || costingOf(p) !== COSTING.SIZE) return null;
   return (p.sizeSetId && store.get('sizeSets', p.sizeSetId)) || defaultSet();
 }
 export const sizesOf = p => { const s = setOfProduct(p); return s ? setSizes(s.id) : []; };
-export const sizeOf = (p, code) => (code ? sizesOf(p).find(z => z.code === code) || null : null);
+export const sizeOf = (p, code) => { const s = setOfProduct(p); return code && s ? allSetSizes(s.id).find(z => z.code === code && active(z)) || allSetSizes(s.id).find(z => z.code === code) || null : null; };
 export const isTwoFigure = set => (set?.measure || 'WH') === 'WH';
 
 // The smallest size whose limit holds the measured figure (blank limit = no limit).
@@ -78,12 +81,13 @@ export function repairLabour(p, sizeCode, qty = 1) {
 // ---------- AMC and General Servicing: the Labour_Matrix rows ----------
 // One row per size of every size set (key "WH:M"), and one per product with standard servicing hours (key "P:<id>").
 // Matrices saved before size sets keyed their rows by the size code alone; amcSiteRow reads either.
+// Switched-off sizes and products keep their rows (inactive: true), so what is already covered keeps its hours.
 export function matrixRows() {
   const sets = sizeSets();
-  const sizes = sets.flatMap(set => setSizes(set.id).map(z => ({ key: `${set.code}:${z.code}`, code: z.code, name: z.name, setCode: set.code, setName: set.name,
-    limits: limitText(z, set), teamHrs: num(z.amcTeamHrs), extraWorkers: num(z.amcExtraWorkers), extraHrs: num(z.amcExtraHrs) })));
-  const own = store.list('products', p => active(p) && costingOf(p) === COSTING.HOURS && keeps(p)).sort((a, b) => String(a.code).localeCompare(String(b.code)))
-    .map(p => ({ key: `P:${p.id}`, code: p.code, name: p.name, setCode: '', setName: 'No size', limits: 'per product', teamHrs: num(p.servHrs), extraWorkers: 0, extraHrs: 0 }));
+  const sizes = sets.flatMap(set => allSetSizes(set.id).map(z => ({ key: `${set.code}:${z.code}`, code: z.code, name: z.name, setCode: set.code, setName: set.name,
+    limits: limitText(z, set), teamHrs: num(z.amcTeamHrs), extraWorkers: num(z.amcExtraWorkers), extraHrs: num(z.amcExtraHrs), inactive: !active(z) || !active(set) })));
+  const own = store.list('products', p => costingOf(p) === COSTING.HOURS && keeps(p)).sort((a, b) => String(a.code).localeCompare(String(b.code)))
+    .map(p => ({ key: `P:${p.id}`, code: p.code, name: p.name, setCode: '', setName: 'No size', limits: 'per product', teamHrs: num(p.servHrs), extraWorkers: 0, extraHrs: 0, inactive: !active(p) }));
   return [...sizes, ...own];
 }
 // The Labour_Matrix key of a customer product.
@@ -130,6 +134,26 @@ export function tagMaker(site, extra = []) {
     next[prefix] += 1;
     return `${prefix}${next[prefix]}`;
   };
+}
+
+// The product a new row or customer product starts with: the first of `ids` (the products this work is already about),
+// else the product the site has most of, else '' (the user picks). Never a fixed product.
+export function likelyProduct(ids = [], site = null, test = isPhysical) {
+  const ok = id => test(productOf(id)) && productOf(id)?.status !== 'Inactive';
+  const first = ids.find(ok);
+  if (first) return first;
+  const counts = {};
+  (site?.shutters || []).filter(s => s.status !== 'Inactive' && ok(s.productId)).forEach(s => { counts[s.productId] = (counts[s.productId] || 0) + 1; });
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+}
+
+// Where a product is already used: customer products at the sites, and documents still open (enquiries, estimates).
+// Its costing, size set and "Customer product" cannot change while it is used: they would re-price what is there.
+export function productUses(id) {
+  const reg = store.list('customers').reduce((n, c) => n + (c.sites || []).reduce((m, s) => m + (s.shutters || []).filter(x => x.productId === id).length, 0), 0);
+  const est = store.list('estimates', e => !['Superseded', 'Cancelled'].includes(e.status) && ((e.shutters || []).some(x => x.productId === id) || (e.fixed || []).some(f => f.productId === id))).length;
+  const enq = store.list('enquiries', e => !['Lost', 'Cancelled', 'Closed'].includes(e.status) && (e.lines || []).some(l => l.itemRef === `prd:${id}`)).length;
+  return { reg, est, enq, total: reg + est + enq };
 }
 
 // ---------- Groups and units ----------

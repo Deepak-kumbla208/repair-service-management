@@ -31,7 +31,7 @@ export function productStrip(ref) {
 // Returns { read, set } so the form can read the lines and paste-email can replace them.
 export function linesEditor(box, initial) {
   let lines = (initial && initial.length ? initial : [blankLine()]).map(l => ({ ...l }));
-  const choices = itemChoices();
+  const choices = itemChoices(lines.map(l => l.itemRef));
 
   const sync = () => $$('tr[data-i]', box).forEach(tr => {
     const l = lines[+tr.dataset.i];

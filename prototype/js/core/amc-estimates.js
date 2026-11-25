@@ -7,7 +7,7 @@ import * as auth from './auth.js';
 import { findSite, zones } from './lookups.js';
 import { hourlyRate, amcSiteRow, summarizeAmc } from './costing.js';
 import { companyTax, latestReport } from './estimates.js';
-import { matrixRows, amcKey } from './products.js';
+import { matrixRows, amcKey, defaultSet, countText } from './products.js';
 
 const rid = () => store.uid('r_');
 const num = v => Number(v) || 0;
@@ -29,6 +29,21 @@ export function amcMatrix() {
   return { team: rate(pick('LAB-A1')), extra: rate(pick('LAB-A2')), sizes: matrixRows() };
 }
 export const rowKey = z => z.key || z.code;
+// A matrix saved before size sets keyed its rows and counts by the size code alone ("S"): they become keys of the first
+// set ("WH:S"), the same numbers. A count whose row is missing (a product or size added since the estimate was made)
+// gets its row from the masters. Pure: returns the estimate as it should be.
+export function keyedMatrix(est) {
+  if (!est?.matrix) return est;
+  const first = defaultSet();
+  const rekey = k => (k.includes(':') ? k : `${first?.code || 'WH'}:${k}`);
+  const sizes = est.matrix.sizes.map(z => (z.key ? z : { ...z, key: rekey(z.code), setCode: first?.code || 'WH', setName: first?.name || '' }));
+  const sites = (est.sites || []).map(s => ({ ...s, counts: Object.fromEntries(Object.entries(s.counts || {}).map(([k, n]) => [rekey(k), n])) }));
+  const have = new Set(sizes.map(z => z.key));
+  const fresh = matrixRows();
+  [...new Set(sites.flatMap(s => Object.keys(s.counts)))].filter(k => !have.has(k)).forEach(k => { const row = fresh.find(z => z.key === k); if (row) sizes.push(row); });
+  return { ...est, matrix: { ...est.matrix, sizes }, sites };
+}
+export const needsKeying = est => !!est?.matrix && (est.matrix.sizes.some(z => !z.key) || (est.sites || []).some(s => Object.keys(s.counts || {}).some(k => !k.includes(':'))));
 
 const covered = site => (site?.shutters || []).filter(s => s.status !== 'Inactive');
 // Counts by Labour_Matrix row: a product's size (in its size set), or the product itself when it has no size.
@@ -101,7 +116,7 @@ export function addSiteTo(est, siteId) {
   if (!site) return est;
   const entry = siteEntry(site, est.jobType === 'GS' ? 1 : amcDefaults().visitsPerYear);
   const sites = [...est.sites, entry];
-  return { ...est, sites, transport: transportRows(sites, est.transport), equipment: [...est.equipment, ...liftRows([entry])] };
+  return keyedMatrix({ ...est, sites, transport: transportRows(sites, est.transport), equipment: [...est.equipment, ...liftRows([entry])] });
 }
 export function removeSiteFrom(est, key) {
   const sites = est.sites.filter(s => s.key !== key);
@@ -114,7 +129,7 @@ export function setCovered(est, key, shutterIds) {
     const { site } = findSite(s.siteId);
     return { ...s, shutterIds, counts: countBySize(covered(site).filter(sh => shutterIds.includes(sh.id))) };
   });
-  return { ...est, sites };
+  return keyedMatrix({ ...est, sites });
 }
 export const otherSites = est => (store.get('customers', est.customerId)?.sites || []).filter(s => !est.sites.some(x => x.siteId === s.id));
 export const isRenewal = est => !!store.get('enquiries', est.enquiryId)?.renewsContractId;
@@ -124,6 +139,13 @@ export function amcProblems(est) {
   const s = summarizeAmc(est, zones());
   const p = [];
   if (!s.metrics.shutters) p.push('No products are covered yet (Products to service tab).');
+  // A covered product must be counted and priced: a row for its size or product, with servicing hours.
+  const label = k => countText({ [k]: 1 }).replace(/^1 × /, '');
+  est.sites.forEach(x => Object.entries(x.counts || {}).filter(([, n]) => num(n) > 0).forEach(([k]) => {
+    const row = est.matrix.sizes.find(z => (z.key || z.code) === k);
+    if (!row) p.push(`${x.name}: ${label(k)} is covered but has no Labour_Matrix row; tick "covered" again to add it.`);
+    else if (!num(row.teamHrs)) p.push(`${x.name}: ${label(k)} has 0 servicing hours (Labour_Matrix tab, or the Product master).`);
+  }));
   est.sites.forEach(x => { if (!num(x.visits)) p.push(`${x.name}: enter the visits per year.`); });
   est.sites.forEach(x => { if (x.zoneId && !est.transport.some(t => t.zoneId === x.zoneId)) p.push(`${x.name}: its zone has no Transport row.`); });
   if (!s.direct) p.push('The estimate has no cost yet.');

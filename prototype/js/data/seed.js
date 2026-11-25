@@ -8,13 +8,13 @@ const DSH = 'co_dsh';
 const GDD = 'co_gdd';
 
 const COMPANIES = [
-  { id: DSH, tenantId: DSH, code: 'DSH', name: 'Demo Shutters Pte Ltd', country: 'Singapore', currency: 'SGD',
+  { id: DSH, tenantId: DSH, code: 'DSH', name: 'Demo Shutters Pte Ltd', country: 'Singapore', currency: 'SGD', productsData: 2,
     taxLabel: 'GST', taxRegLabel: 'GST Reg. No.', taxRegNo: 'M9-0000000-0', chargesTax: true, defaultTaxCode: 'SR9',
     regLabel: 'UEN', regNo: '200000000D', address: 'Blk 10 Demo Road, #01-01, Singapore 100010',
     tel: '+65 6000 0000', mobile: '+65 8000 0000', email: 'sales@demo-shutters.example', inspectionTargetHours: 2, dpo: 'dpo@demo-shutters.example', logoId: '',
     workDays: [1, 2, 3, 4, 5, 6], workStart: 8.5, workEnd: 17.5,
     bank: 'Demo Bank Singapore · account 000-000000-0', payNow: 'PayNow to UEN 200000000D', txDefaults: { ...TX_DEFAULTS, amc: AMC_TX }, placeholders: ['taxRegNo', 'regNo', 'bank', 'payNow'] },
-  { id: GDD, tenantId: GDD, code: 'GDD', name: 'Gulf Demo Doors LLC', country: 'United Arab Emirates', currency: 'AED',
+  { id: GDD, tenantId: GDD, code: 'GDD', productsData: 2, name: 'Gulf Demo Doors LLC', country: 'United Arab Emirates', currency: 'AED',
     taxLabel: 'VAT', taxRegLabel: 'TRN', taxRegNo: '100000000000003', chargesTax: true, defaultTaxCode: 'VAT5',
     regLabel: 'Trade licence', regNo: '000000', address: 'Office 12, Demo Business Centre, Al Quoz, Dubai, UAE',
     tel: '+971 4 000 0000', mobile: '+971 50 000 0000', email: 'sales@gulf-demo-doors.example', inspectionTargetHours: 2, dpo: '', logoId: '',

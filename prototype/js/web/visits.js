@@ -45,7 +45,7 @@ export function checklistHtml(d) {
   return html`${(d.shutters || []).map(sh => {
     const st = shutterState(d, sh);
     const live = st.items.filter(i => i.on);
-    return html`<div class="ck-web"><div class="row"><b>${sh.tag}</b> ${sh.location} <span class="muted small">${sh.typeName} · ${sh.sizeCode}${sh.fireRated ? ' · fire-rated' : ''}</span><span class="grow"></span>
+    return html`<div class="ck-web"><div class="row"><b>${sh.tag}</b> ${sh.location} <span class="muted small">${[sh.typeName, sh.sizeText || sh.sizeCode].filter(Boolean).join(' · ')}${sh.fireRated ? ' · fire-rated' : ''}</span><span class="grow"></span>
       ${st.unsafe ? pill('Taken out of service', 'red') : ''}${st.fails ? pill(`${st.fails} fail`, 'red') : st.answered === st.total && st.total ? pill('All pass', 'green') : pill(`${st.answered} of ${st.total} checked`, 'amber')}
       <span class="muted small">${st.off} N/A by type</span></div>
       ${live.some(i => i.r !== 'P') ? html`<div class="ck-items">${live.filter(i => i.r !== 'P').map(i => html`<span class="ck-i ${i.r === 'F' ? 'f' : ''}" title="${i.hint}">${i.label}: ${i.r ? RES[i.r][0] : 'not checked'}${i.r === 'F' && i.note ? ` – ${i.note}` : ''}${i.r === 'F' && i.photoId ? html` <img class="ck-ph" data-media="${i.photoId}" alt="Photo">` : ''}</span>`)}</div>` : ''}</div>`;
@@ -92,8 +92,8 @@ export function renderVisit(el, id) {
         </div><div><div class="form-sec">Site</div>
         ${row('Site', html`${v.site}<br><span class="small muted">${v.address}</span>`)}${row('Zone', zoneLabel(v.zoneId))}${v.access ? row('Access', v.access) : ''}
       </div></div>` })}
-        <div class="card"><div class="card-head"><h2>Inspection check list</h2><span class="muted small">${v.shutters.length} shutters · only failed and unchecked items are listed</span></div>
-          ${v.steps?.checkInAt ? checklistHtml(v) : html`<div class="muted">The technician fills it on the phone after checking in. Covered shutters: ${v.shutters.map(x => x.tag).join(', ')}.</div>`}</div>
+        <div class="card"><div class="card-head"><h2>Inspection check list</h2><span class="muted small">${v.shutters.length} products · only failed and unchecked items are listed</span></div>
+          ${v.steps?.checkInAt ? checklistHtml(v) : html`<div class="muted">The technician fills it on the phone after checking in. Covered products: ${v.shutters.map(x => x.tag).join(', ')}.</div>`}</div>
         ${(v.failures || []).length ? html`<div class="card"><div class="card-head"><h2>Failed items</h2></div>
           ${v.failures.map(f => html`<div class="row" style="padding:4px 0;border-top:1px solid var(--line-soft)"><b>${f.tag}</b> ${f.label}${f.note ? ` – ${f.note}` : ''}${f.unsafe ? html` ${pill('Out of service', 'red')}` : ''}</div>`)}
           <div style="margin-top:8px">${repair ? html`New repair enquiry: <a href="#/enquiries/${repair.id}">${repair.no}</a> ${pill(repair.status)}` : ''}${added.length ? html`${repair ? ' · ' : ''}Added to the open ${added.map(e => html`<a href="#/enquiries/${e.id}">${e.no}</a> `)}(same fault reported before)` : ''}</div></div>` : ''}
@@ -120,6 +120,6 @@ export function renderVisit(el, id) {
 
 // A General Servicing job's check list (job page card).
 export const gsChecklistCard = j => html`<div class="card"><div class="card-head"><h2>Inspection check list</h2>${signOf('jobs', j)?.signedAt ? html`<a href="#/jobs/${j.id}/service">Print the service report</a>` : ''}</div>
-  ${j.steps?.checkInAt ? checklistHtml(j) : html`<div class="muted">Filled on the phone after check-in. Shutters: ${(j.shutters || []).map(x => x.tag).join(', ')}.</div>`}
+  ${j.steps?.checkInAt ? checklistHtml(j) : html`<div class="muted">Filled on the phone after check-in. Products: ${(j.shutters || []).map(x => x.tag).join(', ')}.</div>`}
   ${(j.failures || []).length ? html`<div style="margin-top:8px">${j.repairEnquiryId ? html`Failed items → repair enquiry <a href="#/enquiries/${j.repairEnquiryId}">${store.get('enquiries', j.repairEnquiryId)?.no}</a>` : ''}
     ${(j.repairAddedTo || []).map(x => html` · added to <a href="#/enquiries/${x}">${store.get('enquiries', x)?.no}</a>`)}</div>` : ''}</div>`;

@@ -5,6 +5,7 @@ import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, $$, go, debounce, pill, toast, readForm, icon } from '../core/ui.js';
 import { zones, zoneLabel, productName } from '../core/lookups.js';
+import { sizeText } from '../core/products.js';
 import { nextCode, findDuplicates, primaryContact, shutterCount } from '../core/customers.js';
 import { newEnquiryFor } from './enquiry-form.js';
 
@@ -42,7 +43,7 @@ export function mCustomer(page, id) {
     <div class="m-section">Sites</div>
     ${(c.sites || []).length ? html`${c.sites.map(s => html`<div class="m-card"><b>${s.name}</b> <span class="pill">Zone ${zoneLabel(s.zoneId) || 'not set'}</span>
       <div class="small muted">${[s.address, s.blockUnit].filter(Boolean).join(' ')}</div>
-      ${(s.shutters || []).length ? html`<div class="small" style="margin-top:6px">${s.shutters.map(sh => html`<div>${sh.tag} ${sh.location} · ${productName(sh.productId)} · ${sh.sizeCode}</div>`)}</div>` : ''}</div>`)}` : html`<div class="muted small">No sites yet.</div>`}`);
+      ${(s.shutters || []).length ? html`<div class="small" style="margin-top:6px">${s.shutters.map(sh => html`<div>${sh.tag} ${sh.location} · ${productName(sh.productId)}${sh.sizeCode ? ` · ${sizeText(sh)}` : ''}</div>`)}</div>` : ''}</div>`)}` : html`<div class="muted small">No sites yet.</div>`}`);
   const acts = [
     auth.can('enquiry', 'create', 'mobile') && c.status !== 'Inactive' ? html`<button class="btn" id="enq">${icon('plus', 15)} New enquiry</button>` : '',
     auth.can('customer', 'edit', 'mobile') ? html`<a class="btn primary" href="#/m/customer/${c.id}/edit">${icon('edit', 15)} Edit</a>` : '',

@@ -321,6 +321,23 @@ async function gulf() {
   phase({ hoursAgo: 2 }, () => makeQuote(e));
 }
 
+// Products of the new trades (user, 25 Nov 2026): a new enquiry at Demo Towers with a shutter, a pump and lightning tape
+// by the metre (site inspection still to assign: no technician works on all three groups), and one for a sanitary plan
+// submission and a BIM model (fixed prices, no site inspection) at Demo Food Factory.
+function mixedSamples() {
+  T = 'co_dsh';
+  as('ops');
+  const prd = code => store.findOne('products', p => p.code === code);
+  const line = (code, qty, description) => { const p = prd(code); return p ? { itemRef: `prd:${p.id}`, itemName: p.name, qty, unit: p.unit, description } : null; };
+  const base = (c, siteInspection, lines) => ({ receivedAt: new Date().toISOString(), channel: 'CALL', channelOther: '', type: 'REPAIR', enquiryStatus: 'HOT', priority: 'HIGH', siteInspection,
+    recordedBy: userOf('ops'), remarks: '', attachments: [], customerId: c.id, contactId: c.contacts[0].id, contactName: c.contacts[0].name, mobile: c.contacts[0].mobile, email: c.contacts[0].email,
+    siteId: c.sites[0].id, lines: lines.filter(Boolean) });
+  const towers = cust('CUS-0010'), food = cust('CUS-0008');
+  if (towers) saveNewEnquiry(base(towers, 'YES', [line('RS', 1, 'Car park shutter jammed half-way'), line('BP', 1, 'Pump trips; low water pressure on the upper floors'),
+    line('LPT', 15, 'Tape corroded on the roof, near the water tank')]));
+  if (food) saveNewEnquiry(base(food, 'NO', [line('PUB', 1, 'New staff toilets on level 2'), line('BIM', 2, 'Model of levels 1 and 2')]));
+}
+
 export async function buildDemoFlow() {
   store.holdWrites(true);
   try {
@@ -330,6 +347,8 @@ export async function buildDemoFlow() {
     await gulf();
     await buildAmcSamples();
     await buildHistory();
+    auth.login('usr_co_dsh_ops', 'web');
+    mixedSamples();
   } finally {
     auth.logout();
     store.holdWrites(false);

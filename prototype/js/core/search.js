@@ -12,7 +12,8 @@ const MASTER_SOURCES = [
   ['labour', 'labour', l => `${l.name} (${l.rateSet})`, l => l.code],
   ['product', 'products', p => p.name, p => p.code],
   ['item', 'items', i => i.name, i => `${i.code} · ${i.spec || i.unit}`],
-  ['size', 'sizes', s => `${s.code} · ${s.name}`, () => 'Shutter size'],
+  ['size', 'sizeSets', s => s.name, s => `${s.code} · product size set`],
+  ['uom', 'uoms', u => `${u.code} · ${u.name}`, () => 'Unit of measure'],
   ['valueset', 'valueSets', v => v.name, v => v.values.map(x => x.label).join(', ')],
   ['tax', 'taxes', t => t.name, t => `${t.code} · ${t.rate}%`],
   ['terms', 'terms', t => t.title, t => `${t.code} · ${t.docType}`],
@@ -80,11 +81,11 @@ export function globalSearch(query, channel = auth.view()) {
     customers.forEach(c => (c.sites || []).forEach(s => {
       const shutters = (s.shutters || []).filter(sh => hit(sh.tag, sh.location, sh.serial));
       if (hit(s.name, s.address, s.blockUnit, zoneLabel(s.zoneId)) || shutters.length) {
-        const list = shutters.length ? shutters.slice(0, 3).map(sh => `${sh.tag} ${sh.location}`).join(', ') : `${(s.shutters || []).length} shutters`;
+        const list = shutters.length ? shutters.slice(0, 3).map(sh => `${sh.tag} ${sh.location}`).join(', ') : `${(s.shutters || []).length} products`;
         sites.push({ icon: '⌂', title: s.name, sub: `${c.name} · ${zoneLabel(s.zoneId)} · ${list}`, route: `master/customer/${c.id}` });
       }
     }));
-    add('Sites and shutters', sites);
+    add('Sites and products', sites);
   }
 
   if (!mobile) {

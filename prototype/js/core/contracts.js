@@ -10,7 +10,8 @@ import { amcSiteRow } from './costing.js';
 import { amcDefaults } from './amc-estimates.js';
 import { createEstimate } from './estimates.js';
 import { saveNewEnquiry } from './enquiries.js';
-import { makeShutter, nextShutterTag, addShutters } from './customers.js';
+import { makeShutter, addShutters } from './customers.js';
+import { tagMaker, fromKey, sizeOf, productOf, setOfProduct, isTwoFigure, sizeText } from './products.js';
 import { openTask, closeTask, cancelTasksFor } from './workflow.js';
 import { createContractInvoice, balanceOf } from './billing.js';
 import { fmtDate } from './ui.js';
@@ -42,13 +43,15 @@ export const contractFor = enqId => store.list('contracts', c => c.enquiryId ===
 export const visitsOf = id => store.list('amcVisits', v => v.contractId === id).sort((a, b) => a.plannedDate.localeCompare(b.plannedDate) || a.n - b.n);
 export const invoicesOf = c => (c.billingPlan || []).map(l => (l.invoiceId ? store.get('invoices', l.invoiceId) : null)).filter(Boolean);
 
-// The covered shutters of a site, copied from its register (type, size, height, motor, fire-rated).
+// The covered products of a site, copied from its customer products (product, size, height, motor, fire-rated, and the
+// check list its product uses).
 export function snapshot(siteId, ids) {
   const { site } = findSite(siteId);
   return (site?.shutters || []).filter(s => ids.includes(s.id)).map(s => {
     const prd = store.get('products', s.productId);
-    return { shutterId: s.id, tag: s.tag, location: s.location, productId: s.productId, typeName: productName(s.productId), sizeCode: s.sizeCode, heightM: s.heightM,
-      motorised: prd?.code === 'MR' || !!s.motor, fireRated: !!s.fireRated };
+    const twoFigure = isTwoFigure(setOfProduct(prd));
+    return { shutterId: s.id, tag: s.tag, location: s.location, productId: s.productId, typeName: productName(s.productId), sizeCode: s.sizeCode, sizeText: sizeText(s, { none: '' }), heightM: s.heightM,
+      motorised: twoFigure && (prd?.code === 'MR' || !!s.motor), fireRated: !!s.fireRated, checklist: prd?.checklist || 'GENERAL' };
   });
 }
 
@@ -108,21 +111,21 @@ export function billingLines(c, start) {
   });
 }
 
-// Shutters typed as counts (no register yet) get register entries: "SH-1 … location to confirm". Returns their ids.
+// Products typed as counts (none recorded at the site yet) become customer products: "RS-1 … location to confirm",
+// with the product and size of their count (a size of a size set: the first product using that set). Returns their ids.
 // Used when an AMC contract is activated and when a General Servicing job is created.
 export function registerCounts(customerId, siteId, counts, source) {
-  const sizes = store.list('sizes');
-  const rolling = store.findOne('products', p => p.code === 'RS') || store.list('products')[0];
   const { site } = findSite(siteId);
   const made = [];
-  Object.entries(counts || {}).forEach(([code, n]) => {
-    const z = sizes.find(x => x.code === code);
-    for (let i = 0; i < n; i++) {
-      const tag = nextShutterTag({ shutters: [...(site?.shutters || []), ...made] }, 'SH-');
-      made.push(makeShutter({ tag, location: 'to confirm', productId: rolling?.id, width: z?.maxWidth ?? 8, height: z?.maxHeight ?? 6, unit: 'm' }, source));
-    }
+  const tag = tagMaker(site, made);
+  Object.entries(counts || {}).forEach(([key, n]) => {
+    const { productId, sizeCode } = fromKey(key);
+    if (!productId) return;
+    const z = sizeCode ? sizeOf(productOf(productId), sizeCode) : null;
+    const dims = z && z.maxWidth !== undefined && z.maxValue === undefined ? { width: z.maxWidth ?? 8, height: z.maxHeight ?? 6, unit: 'm' } : { sizeCode, measure: z?.maxValue ?? null };
+    for (let i = 0; i < n; i++) made.push(makeShutter({ tag: tag(productId), location: 'to confirm', productId, ...dims, sizeCode }, source));
   });
-  if (made.length) addShutters(customerId, siteId, made, `${made.length} shutter(s) added from ${source} (location to confirm)`);
+  if (made.length) addShutters(customerId, siteId, made, `${made.length} customer product(s) added from ${source} (location to confirm)`);
   return made.map(m => m.id);
 }
 const registerTyped = c => c.sites.map(s => (s.typed ? { ...s, typed: false, shutters: snapshot(s.siteId, registerCounts(c.customerId, s.siteId, s.counts, `AMC contract ${c.no}`)) } : s));

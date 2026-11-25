@@ -3,9 +3,12 @@
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, $$, on, go, debounce, field, readForm, markInvalid, toast, openModal, pill, emptyRow, fmtNum } from '../core/ui.js';
-import { zones, zoneLabel, products, productName, sizes, vsOptions, vsDefault } from '../core/lookups.js';
-import { nextCode, findDuplicates, primaryContact, shutterCount, nextShutterTag } from '../core/customers.js';
-import { classifySize, toMetres } from '../core/costing.js';
+import { zones, zoneLabel, products, productName, vsOptions, vsDefault } from '../core/lookups.js';
+import { nextCode, findDuplicates, primaryContact, shutterCount, productTag } from '../core/customers.js';
+import { toMetres } from '../core/costing.js';
+import { productOf, keeps, setOfProduct, sizesOf, isTwoFigure, classifyFor, costingOf, sizeText } from '../core/products.js';
+// The Size column: size and measure (M · 4 × 3 m, M · 5.5 kW), or "No size" for a product without a size set.
+const sizeCell = sh => (setOfProduct(productOf(sh.productId)) ? html`<b>${sh.sizeCode || ''}</b>${sizeText(sh).replace(sh.sizeCode || '', '')}` : html`<span class="muted">No size</span>`);
 import { pageHead } from './shell.js';
 import { openLater } from '../core/later-work.js';
 
@@ -102,7 +105,7 @@ export function renderCustomerForm(el, id) {
       (openLater(e)?.items || []).filter(i => i.shutterKey).forEach(i => owed.set(i.shutterKey, { ...i, how: 'later work' }));
     });
     const owedPill = sh => { const o = owed.get(sh.id); return o ? html` ${pill(o.priority === 'URGENT' ? `Urgent · ${o.how}` : o.how, o.priority === 'URGENT' ? 'red' : 'amber')}` : ''; };
-    const shMatch = sh => terms.every(t => [sh.tag, sh.location, productName(sh.productId), sh.serial, sh.motor, sh.sizeCode].join(' ').toLowerCase().includes(t));
+    const shMatch = sh => terms.every(t => [sh.tag, sh.location, productName(sh.productId), sh.serial, sh.motor, sizeText(sh)].join(' ').toLowerCase().includes(t));
     const siteMatch = s => terms.every(t => [s.name, s.address, s.blockUnit, zoneLabel(s.zoneId)].join(' ').toLowerCase().includes(t));
     const parts = draft.sites.map((s, i) => {
       const list = terms.length && !siteMatch(s) ? s.shutters.filter(shMatch) : s.shutters;
@@ -113,11 +116,10 @@ export function renderCustomerForm(el, id) {
         <div class="grid g2 form-lines">${inp('name', 'Site name')}${inp('address', 'Address')}${inp('blockUnit', 'Block / Level / Unit')}
           <div class="field"><label>Zone</label><select data-site="${i}" data-f="zoneId" ${editable ? '' : 'disabled'}><option value="">Not set</option>${zones().map(z => html`<option value="${z.id}" ${z.id === s.zoneId ? 'selected' : ''}>${z.code} · ${z.name}</option>`)}</select></div>
           ${inp('postal', 'Postal code')}${inp('access', 'Access notes')}</div>
-        <div class="tbl-wrap" style="max-height:none;margin-top:8px"><table class="tbl"><thead><tr><th>Tag</th><th>Location</th><th>Type</th><th>Width × height</th><th>Size</th><th>Motor</th><th>Serial</th><th>Install date</th><th>Added from</th><th>Status</th>${editable ? html`<th></th>` : ''}</tr></thead><tbody>
+        <div class="tbl-wrap" style="max-height:none;margin-top:8px"><table class="tbl"><thead><tr><th>Tag</th><th>Location</th><th>Product</th><th>Size</th><th>Make / model</th><th>Serial</th><th>Install date</th><th>Added from</th><th>Status</th>${editable ? html`<th></th>` : ''}</tr></thead><tbody>
           ${list.length ? html`${list.map(sh => html`<tr><td class="lnk">${sh.tag}${owedPill(sh)}</td><td>${sh.location}</td><td>${productName(sh.productId)}</td>
-            <td>${sh.width && sh.height ? html`${fmtNum(sh.width)} × ${fmtNum(sh.height)} ${sh.unit}${sh.unit === 'ft' ? html` <span class="muted small">(${fmtNum(sh.widthM)} × ${fmtNum(sh.heightM)} m)</span>` : ''}` : '—'}</td>
-            <td><b>${sh.sizeCode}</b>${sh.fireRated ? html` <span class="tag">fire</span>` : ''}</td><td>${sh.motor}</td><td>${sh.serial}</td><td>${sh.installDate}</td><td class="small">${sh.source}</td><td>${sh.outOfService ? pill('Out of service', 'red') : pill(sh.status)}</td>
-            ${editable ? html`<td><button type="button" class="btn link small" data-edsh="${i}:${sh.id}">Edit</button></td>` : ''}</tr>`)}` : emptyRow(11, terms.length ? 'No product matches.' : 'No customer products recorded at this site yet.')}
+            <td>${sizeCell(sh)}${sh.fireRated ? html` <span class="tag">fire</span>` : ''}</td><td>${sh.motor}</td><td>${sh.serial}</td><td>${sh.installDate}</td><td class="small">${sh.source}</td><td>${sh.outOfService ? pill('Out of service', 'red') : pill(sh.status)}</td>
+            ${editable ? html`<td><button type="button" class="btn link small" data-edsh="${i}:${sh.id}">Edit</button></td>` : ''}</tr>`)}` : emptyRow(10, terms.length ? 'No product matches.' : 'No customer products recorded at this site yet.')}
         </tbody></table></div></div>`;
     });
     $('#sites', el).innerHTML = String(draft.sites.length ? html`${parts}` : html`<div class="muted">No sites yet.${editable ? ' Use “+ Add site”.' : ''}</div>`);
@@ -126,31 +128,57 @@ export function renderCustomerForm(el, id) {
     $$('#sites select[data-site]', el).forEach(s => s.addEventListener('change', () => { syncSites(); paintSites(); }));
   }
 
+  // A customer product: its product decides what is asked (Product master): width × height or one figure (kW, A …) and
+  // the size, or nothing about size; the fire drop test only for doors and shutters (Width × height).
   function shutterDialog(siteIdx, shutterId) {
     const site = draft.sites[siteIdx];
-    const sh = shutterId ? site.shutters.find(x => x.id === shutterId) : { tag: nextShutterTag(site), location: '', productId: products()[0]?.id, width: '', height: '', unit: 'm', motor: '', serial: '', installDate: '', status: 'Active' };
-    const sizeOf = d => classifySize(toMetres(d.width, d.unit), toMetres(d.height, d.unit), sizes());
-    const sizeCodes = sizes().filter(z => z.status !== 'Inactive').sort((a, b) => a.order - b.order).map(z => z.code);
+    const kept = products().filter(keeps);
+    const first = kept[0]?.id;
+    const sh = shutterId ? site.shutters.find(x => x.id === shutterId) : { tag: productTag(site, first), location: '', productId: first, width: '', height: '', unit: 'm', measure: null, motor: '', serial: '', installDate: '', status: 'Active' };
+    const sizeOf = d => classifyFor(productOf(d.productId), { width: d.width, height: d.height, unit: d.unit, measure: d.measure });
+    let tagTouched = !!shutterId;
+    const sizePart = d => {
+      const p = productOf(d.productId), set = setOfProduct(p);
+      if (!set) return html`<div class="field span2"><div class="hint">No size: ${costingOf(p) === 'HOURS' ? 'its hours are the product\'s standard hours' : 'not sized'}.</div></div>`;
+      const codes = sizesOf(p).map(z => z.code);
+      const size = field({ name: 'sizeCode', label: `Size (from the ${isTwoFigure(set) ? 'width × height' : set.name.toLowerCase()} when measured)`, type: 'select', options: codes, value: sizeOf(d) || (codes.includes(d.sizeCode) ? d.sizeCode : ''), required: true });
+      return isTwoFigure(set)
+        ? html`${field({ name: 'width', label: 'Width', type: 'number', step: '0.01', value: d.width })}${field({ name: 'height', label: 'Height', type: 'number', step: '0.01', value: d.height })}
+          ${field({ name: 'unit', label: 'Unit', type: 'select', options: [{ value: 'm', label: 'metres' }, { value: 'ft', label: 'feet' }], value: d.unit || 'm', blank: false })}${size}
+          ${field({ name: 'fireRated', label: 'Fire-rated (the AMC check list adds the fire drop test)', type: 'checkbox', value: d.fireRated, cls: 'span2' })}`
+        : html`${field({ name: 'measure', label: `${set.name} (${set.unit})`, type: 'number', step: 'any', value: d.measure ?? '' })}${size}`;
+    };
     openModal({
       title: shutterId ? `Edit product ${sh.tag}` : `Add a product at ${site.name || 'site'}`,
       body: html`<div class="grid g2 form-lines" id="shf">
         ${field({ name: 'tag', label: 'Tag', value: sh.tag, required: true })}${field({ name: 'location', label: 'Location', value: sh.location, required: true, cls: 'span2' })}
-        ${field({ name: 'productId', label: 'Type', type: 'select', options: products().map(p => ({ value: p.id, label: p.name })), value: sh.productId, required: true })}
-        ${field({ name: 'width', label: 'Width', type: 'number', step: '0.01', value: sh.width })}${field({ name: 'height', label: 'Height', type: 'number', step: '0.01', value: sh.height })}
-        ${field({ name: 'unit', label: 'Unit', type: 'select', options: [{ value: 'm', label: 'metres' }, { value: 'ft', label: 'feet' }], value: sh.unit, blank: false })}
-        ${field({ name: 'sizeCode', label: 'Size (from width × height when measured)', type: 'select', options: sizeCodes, value: sizeOf(sh) || sh.sizeCode, required: true })}
+        ${field({ name: 'productId', label: 'Product', type: 'select', options: kept.filter(p => p.id !== sh.productId).concat(productOf(sh.productId) || []).sort((a, b) => a.name.localeCompare(b.name)).map(p => ({ value: p.id, label: p.name })), value: sh.productId, required: true })}
         ${field({ name: 'status', label: 'Status', type: 'select', options: ['Active', 'Inactive'], value: sh.status, blank: false })}
-        ${field({ name: 'motor', label: 'Motor (make / model)', value: sh.motor })}${field({ name: 'serial', label: 'Serial no.', value: sh.serial })}
-        ${field({ name: 'installDate', label: 'Install date', type: 'date', value: sh.installDate })}
-        ${field({ name: 'fireRated', label: 'Fire-rated shutter (the AMC check list adds the fire drop test)', type: 'checkbox', value: sh.fireRated, cls: 'span2' })}</div>`,
-      // Measuring sets the size by the one rule; a product recorded from a site report may only have the size tapped on site.
-      onOpen: body => body.addEventListener('input', () => { const code = sizeOf(readForm(body)); if (code) $('[name="sizeCode"]', body).value = code; }),
+        <div class="grid g2 span2" id="szbox" style="grid-column:1/-1">${sizePart(sh)}</div>
+        ${field({ name: 'motor', label: 'Make / model', value: sh.motor })}${field({ name: 'serial', label: 'Serial no.', value: sh.serial })}
+        ${field({ name: 'installDate', label: 'Install date', type: 'date', value: sh.installDate })}</div>`,
+      // Measuring sets the size; another product changes what is asked (and the next tag, until the tag is typed).
+      onOpen: body => {
+        body.addEventListener('input', e => {
+          if (e.target.name === 'tag') tagTouched = true;
+          const code = sizeOf(readForm(body)); const sel = $('[name="sizeCode"]', body); if (code && sel) sel.value = code;
+        });
+        body.addEventListener('change', e => {
+          if (e.target.name !== 'productId') return;
+          const d = readForm(body);
+          $('#szbox', body).innerHTML = String(sizePart({ ...d, width: '', height: '', measure: null, sizeCode: '' }));
+          if (!tagTouched) $('[name="tag"]', body).value = productTag(site, d.productId);
+        });
+      },
       actions: [{ label: 'Cancel' }, { label: shutterId ? 'Update product' : 'Add product', kind: 'primary', onClick: body => {
         const d = readForm(body);
-        if (!markInvalid(body, ['tag', 'location', 'productId', 'sizeCode'].filter(n => n === 'sizeCode' ? !sizeOf(d) && !d.sizeCode : d[n] === '' || d[n] == null))) return false;
+        const set = setOfProduct(productOf(d.productId));
+        if (!markInvalid(body, ['tag', 'location', 'productId', 'sizeCode'].filter(n => n === 'sizeCode' ? !!set && !sizeOf(d) && !d.sizeCode : d[n] === '' || d[n] == null))) return false;
         if (site.shutters.some(x => x.id !== shutterId && x.tag.toLowerCase() === d.tag.toLowerCase())) { markInvalid(body, ['tag'], 'Tag already used at this site'); return false; }
-        const widthM = toMetres(d.width, d.unit), heightM = toMetres(d.height, d.unit);
-        const next = { ...sh, ...d, widthM, heightM, sizeCode: classifySize(widthM, heightM, sizes()) || d.sizeCode };
+        const two = isTwoFigure(set);
+        const dims = set && two ? { width: d.width, height: d.height, unit: d.unit, widthM: toMetres(d.width, d.unit), heightM: toMetres(d.height, d.unit), measure: null }
+          : { width: null, height: null, unit: 'm', widthM: null, heightM: null, measure: set ? d.measure : null, fireRated: false };
+        const next = { ...sh, ...d, ...dims, sizeCode: set ? sizeOf(d) || d.sizeCode : '' };
         if (shutterId) Object.assign(sh, next); else site.shutters.push({ ...next, id: store.uid('sht_'), source: 'Manual' });
         paintSites();
       } }],

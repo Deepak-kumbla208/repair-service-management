@@ -8,7 +8,7 @@ import { html, $, $$, go, field, chipGroup, readForm, markInvalid, openModal, co
 import { vsOptions, vsLabel, zones, zoneLabel } from '../core/lookups.js';
 import { findDuplicates, primaryContact } from '../core/customers.js';
 import { saveNewEnquiry, saveEnquiryChanges } from '../core/enquiries.js';
-import { techniciansFor } from '../core/inspections.js';
+import { techniciansFor, groupsOf } from '../core/inspections.js';
 import { parseEmail, SAMPLE_EMAIL } from '../core/intake.js';
 import { saveBlob, removeBlob, getUrl, fmtSize } from '../core/media.js';
 import { bindMics } from '../core/capture.js';
@@ -183,7 +183,7 @@ export function renderEnquiryForm(el, id) {
       const site = c.sites.find(s => s.id === st.siteId);
       body = html`${field({ name: 'siteId', label: 'Site Location', type: 'select', options: c.sites.map(s => ({ value: s.id, label: s.name })), value: st.siteId, required: true, blankLabel: 'Choose a site…', hint: html`<a href="#" id="newSite">+ New site</a>` })}
         ${row('Zone', site ? (site.zoneId ? zoneLabel(site.zoneId) : html`<span class="muted">Not set</span>`) : '')}
-        ${site?.shutters?.length ? row('Customer products', html`${site.shutters.map(s => html`<span class="pill" style="margin:0 4px 4px 0">${s.tag} ${s.location} · ${s.sizeCode}</span>`)}`) : ''}`;
+        ${site?.shutters?.length ? row('Customer products', html`${site.shutters.map(s => html`<span class="pill" style="margin:0 4px 4px 0">${s.tag} ${s.location}${s.sizeCode ? ` · ${s.sizeCode}` : ''}</span>`)}`) : ''}`;
     } else {
       body = html`<div class="muted" style="padding:4px 0 6px">Choose the customer first.</div>`;
     }
@@ -212,8 +212,9 @@ export function renderEnquiryForm(el, id) {
     const techId = keep('technicianId', insp?.technicianId || '');
     const date = keep('visitDate', visit ? dateInput(visit) : ''), time = keep('visitTime', visit ? timeInput(visit) : '');
     const zoneId = currentZone();
-    const opts = techniciansFor(zoneId, date ? joinDateTime(date, time) : new Date().toISOString())
-      .map(x => ({ value: x.tech.id, label: `${x.tech.name}${x.match ? ` · covers Zone ${store.get('zones', zoneId)?.code}` : ''}${x.visits ? ` · ${x.visits} visit(s) that day` : ''}` }));
+    const groups = groupsOf(lines.read().filter(l => l.itemRef.startsWith('prd:')).map(l => l.itemRef.slice(4)));
+    const opts = techniciansFor(zoneId, date ? joinDateTime(date, time) : new Date().toISOString(), groups)
+      .map(x => ({ value: x.tech.id, label: `${x.tech.name}${x.match ? ` · covers Zone ${store.get('zones', zoneId)?.code}` : ''}${x.missing.length ? ` · does not work on ${x.missing.map(g => vsLabel('PRODUCT_GROUP', g)).join(', ')}` : ''}${x.visits ? ` · ${x.visits} visit(s) that day` : ''}` }));
     box.innerHTML = String(html`
       ${field({ name: 'technicianId', label: 'Technician', type: 'select', options: opts, value: techId, blankLabel: 'Assign later' })}
       <div class="field"><label>Visit date / time</label><div class="row"><input type="date" name="visitDate" value="${date}"><input type="time" name="visitTime" value="${time}" style="width:110px"></div></div>
@@ -222,6 +223,8 @@ export function renderEnquiryForm(el, id) {
     v('visitDate').addEventListener('change', paintInspection);
   }
   $$('[name="siteInspection"]', form).forEach(r => r.addEventListener('change', () => { st.siteTouched = true; paintInspection(); }));
+  // A product picked on a line can change which technicians work on it (Works on, Employee master).
+  $('#linesBox', el).addEventListener('change', e => { if (e.target.dataset.c === 'item') paintInspection(); });
   v('type').addEventListener('change', () => { if (!st.siteTouched) setRadio('siteInspection', v('type').value === 'REPAIR' ? 'YES' : 'NO'); paintInspection(); });
   const paintOther = () => { $('#otherRow', el).hidden = v('channel').value !== 'OTHER'; };
   v('channel').addEventListener('change', paintOther);

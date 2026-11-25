@@ -4,7 +4,7 @@ import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, on, debounce, tiles, pill, fmtDateTime, icon, readForm, toast, dateInput, timeInput, joinDateTime } from '../core/ui.js';
 import { cleanLines } from '../core/enquiries.js';
-import { techniciansFor, assignTechnician } from '../core/inspections.js';
+import { techniciansFor, assignTechnician, enquiryGroups } from '../core/inspections.js';
 import { vsLabel, zoneLabel, empName } from '../core/lookups.js';
 import { enquiryTiles } from '../web/enquiry-list.js';
 import { workflowHtml } from '../web/enquiry-view.js';
@@ -56,7 +56,7 @@ export function mEnquiry(page, id) {
       ${insp && insp.status !== 'Cancelled' ? html`<br>Site inspection: ${insp.status}${insp.technicianId ? ` · ${empName(insp.technicianId)} · ${fmtDateTime(insp.visitAt)}` : ''}` : ''}</div>
     ${canAssign ? html`<div class="m-section">Assign technician</div>
       <form class="m-card m-fields" id="asg" onsubmit="return false">
-        <div class="field"><label>Technician</label><select name="technicianId">${techniciansFor(insp.zoneId, insp.visitAt || new Date().toISOString()).map(x => html`<option value="${x.tech.id}" ${x.tech.id === insp.technicianId ? 'selected' : ''}>${x.tech.name}${x.match ? ' · covers the zone' : ''}${x.visits ? ` · ${x.visits} visit(s) that day` : ''}</option>`)}</select></div>
+        <div class="field"><label>Technician</label><select name="technicianId">${techniciansFor(insp.zoneId, insp.visitAt || new Date().toISOString(), enquiryGroups(e)).map(x => html`<option value="${x.tech.id}" ${x.tech.id === insp.technicianId ? 'selected' : ''}>${x.tech.name}${x.match ? ' · covers the zone' : ''}${x.missing.length ? ' · not all products' : ''}${x.visits ? ` · ${x.visits} visit(s) that day` : ''}</option>`)}</select></div>
         <div class="row"><div class="field grow"><label>Visit date</label><input type="date" name="visitDate" value="${visit ? dateInput(visit) : dateInput()}"></div><div class="field"><label>Time</label><input type="time" name="visitTime" value="${visit ? timeInput(visit) : '10:00'}"></div></div>
         <div class="field"><label>Confirmed with the customer by</label><select name="confirmedBy">${['Call', 'WhatsApp', 'Email', 'SMS'].map(x => html`<option ${x === insp.confirmedBy ? 'selected' : ''}>${x}</option>`)}</select></div>
         <button class="btn primary block" id="saveAsg">Save assignment</button></form>` : ''}

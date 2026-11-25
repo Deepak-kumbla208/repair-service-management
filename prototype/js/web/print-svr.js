@@ -5,6 +5,7 @@ import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $ } from '../core/ui.js';
 import { zones, productName } from '../core/lookups.js';
+import { sizeText } from '../core/products.js';
 import { hydrateImages } from '../core/media.js';
 import { findingRows, perProduct, priorityLabel } from '../core/inspections.js';
 import { logoHtml } from './print-docs.js';
@@ -21,7 +22,7 @@ function sheetHead(company) {
       <div>Tel: ${company.tel} &nbsp;|&nbsp; Mobile: ${company.mobile} &nbsp;|&nbsp; Email: ${company.email}</div></div></div>`;
 }
 
-// Text for "Full Address & Shutter Location": the site address plus the products in Job scope (a new one once it
+// Text for "Full Address & Product Location" (was "Shutter Location": products of every trade, user 25 Nov 2026): the site address plus the products in Job scope (a new one once it
 // has a location).
 export const shutterLocations = rep => rep.shutters.filter(s => s.location).map(s => `${s.tag} ${s.location}`.trim()).join('; ');
 
@@ -52,7 +53,7 @@ export function svrSheetHtml(rep, company) {
       ${sec(1, 'GENERAL DETAILS', 4)}
       <tr><td class="lbl">Company / Customer</td><td data-f="s1.customer">${s1.customer}</td><td class="lbl">Date of Viewing</td><td data-f="s1.viewDate">${dmy(s1.viewDate)}</td></tr>
       <tr><td class="lbl">Site / Project</td><td data-f="s1.site">${s1.site}</td><td class="lbl">Report / Ref. No.</td><td>${rep.no}</td></tr>
-      <tr><td class="lbl">Full Address &amp; Shutter Location</td><td data-f="s1.address">${s1.address}${loc ? html`<br>${loc}` : ''}</td><td class="lbl">Contact Person</td><td data-f="s1.contactPerson">${s1.contactPerson}</td></tr>
+      <tr><td class="lbl">Full Address &amp; Product Location</td><td data-f="s1.address">${s1.address}${loc ? html`<br>${loc}` : ''}</td><td class="lbl">Contact Person</td><td data-f="s1.contactPerson">${s1.contactPerson}</td></tr>
       <tr><td class="lbl">Block / Level / Unit</td><td data-f="s1.blockUnit">${s1.blockUnit}</td><td class="lbl">Contact No. / Email</td><td data-f="s1.contactNo">${s1.contactNo}</td></tr>
       <tr><td class="lbl">Viewed By</td><td data-f="s1.viewedBy">${s1.viewedBy}</td><td class="lbl">Time In / Out <span class="small">24-hour</span></td><td data-f="s1.timeIn s1.timeOut">${s1.timeIn || ''} / ${s1.timeOut || ''}</td></tr>
     </table>
@@ -109,7 +110,7 @@ export function photoSheetHtml(rep, company) {
   if (!rep.photos.length) return '';
   return html`<div class="sheet"><div class="demo-water"><span>DEMO</span></div>${sheetHead(company)}
     <p><b>Attachment to ${rep.no}: site photos</b> (taken on the phone; not part of the printed form)</p>
-    <p class="small">Products: ${rep.shutters.map(s => `${s.tag} ${s.location} (${productName(s.productId)}, ${s.sizeCode || '?'}${s.finding ? `: ${s.finding}` : ''})`).join('; ') || '—'}</p>
+    <p class="small">Products: ${rep.shutters.map(s => `${[s.tag || (s.notKept ? `${s.qty} ${s.uom || ''}`.trim() : ''), s.location].filter(Boolean).join(' ')} (${[productName(s.productId), sizeText(s, { none: '' })].filter(Boolean).join(', ')}${s.finding ? `: ${s.finding}` : ''})`).join('; ') || '—'}</p>
     <div class="photo-grid">${rep.photos.map(p => html`<img data-media="${p}" alt="Site photo">`)}</div>
     <div class="foot"><span>${company.name} &nbsp;|&nbsp; ${rep.no} attachment</span><span>Photos</span></div></div>`;
 }

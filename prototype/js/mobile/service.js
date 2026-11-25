@@ -41,7 +41,7 @@ export function serviceCard(kind, d) {
     <div class="row"><span class="pill ${kind === 'visit' ? 'green' : 'purple'}">${kind === 'visit' ? `AMC visit ${d.n} of ${d.of}` : 'General servicing'}</span><span class="grow"></span><b>${d.start ? `${fmtDate(d.start)} ${fmtTime(d.start)}` : 'Not scheduled'}</b></div>
     <div class="strong" style="margin-top:6px">${d.customer}</div>
     <div class="muted">${d.site} · Zone ${zoneLabel(d.zoneId)}</div>
-    <div class="muted">${kind === 'visit' ? d.contractNo : d.no} · ${(d.shutters || []).length} shutters · ${d.contact}</div>
+    <div class="muted">${kind === 'visit' ? d.contractNo : d.no} · ${(d.shutters || []).length} products · ${d.contact}</div>
     <div class="row" style="margin-top:4px"><span class="pill">${d.status}</span>${d.days > 1 ? html`<span class="small muted">${d.days} days</span>` : ''}</div>
     <div class="actions">${d.phone ? html`<a class="btn" href="tel:${d.phone.replace(/\s/g, '')}">${icon('call', 15)} Call</a>` : ''}<a class="btn primary" href="#/m/${kind}/${d.id}" style="flex:2">${action}</a></div>
   </div>`;
@@ -59,7 +59,7 @@ export function mService(page, kind, id) {
     <h2 style="margin:8px 0 2px">${d.customer}</h2><div class="muted">${kind === 'visit' ? `${d.contractNo} · visit ${d.n} of ${d.of}` : d.no} · ${d.start ? fmtDate(d.start) : ''}</div>
     <div class="m-card" style="margin-top:10px"><div class="k muted small">Address</div>${d.address || d.site}<br><span class="pill blue" style="margin-top:4px">Zone ${zoneLabel(d.zoneId)}</span>${d.access ? html`<div class="small" style="margin-top:4px">Access: ${d.access}</div>` : ''}</div>
     <div class="m-card"><div class="k muted small">Contact</div>${d.contact}<br>${d.phone ? html`<div class="m-acts"><a class="btn" href="tel:${d.phone.replace(/\s/g, '')}">${icon('call', 15)} ${d.phone}</a></div>` : ''}</div>
-    <div class="m-section">Shutters to check (${d.shutters.length})</div>${d.shutters.map(sh => html`<div class="m-card small"><b>${sh.tag}</b> ${sh.location} · ${sh.typeName} · ${sh.sizeCode}${sh.fireRated ? ' · fire-rated' : ''}</div>`)}
+    <div class="m-section">Products to check (${d.shutters.length})</div>${d.shutters.map(sh => html`<div class="m-card small"><b>${sh.tag}</b> ${sh.location} · ${[sh.typeName, sh.sizeText || sh.sizeCode].filter(Boolean).join(' · ')}${sh.fireRated ? ' · fire-rated' : ''}</div>`)}
     ${kind === 'gjob' ? html`<div class="m-section">Payment</div><div class="m-card small">${vsLabel('PAYMENT_TERMS', d.paymentTerm)}${inv?.status === 'Posted' && d.paymentTerm === 'IMMEDIATE' ? html` · ${inv.no} · <b>collect ${auth.company().currency} ${m2(balanceOf(inv))}</b>` : ' · invoice from the office'}</div>`
       : html`<div class="m-section">Payment</div><div class="m-card small">Nothing to collect: the contract is billed by its plan.</div>`}
     ${d.steps?.checkInAt ? html`<div class="m-section">Steps</div>${progress(kind, d, '')}` : ''}`);
@@ -103,7 +103,7 @@ export function mShutter(page, kind, id, shutterId) {
   const coll = COLL[kind];
   const d = store.get(coll, id);
   const sh = d?.shutters.find(s => s.shutterId === shutterId);
-  if (!d || !sh || !mine(kind, d)) { page.setTitle('Shutter', 'm/jobs'); page.body.innerHTML = '<div class="empty">Not found.</div>'; return; }
+  if (!d || !sh || !mine(kind, d)) { page.setTitle('Product', 'm/jobs'); page.body.innerHTML = '<div class="empty">Not found.</div>'; return; }
   page.setTitle(`${sh.tag} ${sh.location}`, `m/${kind}/${id}/list`);
   const locked = !!signOf(coll, d)?.signedAt || !canWork(kind, d);
   const st = shutterState(d, sh);
@@ -111,7 +111,7 @@ export function mShutter(page, kind, id, shutterId) {
   const parts = [{ value: '', label: 'No part' }, ...items().map(i => ({ value: i.id, label: i.name }))];
   const on = st.items.filter(i => i.on), off = st.items.filter(i => !i.on);
   page.body.innerHTML = String(html`
-    <div class="row" style="margin-bottom:4px"><span class="muted small">${sh.typeName} · ${sh.sizeCode}${sh.fireRated ? ' · fire-rated' : ''}</span><span class="grow"></span>${locked ? '' : html`<button class="btn small" id="allPass">✓ All pass</button>`}</div>
+    <div class="row" style="margin-bottom:4px"><span class="muted small">${[sh.typeName, sh.sizeText || sh.sizeCode].filter(Boolean).join(' · ')}${sh.fireRated ? ' · fire-rated' : ''}</span><span class="grow"></span>${locked ? '' : html`<button class="btn small" id="allPass">✓ All pass</button>`}</div>
     ${last ? html`<div class="small" style="margin-bottom:6px;color:${last.fails.length ? 'var(--red-ink)' : 'var(--green-ink)'}">Last visit (${last.n}): ${last.fails.length ? last.fails.map(f => f.label).join(', ') : 'all pass'}</div>` : ''}
     ${on.map(i => html`<div class="ck"><div class="t"><b>${i.label}${i.hint ? html`<small>${i.hint}</small>` : ''}</b><span class="pf">${[['P', 'Pass', 'p'], ['F', 'Fail', 'f'], ['NA', 'N/A', 'na']].map(([r, label, cls]) => html`<button type="button" class="${i.r === r ? cls : ''}" data-r="${i.code}|${r}" ${locked ? 'disabled' : ''}>${label}</button>`)}</span></div>
       ${i.r === 'F' ? html`<div class="failbox"><div class="row" style="gap:8px;align-items:flex-start">
@@ -121,7 +121,7 @@ export function mShutter(page, kind, id, shutterId) {
               ${i.itemId ? html`× <input type="number" data-fqty="${i.code}" value="${i.qty || 1}" style="width:48px" ${locked ? 'disabled' : ''}>` : ''}</div></div></div>
         ${openFault(d, sh.shutterId, i.code) ? html`<div class="small" style="margin-top:6px;color:var(--red-ink)">Already open in ${openFault(d, sh.shutterId, i.code).no} (${openFault(d, sh.shutterId, i.code).status}): this will be added to it.</div>` : ''}</div>` : ''}</div>`)}
     ${off.length ? html`<div class="ck na"><div class="t"><b>${off.length} item${off.length > 1 ? 's' : ''} not for this type<small>${off.map(i => i.label).join(' · ')}</small></b><span class="pf"><span class="na">N/A</span></span></div></div>` : ''}
-    <label class="check" style="display:flex;margin:8px 0"><input type="checkbox" id="unsafe" ${st.unsafe ? 'checked' : ''} ${locked ? 'disabled' : ''}> Unsafe – take this shutter out of service</label>
+    <label class="check" style="display:flex;margin:8px 0"><input type="checkbox" id="unsafe" ${st.unsafe ? 'checked' : ''} ${locked ? 'disabled' : ''}> Unsafe – take this product out of service</label>
     <p class="muted small">An adjustment you made on the spot is a Pass with a note. Fail means a repair is needed.</p>`);
   hydrateImages(page.body);
   bindMics(page.body);
@@ -135,16 +135,16 @@ export function mShutter(page, kind, id, shutterId) {
   $('#unsafe', page.body)?.addEventListener('change', e => setUnsafe(coll, id, shutterId, e.target.checked));
   const list = d.shutters;
   const next = list[list.findIndex(s => s.shutterId === shutterId) + 1];
-  const foot = page.setFoot(html`<a class="btn" href="#/m/${kind}/${id}/list">← All shutters</a>${next ? html`<a class="btn primary" href="#/m/${kind}/${id}/sh/${next.shutterId}">Next: ${next.tag} →</a>` : html`<a class="btn primary" href="#/m/${kind}/${id}/after">Next: After photos</a>`}`);
+  const foot = page.setFoot(html`<a class="btn" href="#/m/${kind}/${id}/list">← All products</a>${next ? html`<a class="btn primary" href="#/m/${kind}/${id}/sh/${next.shutterId}">Next: ${next.tag} →</a>` : html`<a class="btn primary" href="#/m/${kind}/${id}/after">Next: After photos</a>`}`);
   foot.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { $$('[data-fnote]', page.body).forEach(inp => setItem(coll, id, shutterId, inp.dataset.fnote, { note: inp.value })); }));
 }
 
 const RENDER = {
   start: (kind, d, locked) => html`<label class="check" style="display:flex;margin:4px 0 10px;font-weight:600"><input type="checkbox" id="safe" ${d.safeIsolation ? 'checked' : ''} ${locked ? 'disabled' : ''}> Safe isolation done (power off and locked) before work</label>
-    <p class="small muted" style="margin:0 0 6px">Take photos of the shutters before you start.</p>${photosBlock(d, 'photosBefore', 'Before photos')}`,
-  list: (kind, d) => (!d.shutters.length ? html`<div class="m-card">No shutters to check. Ask the office to add them to the site's shutter register.</div>` : html`${d.shutters.map(sh => { const st = shutterState(d, sh); return html`<a class="shl" href="#/m/${kind}/${d.id}/sh/${sh.shutterId}" style="display:block;color:inherit;text-decoration:none">
+    <p class="small muted" style="margin:0 0 6px">Take photos of the products before you start.</p>${photosBlock(d, 'photosBefore', 'Before photos')}`,
+  list: (kind, d) => (!d.shutters.length ? html`<div class="m-card">No products to check. Ask the office to add them to the site's customer products.</div>` : html`${d.shutters.map(sh => { const st = shutterState(d, sh); return html`<a class="shl" href="#/m/${kind}/${d.id}/sh/${sh.shutterId}" style="display:block;color:inherit;text-decoration:none">
       <div class="r"><b>${sh.tag}</b>&nbsp;${sh.location}<span class="grow"></span>${st.fails ? pill(`${st.fails} fail`, 'red') : st.answered === st.total ? pill('All pass', 'green') : pill(st.answered ? `${st.answered} of ${st.total}` : 'Not started')}</div>
-      <div class="muted small">${sh.typeName} · ${sh.sizeCode}${sh.fireRated ? ' · fire-rated' : ''} · ${st.total} items${st.off ? ` (${st.off} N/A)` : ''}</div><div class="minibar"><i style="width:${st.total ? (st.answered / st.total) * 100 : 0}%;${st.answered === st.total && !st.fails ? 'background:var(--green)' : ''}"></i></div></a>`; })}`),
+      <div class="muted small">${[sh.typeName, sh.sizeText || sh.sizeCode].filter(Boolean).join(' · ')}${sh.fireRated ? ' · fire-rated' : ''} · ${st.total} items${st.off ? ` (${st.off} N/A)` : ''}</div><div class="minibar"><i style="width:${st.total ? (st.answered / st.total) * 100 : 0}%;${st.answered === st.total && !st.fails ? 'background:var(--green)' : ''}"></i></div></a>`; })}`),
   after: (kind, d) => photosBlock(d, 'photosAfter', 'After photos'),
   signoff: (kind, d, locked) => {
     const coll = COLL[kind];
@@ -153,7 +153,7 @@ const RENDER = {
     const pad = (who, sid) => (sid ? html`<img class="sig-img" data-media="${sid}" alt="Signature">${locked ? '' : html`<button type="button" class="btn link small" data-resign="${who}">Sign again</button>`}`
       : html`<canvas class="sig-pad" id="sig_${who}" style="height:100px"></canvas><div class="hint small muted">Sign with a finger or the mouse.</div>`);
     return html`<div class="wd-sec">INSPECTION CHECK LIST · ${kind === 'visit' ? d.reportNo : d.no}</div>
-      <div class="wd-kv"><span class="k">Customer</span><span>${d.customer}</span><span class="k">Site</span><span>${d.site}</span><span class="k">Result</span><span><b>${d.shutters.length} shutters</b> · ${fails.length ? `${fails.length} failed item(s)` : 'all pass'}</span></div>
+      <div class="wd-kv"><span class="k">Customer</span><span>${d.customer}</span><span class="k">Site</span><span>${d.site}</span><span class="k">Result</span><span><b>${d.shutters.length} products</b> · ${fails.length ? `${fails.length} failed item(s)` : 'all pass'}</span></div>
       ${fails.length ? html`<div class="wd-sec">FAILED ITEMS</div>${fails.map(f => { const o = openFault(d, f.shutterId, f.code); return html`<div class="wl small"><b>${f.tag} ${f.label}</b> · ${f.note || html`<span style="color:var(--red-ink)">note missing</span>`} · ${o ? html`added to <b>${o.no}</b>` : html`<b>new repair enquiry</b>`}</div>`; })}` : ''}
       <div class="wd-sec">CUSTOMER FEEDBACK</div><div class="small muted">Hand the phone to the customer. 5 Excellent · 1 Very poor</div>
       ${RATINGS.map(([k, label]) => html`<div class="rate"><span>${label}</span>${[5, 4, 3, 2, 1].map(n => html`<button type="button" class="dot ${s.ratings[k] === n ? 'on' : ''}" data-rate="${k}|${n}" ${locked ? 'disabled' : ''}>${n}</button>`)}</div>`)}

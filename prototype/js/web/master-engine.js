@@ -1,12 +1,14 @@
 // Generic master list + form engine: page search, status filter, Code + Name, unique codes,
-// placeholder tags, Active / Inactive status, and an editable child table (Value Set values).
+// placeholder tags, Active / Inactive status, an editable child table (Value Set values), group headings with count
+// tiles (groupBy), and fields shown only when they apply (showIf).
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, $$, on, go, debounce, field, readForm, markInvalid, toast, fmtMoney, pill, placeholderTag, emptyRow } from '../core/ui.js';
+import { html, $, $$, on, go, debounce, field, readForm, markInvalid, toast, fmtMoney, pill, placeholderTag, emptyRow, tiles } from '../core/ui.js';
 import { withCompany } from '../core/lookups.js';
 import { nextCode } from '../core/customers.js';
 import { DEFS } from './master-defs.js';
 import { renderCustomerList, renderCustomerForm } from './customer.js';
+import { renderProductSize } from './product-size.js';
 import { pageHead } from './shell.js';
 
 const notFound = el => { el.innerHTML = '<div class="page"><div class="empty">Master not found.</div></div>'; };
@@ -23,27 +25,41 @@ function cell(def, col, r, company) {
 
 export function renderMasterList(el, key) {
   if (key === 'customer') return renderCustomerList(el);
+  if (key === 'size') return renderProductSize(el, null);
   const def = DEFS[key];
   if (!def) return notFound(el);
   const company = auth.company();
-  const state = { q: '', status: '' };
+  const state = { q: '', status: '', group: '' };
   el.innerHTML = String(html`<div class="page">
     ${pageHead({ crumb: 'Master', title: def.title, sub: def.note, actions: auth.can(key, 'create') ? html`<a class="btn primary" href="#/master/${key}/new">+ New</a>` : '' })}
+    ${def.groupBy ? html`<div id="tiles"></div>` : ''}
     <div class="filters"><input type="search" class="search" id="q" placeholder="Search ${def.title}: code, name and details">
       <select id="st"><option value="">Active and inactive</option><option>Active</option><option>Inactive</option></select></div>
     <div class="tbl-wrap"><table class="tbl"><thead><tr>${def.columns.map(c => html`<th>${c[1]}</th>`)}<th>Status</th></tr></thead><tbody id="rows"></tbody></table></div>
     <div class="list-foot"><span id="count"></span></div>
   </div>`);
 
+  // groupBy: rows under a heading per group, in the group list's order; a count tile per group filters the list.
+  const grp = def.groupBy;
+  const groupOrder = () => { const o = grp.order(); return g => (o.includes(g) ? o.indexOf(g) : o.length); };
   function paint() {
     const all = store.list(def.coll).sort(def.sort || ((a, b) => String(a.code).localeCompare(String(b.code))));
     const terms = state.q.toLowerCase().split(/\s+/).filter(Boolean);
-    const shown = all.filter(r => (!state.status || (r.status || 'Active') === state.status)
+    const shown = all.filter(r => (!state.status || (r.status || 'Active') === state.status) && (!state.group || grp.label(r) === state.group)
       && terms.every(t => def.search(r).flat().join(' ').toLowerCase().includes(t)));
-    $('#rows', el).innerHTML = String(shown.length ? html`${shown.map(r => html`<tr class="click" data-id="${r.id}">${def.columns.map(c => cell(def, c, r, company))}<td>${pill(r.status || 'Active')}</td></tr>`)}`
-      : emptyRow(def.columns.length + 1, 'Nothing matches the search.'));
+    const row = r => html`<tr class="click" data-id="${r.id}">${def.columns.map(c => cell(def, c, r, company))}<td>${pill(r.status || 'Active')}</td></tr>`;
+    let body = shown.map(row);
+    if (grp) {
+      const rank = groupOrder();
+      const names = [...new Set(shown.map(grp.label))].sort((a, b) => rank(a) - rank(b));
+      body = names.map(g => html`<tr class="grp-row"><td colspan="${def.columns.length + 1}">${g}</td></tr>${shown.filter(r => grp.label(r) === g).map(row)}`);
+      const counts = [...new Set(all.map(grp.label))].sort((a, b) => rank(a) - rank(b));
+      $('#tiles', el).innerHTML = String(tiles([{ key: '', label: 'All', count: all.length }, ...counts.map(g => ({ key: g, label: g, count: all.filter(r => grp.label(r) === g).length }))], state.group));
+    }
+    $('#rows', el).innerHTML = String(shown.length ? html`${body}` : emptyRow(def.columns.length + 1, 'Nothing matches the search.'));
     $('#count', el).textContent = `${shown.length} of ${all.length} records`;
   }
+  if (grp) on(el, 'click', '[data-tile]', (e, b) => { state.group = b.dataset.tile; paint(); });
   $('#q', el).addEventListener('input', debounce(e => { state.q = e.target.value; paint(); }, 120));
   $('#st', el).addEventListener('change', e => { state.status = e.target.value; paint(); });
   on(el, 'click', 'tr[data-id]', (e, tr) => go(`master/${key}/${tr.dataset.id}`));
@@ -51,6 +67,7 @@ export function renderMasterList(el, key) {
 }
 
 // ---------- Child table editor (used by Value Set values) ----------
+// f.columns may depend on the record (the AMC check list has more columns).
 function tableEditor(box, f, rows, access, readOnly) {
   const canAdd = !readOnly && access !== 'System';
   const canRemove = !readOnly && access === 'User';
@@ -74,16 +91,20 @@ function tableEditor(box, f, rows, access, readOnly) {
 
 export function renderMasterForm(el, key, id) {
   if (key === 'customer') return renderCustomerForm(el, id);
+  if (key === 'size') return renderProductSize(el, id || 'new');
   const def = DEFS[key];
   if (!def) return notFound(el);
   const rec = id ? store.get(def.coll, id) : null;
   if (id && !rec) return notFound(el);
   const company = auth.company();
   const editable = auth.can(key, rec ? 'edit' : 'create');
-  const draft = rec ? structuredClone(rec) : { code: def.codePrefix ? nextCode(def.coll, def.codePrefix, def.codePad || 4) : '' };
+  const draft = rec ? { ...(def.defaults?.() || {}), ...structuredClone(rec) } : { ...(def.defaults?.() || {}), code: def.codePrefix ? nextCode(def.coll, def.codePrefix, def.codePad || 4) : '' };
   let readTable = null;
+  const shows = (f, d) => !f.showIf || f.showIf(d);
 
-  const fieldHtml = f => {
+  // A field shown only when it applies (showIf) sits in a wrapper that hides with it.
+  const fieldHtml = f => (f.showIf ? html`<div class="showif" data-show="${f.name}" ${shows(f, draft) ? '' : 'hidden'}>${fieldBody(f)}</div>` : fieldBody(f));
+  const fieldBody = f => {
     if (f.type === 'gap') return html`<div></div>`;
     const opts = typeof f.options === 'function' ? f.options() : f.options;
     const tag = html`${draft.placeholders?.includes(f.name) ? placeholderTag() : ''}${draft.tags?.[f.name] ? placeholderTag(draft.tags[f.name]) : ''}`;
@@ -112,7 +133,15 @@ export function renderMasterForm(el, key, id) {
   </div>`);
 
   const tableField = def.fields.find(f => f.type === 'table');
-  if (tableField) readTable = tableEditor($(`#tbl-${tableField.name}`, el), tableField, structuredClone(draft[tableField.name] || []), draft.access || 'User', !editable);
+  if (tableField) {
+    const tf = typeof tableField.columns === 'function' ? { ...tableField, columns: tableField.columns(draft) } : tableField;
+    readTable = tableEditor($(`#tbl-${tableField.name}`, el), tf, structuredClone(draft[tableField.name] || []), draft.access || 'User', !editable);
+  }
+  // Fields that depend on another (a product's costing) show and hide as it changes.
+  $('#f', el).addEventListener('change', () => {
+    const d = readForm($('#f', el));
+    def.fields.filter(f => f.showIf).forEach(f => { $(`[data-show="${f.name}"]`, el).hidden = !shows(f, d); });
+  });
 
   $('#toggle', el)?.addEventListener('click', () => {
     const next = rec.status === 'Inactive' ? 'Active' : 'Inactive';
@@ -126,7 +155,9 @@ export function renderMasterForm(el, key, id) {
     const d = readForm(form);
     def.fields.filter(f => f.type === 'multi').forEach(f => { d[f.name] = $$(`[data-multi="${f.name}"]`, form).filter(x => x.checked).map(x => x.value); });
     if (readTable) d[tableField.name] = readTable();
-    const missing = def.fields.filter(f => f.required && f.type !== 'table' && (d[f.name] === '' || d[f.name] == null)).map(f => f.name);
+    // A field that does not apply is not asked for and not kept.
+    def.fields.filter(f => !shows(f, d)).forEach(f => { d[f.name] = null; });
+    const missing = def.fields.filter(f => f.required && f.type !== 'table' && shows(f, d) && (d[f.name] === '' || d[f.name] == null)).map(f => f.name);
     if (!markInvalid(form, missing)) { toast('Fill in the required fields', 'bad'); return; }
     if (store.list(def.coll).some(r => r.id !== rec?.id && String(r.code).toLowerCase() === String(d.code).toLowerCase())) {
       markInvalid(form, ['code'], 'This code is already used'); return;

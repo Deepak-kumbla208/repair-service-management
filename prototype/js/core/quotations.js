@@ -30,12 +30,14 @@ function quoteTerms(docType = 'Quotation') {
 }
 
 // A priced line: a line with a quantity ("2 × Tension spring: worn") shows that quantity and the rate of one when its
-// price splits into whole cents; otherwise one lot with the count kept in the text, so Qty × Rate = Amount.
+// price splits into whole cents; otherwise one lot with the count kept in the text, so Qty × Rate = Amount. One unit
+// other than Nos ("1 Lot Sanitary plan submission") shows its own unit.
 function lineRow(l, line) {
   const q = Number(line?.qty) || 1, unit = line?.unit || 'Nos';
   const pre = unit !== 'Nos' ? `${q} ${unit} ` : `${q} × `;
-  const split = q > 1 && l.description.startsWith(pre) ? qtyRate(l.rounded, q) : { qty: 1, rate: l.rounded };
-  return split.qty > 1 ? { description: l.description.slice(pre.length), qty: split.qty, unit, rate: split.rate, amount: l.rounded }
+  const counted = l.description.startsWith(pre);
+  const split = q > 1 && counted ? qtyRate(l.rounded, q) : { qty: 1, rate: l.rounded };
+  return split.qty > 1 || (q === 1 && counted && unit !== 'Nos') ? { description: l.description.slice(pre.length), qty: split.qty, unit, rate: split.rate, amount: l.rounded }
     : { description: l.description, qty: 1, unit: q > 1 ? 'Lot' : 'Nos', rate: l.rounded, amount: l.rounded };
 }
 
@@ -307,8 +309,8 @@ export function autoChecks(q) {
   if (est.kind === 'AMC') amcChecks(q, est, add);
   else add(q.customerId === enq.customerId && q.siteId === enq.siteId, `Customer, contact and site match ${enq.no}`);
   if (est.kind !== 'AMC' && rep) {
-    const tags = rep.shutters.map(s => s.tag).sort().join(', ');
-    add(est.shutters.map(s => s.tag).sort().join(', ') === tags, `Shutters match the site report ${rep.no} (${tags || 'none'})`);
+    const tags = rep.shutters.map(s => s.tag).filter(Boolean).sort().join(', ');
+    add(est.shutters.map(s => s.tag).filter(Boolean).sort().join(', ') === tags, `Products match the site report ${rep.no} (${tags || 'none'})`);
     const names = rep.s5.rows.filter(r => r.name).map(r => r.name.toLowerCase());
     const hit = est.materials.filter(m => names.includes(m.name.toLowerCase())).length;
     add(hit === names.length, `Materials match the site report (${hit} of ${names.length})`);

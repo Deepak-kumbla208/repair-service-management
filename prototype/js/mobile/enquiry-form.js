@@ -4,10 +4,10 @@
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, $$, go, readForm, markInvalid, toast, confirmBox, dateInput, timeInput, joinDateTime, icon, MIC } from '../core/ui.js';
-import { vsOptions, zones, itemChoices, itemName, productInfo } from '../core/lookups.js';
+import { vsOptions, zones, itemChoices, itemName, productInfo, unitOptions } from '../core/lookups.js';
 import { findDuplicates, primaryContact } from '../core/customers.js';
 import { saveNewEnquiry, saveEnquiryChanges, cleanLines } from '../core/enquiries.js';
-import { techniciansFor } from '../core/inspections.js';
+import { techniciansFor, groupsOf } from '../core/inspections.js';
 import { bindMics } from '../core/capture.js';
 
 const CONFIRM_BY = ['Call', 'WhatsApp', 'Email', 'SMS'];
@@ -52,7 +52,7 @@ export function mEnquiryForm(page, id) {
     st.lines = $$('[data-line]', f).map(row => {
       const ref = $('[data-c="item"]', row).value;
       return { itemRef: ref, itemName: itemName(ref), qty: ref ? Number($('[data-c="qty"]', row).value) || 1 : null,
-        unit: ref ? ($('[data-c="unit"]', row).value.trim() || productInfo(ref)?.unit || 'Nos') : '', description: $('[data-c="desc"]', row).value.trim() };
+        unit: ref ? ($('[data-c="unit"]', row).value || productInfo(ref)?.unit || 'Nos') : '', description: $('[data-c="desc"]', row).value.trim() };
     });
   }
 
@@ -86,7 +86,7 @@ export function mEnquiryForm(page, id) {
     return html`${st.lines.map((l, i) => html`<div class="m-line" data-line="${i}">
       <div class="row"><select data-c="item" class="grow" aria-label="Product"><option value="">No product</option>${choices.map(g => html`<optgroup label="${g.group}">${g.options.map(o => html`<option value="${o.value}" ${o.value === l.itemRef ? 'selected' : ''}>${o.label}</option>`)}</optgroup>`)}</select>
         <button type="button" class="btn small" data-rm="${i}" aria-label="Remove this line">－</button></div>
-      ${l.itemRef ? html`<div class="row" style="margin-top:6px"><input type="number" min="1" data-c="qty" value="${l.qty || 1}" style="width:80px" aria-label="Quantity"><input data-c="unit" value="${l.unit || productInfo(l.itemRef)?.unit || 'Nos'}" style="width:80px" aria-label="Unit"><span class="small muted grow">${productInfo(l.itemRef)?.code || ''}</span></div>`
+      ${l.itemRef ? html`<div class="row" style="margin-top:6px"><input type="number" min="0" step="any" data-c="qty" value="${l.qty || 1}" style="width:80px" aria-label="Quantity"><select data-c="unit" style="width:90px" aria-label="Unit">${(u => unitOptions(u).map(c => html`<option ${c === u ? 'selected' : ''}>${c}</option>`))(l.unit || productInfo(l.itemRef)?.unit || 'Nos')}</select><span class="small muted grow">${productInfo(l.itemRef)?.code || ''}</span></div>`
         : html`<input type="hidden" data-c="qty" value=""><input type="hidden" data-c="unit" value="">`}
       <div class="with-mic" style="margin-top:6px"><input data-c="desc" name="line_desc_${i}" value="${l.description}" placeholder="${l.itemRef ? 'Where / what is wrong' : 'Describe what the customer needs'}"><button type="button" class="mic" data-mic="line_desc_${i}" title="Voice input">${MIC}</button></div>
     </div>`)}<button type="button" class="add-dashed" id="addLine">${icon('plus', 14)} Add a line</button>`;
@@ -94,9 +94,9 @@ export function mEnquiryForm(page, id) {
   function nextPart() {
     if (!assignable) return html`<div class="m-card small">Site inspection: ${insp.status} · change it from the site inspection.</div>`;
     const yes = st.siteInspection === 'YES';
-    const opts = techniciansFor(zoneNow(), st.visitDate ? joinDateTime(st.visitDate, st.visitTime) : new Date().toISOString());
+    const opts = techniciansFor(zoneNow(), st.visitDate ? joinDateTime(st.visitDate, st.visitTime) : new Date().toISOString(), groupsOf(st.lines.filter(l => l.itemRef?.startsWith('prd:')).map(l => l.itemRef.slice(4))));
     return html`${fld('Site inspection', seg('siteInspection', vsOptions('YES_NO'), st.siteInspection))}
-      ${yes ? html`${fld('Technician', html`<select name="technicianId"><option value="">Assign later</option>${opts.map(x => html`<option value="${x.tech.id}" ${x.tech.id === st.technicianId ? 'selected' : ''}>${x.tech.name}${x.match ? ' · covers the zone' : ''}</option>`)}</select>`)}
+      ${yes ? html`${fld('Technician', html`<select name="technicianId"><option value="">Assign later</option>${opts.map(x => html`<option value="${x.tech.id}" ${x.tech.id === st.technicianId ? 'selected' : ''}>${x.tech.name}${x.match ? ' · covers the zone' : ''}${x.missing.length ? ' · not all products' : ''}</option>`)}</select>`)}
         <div class="row">${fld('Visit date', html`<input type="date" name="visitDate" value="${st.visitDate}">`)}${fld('Time', html`<input type="time" name="visitTime" value="${st.visitTime}">`)}</div>
         ${fld('Confirmed by', html`<select name="confirmedBy">${CONFIRM_BY.map(x => html`<option ${x === st.confirmedBy ? 'selected' : ''}>${x}</option>`)}</select>`)}` : ''}`;
   }

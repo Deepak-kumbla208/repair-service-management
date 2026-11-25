@@ -36,7 +36,7 @@ function summaryTab(est, ctx, s, sees) {
       <table class="tbl cost-tbl"><thead><tr><th>Cost Head</th><th class="num">Amount (${auth.company().currency})</th>${sees ? html`<th class="num" style="white-space:normal">% of Selling Price</th>` : ''}</tr></thead><tbody>
         ${head('Labour', s.heads.labour, s.pct.labour)}${head('Transport', s.heads.transport, s.pct.transport)}${head('Materials', s.heads.materials, s.pct.materials)}${head('Equipment', s.heads.equipment, s.pct.equipment)}
         ${head('DIRECT COST', s.direct, s.pct.direct, 'sum')}${head('Overhead', s.overhead, s.pct.overhead)}${sees ? head('COST BEFORE MARGIN', s.cbm, s.pct.cbm, 'sum') : ''}
-        ${sees ? head('Margin', s.margin, s.pct.margin) : ''}${head('SELLING PRICE', s.subtotal, s.sell ? 1 : 0, 'sum')}${head(`${est.taxLabel || 'Tax'} ${fmtNum(est.taxRate)} %`, s.tax, null)}${head('TOTAL QUOTE', s.total, null, 'grand')}
+        ${sees ? head('Margin', s.margin, s.pct.margin) : ''}${s.fixed ? head('Fixed-price products (as priced)', s.fixed, s.sell ? s.fixed / s.sell : 0) : ''}${head('SELLING PRICE', s.subtotal, s.sell ? 1 : 0, 'sum')}${head(`${est.taxLabel || 'Tax'} ${fmtNum(est.taxRate)} %`, s.tax, null)}${head('TOTAL QUOTE', s.total, null, 'grand')}
       </tbody></table>
       <div><h3 style="margin:0 0 6px">Transport – zone wise</h3>
         <table class="tbl"><thead><tr><th>Zone</th><th class="num">Cost</th><th class="num">% of Transport</th></tr></thead><tbody>
@@ -100,7 +100,7 @@ export function renderEstimate(el, id) {
       <div class="card"><div class="card-head"><h2>Costing</h2></div><div class="form-lines fcols" id="props"></div></div>
       <div class="card"><div class="card-head"><h2>Cost sheet</h2></div>
         <div id="kpi"></div>
-        <div class="etabs" id="tabs">${tabs.map(([k, label]) => html`<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${label}${k === 'shutters' || k === 'materials' ? ` (${est[k].length})` : ''}</button>`)}</div>
+        <div class="etabs" id="tabs">${tabs.map(([k, label]) => html`<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${label}${k === 'shutters' ? ` (${est.shutters.length + (est.fixed || []).length})` : k === 'materials' ? ` (${est.materials.length})` : ''}</button>`)}</div>
         <div id="tab"></div>
       </div>
       <div class="card"><div class="card-head"><h2>Revisions</h2></div><div class="form-lines fcols">

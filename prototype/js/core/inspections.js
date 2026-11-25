@@ -4,20 +4,27 @@ import * as store from './store.js';
 import { technicians, empName, findSite, productName, vsOptions, vsDefault } from './lookups.js';
 import { makeShutter, addShutters } from './customers.js';
 import { cleanLines, lineText } from './enquiries.js';
+import { productOf, isPhysical, keeps, setOfProduct, sizeText, tagMaker as productTags, unitOfProduct, groupsOf, missingGroups } from './products.js';
+export { groupsOf };
 
 const sameDay = (a, b) => !!a && !!b && new Date(a).toDateString() === new Date(b).toDateString();
 const pad = n => String(n).padStart(2, '0');
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const nowTime = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 
-// Technicians for a zone first (main zone, then extra zones), each with their visits on that day.
-export function techniciansFor(zoneId, visitIso) {
+// Technicians for a zone first (main zone, then extra zones), each with their visits on that day. groups: the product
+// groups of the work (Product master); a technician who works on all of them comes first, then the zone order.
+export function techniciansFor(zoneId, visitIso, groups = []) {
   return technicians().map(t => ({
     tech: t,
     match: t.mainZoneId === zoneId ? 'main' : (t.extraZoneIds || []).includes(zoneId) ? 'extra' : '',
+    missing: missingGroups(t, groups),
     visits: store.list('inspections', i => i.technicianId === t.id && sameDay(i.visitAt, visitIso) && !['Cancelled', 'Report submitted'].includes(i.status)).length,
-  })).sort((a, b) => (a.match ? (a.match === 'main' ? 0 : 1) : 2) - (b.match ? (b.match === 'main' ? 0 : 1) : 2) || a.visits - b.visits);
+  })).sort((a, b) => (a.missing.length ? 1 : 0) - (b.missing.length ? 1 : 0)
+    || (a.match ? (a.match === 'main' ? 0 : 1) : 2) - (b.match ? (b.match === 'main' ? 0 : 1) : 2) || a.visits - b.visits);
 }
+// The product groups an enquiry's lines need; a fixed-price product (a submission) needs none.
+export const enquiryGroups = enq => groupsOf(cleanLines(enq?.lines).filter(l => l.itemRef.startsWith('prd:')).map(l => l.itemRef.slice(4)));
 
 export function assignTechnician(inspId, { technicianId, visitAt, confirmedBy, notes }) {
   const insp = store.get('inspections', inspId);
@@ -52,9 +59,10 @@ function namedIn(l, site, taken) {
   });
 }
 // Job scope, "Products and findings": one row per enquiry line, ticked once checked on site; printed as Customer Complaint / Findings.
-// A line about a shutter type (Product master), or naming a recorded shutter by tag, is a product row: type, qty,
-// location and size, or linkIds = the customer's products already recorded at the site. The technician adds more
-// product rows on site (added: true). The report's shutters come from these rows (reportShutters).
+// A line about a product worked on at the site (Product master), or naming a recorded product by tag, is a product row:
+// product, qty (in its unit), location and size if the product has a size set, or linkIds = the customer's products
+// already recorded at the site. The technician adds more product rows on site (added: true). A fixed-price product (a
+// submission) stays a plain line. The report's products come from these rows (reportShutters).
 export const isProductRow = r => !!(r.productId || r.linkIds?.length);
 function askedFrom(enq, site) {
   const taken = new Set();
@@ -62,21 +70,14 @@ function askedFrom(enq, site) {
     const row = { key: store.uid('ask_'), n: i + 1, text: lineText(l), desc: l.description || '', done: false, note: '' };
     const named = namedIn(l, site, taken);
     named.forEach(s => taken.add(s.id));
-    const productId = l.itemRef.startsWith('prd:') ? l.itemRef.slice(4) : named[0]?.productId || '';
+    const picked = l.itemRef.startsWith('prd:') ? l.itemRef.slice(4) : '';
+    const productId = picked ? (isPhysical(productOf(picked)) ? picked : '') : named[0]?.productId || '';
     if (!productId) return row;
-    return { ...row, productId, qty: Math.max(l.qty || 1, named.length), location: '', sizeCode: '', width: null, height: null, unit: 'm', linkIds: named.map(s => s.id) };
+    return { ...row, productId, qty: Math.max(l.qty || 1, named.length), uom: (picked && l.unit) || unitOfProduct(productOf(productId)), location: '', sizeCode: '', width: null, height: null, unit: 'm', measure: null, linkIds: named.map(s => s.id) };
   });
 }
 export const newProductRow = (rows, productId) => ({ key: store.uid('ask_'), n: rows.length + 1, text: `1 × ${productName(productId)}`, desc: '', done: true, note: '', added: true,
-  productId, qty: 1, location: '', sizeCode: '', width: null, height: null, unit: 'm', linkIds: [] });
-
-// New products get the next tags at the site, with the site's own prefix (RS-, CG-, W-…).
-function tagMaker(site) {
-  const reg = site?.shutters || [];
-  const prefix = reg[0]?.tag?.match(/^\D*/)?.[0] || 'RS-';
-  let n = Math.max(0, ...reg.map(s => parseInt(String(s.tag).replace(/\D/g, ''), 10)).filter(x => !isNaN(x)));
-  return () => `${prefix}${++n}`;
-}
+  productId, qty: 1, uom: unitOfProduct(productOf(productId)), location: '', sizeCode: '', width: null, height: null, unit: 'm', measure: null, linkIds: [] });
 // Findings (user, 2 Nov 2026): each product, and each line with no product, has its fault found, the action needed and a
 // priority (Value Set Master "Finding Priority"; the built-in list serves data saved before that list existed). They are
 // kept on the row by product key (r.found); rows saved before keep their note as the fault.
@@ -89,31 +90,41 @@ export function findingOf(r, key) {
   return { fault: f.fault ?? r.note ?? '', action: f.action || '', priority: f.priority || defaultPriority() };
 }
 
-// The report's shutters from its product rows: the linked customer products, then one new product for each of the rest
-// of the qty (same location and size). They fill "Shutter Location" and become the estimate lines.
+// The report's products from its product rows: the linked customer products, then one new customer product for each of
+// the rest of the qty (same location and size), tagged by product (RS-4, BP-1). A product that is not kept as a
+// customer product (tape by the metre) stays one entry with its qty and unit, untagged. They fill the location on the
+// printed form and become the estimate lines.
 export function reportShutters(rep, rows = rep.asked) {
   const { site } = findSite(rep.siteId);
   const reg = site?.shutters || [];
-  const nextTag = tagMaker(site);
+  const nextTag = productTags(site);
   const out = [];
   (rows || []).filter(isProductRow).forEach(r => {
     const found = key => { const f = findingOf(r, key); return { finding: f.fault || r.desc || '', action: f.action, priority: f.priority, rowKey: r.key }; };
+    const p = productOf(r.productId);
+    const size = { width: r.width ?? null, height: r.height ?? null, unit: r.unit || 'm', measure: r.measure ?? null, sizeCode: r.sizeCode || '' };
+    if (p && !keeps(p)) {
+      const key = `${r.key}_0`;
+      out.push({ key, shutterId: null, isNew: false, notKept: true, tag: '', location: r.location || '', productId: r.productId, qty: Number(r.qty) || 1, uom: r.uom || unitOfProduct(p), ...size, motor: '', ...found(key) });
+      return;
+    }
     const linked = (r.linkIds || []).map(id => reg.find(s => s.id === id)).filter(s => s && !out.some(o => o.shutterId === s.id));
     linked.forEach(s => out.push({ key: s.id, shutterId: s.id, tag: s.tag, location: s.location, productId: s.productId, width: s.width, height: s.height, unit: s.unit,
-      sizeCode: s.sizeCode, motor: s.motor, ...found(s.id) }));
-    for (let i = linked.length; i < (Number(r.qty) || 1); i++) {
+      measure: s.measure ?? null, sizeCode: s.sizeCode, motor: s.motor, ...found(s.id) }));
+    for (let i = linked.length; i < Math.ceil(Number(r.qty) || 1); i++) {
       const key = `${r.key}_${i}`;
-      out.push({ key, shutterId: null, isNew: true, tag: nextTag(), location: r.location || '', productId: r.productId, width: r.width ?? null,
-        height: r.height ?? null, unit: r.unit || 'm', sizeCode: r.sizeCode || '', motor: '', ...found(key) });
+      out.push({ key, shutterId: null, isNew: true, tag: nextTag(r.productId), location: r.location || '', productId: r.productId, ...size, motor: '', ...found(key) });
     }
   });
   return out;
 }
+// The Size column of the findings table: the size and its measure, or the quantity of a work-only product ("15 m").
+const sizeCell = s => (s.notKept && !s.sizeCode ? `${s.qty} ${s.uom || ''}`.trim() : sizeText(s, { none: '' }));
 
 // Customer Complaint / Findings as printed: one row per product (shutter), and one per line with no product.
 export function findingRows(rep, rows = rep.asked, shutters = rep.shutters) {
   return (rows || []).flatMap(r => isProductRow(r)
-    ? (shutters || []).filter(s => s.rowKey === r.key).map(s => ({ key: s.key, tag: s.tag, product: productName(s.productId), location: s.location, size: s.sizeCode,
+    ? (shutters || []).filter(s => s.rowKey === r.key).map(s => ({ key: s.key, tag: s.tag, product: productName(s.productId), location: s.location, size: sizeCell(s),
       complaint: r.desc, ...findingOf(r, s.key) }))
     : [{ key: r.key, tag: '', product: '', location: '', size: '', complaint: r.text, ...findingOf(r, r.key) }]);
 }
@@ -121,9 +132,10 @@ export function findingRows(rep, rows = rep.asked, shutters = rep.shutters) {
 // table print this text in the old single box.
 export function findingsText(rows, other = '') {
   const lines = rows.map(f => {
-    const what = f.fault || (f.tag ? f.complaint : '');
+    const who = [f.tag, f.product].filter(Boolean).join(' ');
+    const what = f.fault || (who ? f.complaint : '');
     const urgent = f.priority === 'URGENT' ? ` (${priorityLabel('URGENT').toLowerCase()})` : '';
-    return f.tag ? `${f.tag} ${f.product}${what ? `: ${what}` : ''}${urgent}` : `${f.complaint}${f.fault ? `: ${f.fault}` : ''}${urgent}`;
+    return who ? `${who}${what ? `: ${what}` : ''}${urgent}` : `${f.complaint}${f.fault ? `: ${f.fault}` : ''}${urgent}`;
   }).filter(Boolean);
   if (other) lines.push(other);
   return lines.length === 1 ? lines[0] : lines.map((t, i) => `${i + 1}. ${t}`).join('\n');
@@ -148,7 +160,7 @@ export function jobScope(rep) {
     const owner = s.shutterId && asked.find(r => (r.linkIds || []).includes(s.shutterId));
     if (owner) { if (!owner.note && owner.linkIds.length === 1) owner.note = s.finding || ''; return; }
     const row = { ...newProductRow(asked, s.productId), text: `${s.tag} ${s.location}`.trim(), note: s.finding || '', linkIds: s.shutterId ? [s.shutterId] : [] };
-    if (!s.shutterId) Object.assign(row, { location: s.location, sizeCode: s.sizeCode, width: s.width ?? null, height: s.height ?? null, unit: s.unit || 'm' });
+    if (!s.shutterId) Object.assign(row, { location: s.location, sizeCode: s.sizeCode, width: s.width ?? null, height: s.height ?? null, unit: s.unit || 'm', measure: s.measure ?? null });
     asked.push(row);
     moved[s.key] = s.shutterId || `${row.key}_0`;
   });
@@ -228,8 +240,11 @@ export function reportProblems(rep, { paper = false } = {}) {
   const p = [];
   // Each message names the section and the field to fill, the same words on the web and the phone.
   if (!rep.shutters.length && !rep.s2.description) p.push('Add at least one product under “Products and findings” (section 2 Job scope, “+ Add product”), or write the “Job Scope / Description of Work” (section 2 Job scope).');
-  (rep.asked || []).filter(r => isProductRow(r) && (Number(r.qty) || 1) > (r.linkIds || []).length && (!r.location || !r.sizeCode))
-    .forEach(r => p.push(`Enter the location and tap the size of line ${r.n} (${productName(r.productId) || 'product'}) under “Products and findings” (section 2 Job scope).`));
+  // A new product needs its location, and its size when its product has a size set (a pump by its kW).
+  (rep.asked || []).filter(r => isProductRow(r) && (Number(r.qty) || 1) > (r.linkIds || []).length).forEach(r => {
+    const sized = !!setOfProduct(productOf(r.productId));
+    if (!r.location || (sized && !r.sizeCode)) p.push(`Enter the location${sized ? ' and the size' : ''} of line ${r.n} (${productName(r.productId) || 'product'}) under “Products and findings” (section 2 Job scope).`);
+  });
   if (!rep.s7.name) p.push('Enter the name under “Viewed by” (section 7 Sign-off).');
   if (!paper && !rep.s7.signatureId) p.push('Sign under “Viewed by” (section 7 Sign-off).');
   const asks = (rep.asked || []).filter(a => !a.added); // rows added on site are not asked by the customer
@@ -241,8 +256,8 @@ export function reportProblems(rep, { paper = false } = {}) {
   return p;
 }
 
-// Submit: new products are recorded as the customer's products at the site (the shutter register) and their rows
-// link them from now on; the inspection and enquiry move on.
+// Submit: new products are recorded as the customer's products at the site and their rows link them from now on (a
+// work-only product, not kept, is not recorded); the inspection and enquiry move on.
 export function submitReport(id, { paper = false } = {}) {
   const rep = store.get('siteReports', id);
   const problems = reportProblems(rep, { paper });

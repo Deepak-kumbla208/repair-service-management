@@ -2,16 +2,27 @@
 // and the "Recorded by" picker (small arrow, no box).
 import * as auth from '../core/auth.js';
 import { html, $$, popMenu, fmtNum, MIC } from '../core/ui.js';
-import { itemChoices, itemName, productInfo } from '../core/lookups.js';
+import { itemChoices, itemName, productInfo, unitOptions } from '../core/lookups.js';
 import { bindMics } from '../core/capture.js';
 
 const blankLine = () => ({ itemRef: '', itemName: '', qty: null, unit: '', description: '' });
+// The line's unit, picked from the Unit of Measure master (it starts from the product's unit).
+const unitPick = l => {
+  const u = l.itemRef ? (l.unit || productInfo(l.itemRef)?.unit || 'Nos') : '';
+  return html`<select data-c="unit" aria-label="Unit" ${l.itemRef ? '' : 'disabled'}>${l.itemRef ? unitOptions(u).map(c => html`<option ${c === u ? 'selected' : ''}>${c}</option>`) : html`<option value="">–</option>`}</select>`;
+};
 
-// The picked product's details under it, from its master, e.g. "ITM-004 · Spare part · rate 85.00 · lead time 3 days".
+// The picked product's details under it, from its master: how a product is costed ("BP · by size · motor power (kW)
+// measured on site", "LPT · standard 0.1 h per m", "PUB · fixed price 800.00 per Lot"), or a part's code, category,
+// rate and lead time ("ITM-004 · Spare part · rate 85.00 · lead time 3 days").
+const hrsText = h => `${Math.round(h * 100) / 100} h`;
 export function productStrip(ref) {
   const p = productInfo(ref);
   if (!p) return '';
-  const text = p.kind === 'shutter' ? [p.code, 'shutter type', 'size class set on site']
+  const product = () => (p.costedBy === 'FIXED' ? [p.code, `fixed price ${p.price.toFixed(2)} per ${p.unit}`]
+    : p.costedBy === 'HOURS' ? [p.code, `standard ${hrsText(p.repairHrs)} per ${p.unit}`]
+      : [p.code, 'by size', `${p.twoFigure ? 'width × height' : `${p.setName.toLowerCase()} (${p.setUnit})`} measured on site`]);
+  const text = p.kind === 'product' ? product()
     : [p.code, p.category, p.spec, `rate ${p.rate.toFixed(2)}${p.placeholder ? ' (placeholder)' : ''}`, p.leadDays ? `lead time ${p.leadDays} days` : 'in stock'];
   return html`<div class="pinfo">${text.filter(Boolean).join(' · ')}</div>`;
 }
@@ -27,7 +38,7 @@ export function linesEditor(box, initial) {
     l.itemRef = tr.querySelector('[data-c="item"]').value;
     l.itemName = itemName(l.itemRef);
     l.qty = l.itemRef ? (Number(tr.querySelector('[data-c="qty"]').value) || 1) : null;
-    l.unit = l.itemRef ? (tr.querySelector('[data-c="unit"]').value.trim() || productInfo(l.itemRef)?.unit || 'Nos') : '';
+    l.unit = l.itemRef ? (tr.querySelector('[data-c="unit"]').value || productInfo(l.itemRef)?.unit || 'Nos') : '';
     l.description = tr.querySelector('[data-c="desc"]').value.trim();
   });
 
@@ -37,8 +48,8 @@ export function linesEditor(box, initial) {
       ${lines.map((l, i) => html`<tr data-i="${i}"><td>${i + 1}</td>
         <td><select data-c="item" aria-label="Product"><option value="">No product</option>${choices.map(g => html`<optgroup label="${g.group}">
           ${g.options.map(o => html`<option value="${o.value}" ${o.value === l.itemRef ? 'selected' : ''}>${o.label}</option>`)}</optgroup>`)}</select>${productStrip(l.itemRef)}</td>
-        <td><input type="number" min="1" data-c="qty" value="${l.itemRef ? (l.qty || 1) : ''}" placeholder="–" ${l.itemRef ? '' : 'disabled'} aria-label="Quantity"></td>
-        <td><input type="text" data-c="unit" value="${l.itemRef ? (l.unit || productInfo(l.itemRef)?.unit || 'Nos') : ''}" placeholder="–" ${l.itemRef ? '' : 'disabled'} aria-label="Unit"></td>
+        <td><input type="number" min="0" step="any" data-c="qty" value="${l.itemRef ? (l.qty || 1) : ''}" placeholder="–" ${l.itemRef ? '' : 'disabled'} aria-label="Quantity"></td>
+        <td>${unitPick(l)}</td>
         <td><div class="with-mic"><input type="text" data-c="desc" name="line_desc_${i}" value="${l.description}" placeholder="${l.itemRef ? 'Where / what is wrong' : 'Describe what the customer needs'}" aria-label="Description">
           <button type="button" class="mic" data-mic="line_desc_${i}" title="Voice input">${MIC}</button></div></td>
         <td class="pmc"><button type="button" class="pm add" data-add="${i}" title="Add a line below" aria-label="Add a line">＋</button><button type="button" class="pm rm" data-rm="${i}" title="Remove this line" aria-label="Remove this line">－</button></td></tr>`)}

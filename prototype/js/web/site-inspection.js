@@ -4,9 +4,9 @@ import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, $$, on, go, debounce, field, readForm, markInvalid, toast, fmtDateTime, fmtDuration, pill, tiles, emptyRow, dateInput, joinDateTime, foldHeader } from '../core/ui.js';
 import { linesTable } from './enquiry-parts.js';
-import { zones, zoneLabel, zoneCode, empName, technicians, findSite } from '../core/lookups.js';
+import { zones, zoneLabel, zoneCode, empName, technicians, findSite, vsLabel } from '../core/lookups.js';
 import { inspectionClock, isToday } from '../core/enquiries.js';
-import { techniciansFor, assignTechnician, startReport } from '../core/inspections.js';
+import { techniciansFor, assignTechnician, startReport, enquiryGroups } from '../core/inspections.js';
 import { pageHead } from './shell.js';
 
 // Countdown text + bar for the "within 2 hours of the call" target.
@@ -98,7 +98,7 @@ export function renderInspection(el, id) {
   const visit = i.visitAt ? new Date(i.visitAt) : nextHour();
   let chosen = i.technicianId;
 
-  const tags = site?.shutters?.length ? html`${site.shutters.map(s => html`<span class="pill" style="margin:0 4px 4px 0">${s.tag} ${s.location} · ${s.sizeCode}</span>`)}` : html`<span class="muted">None recorded yet</span>`;
+  const tags = site?.shutters?.length ? html`${site.shutters.map(s => html`<span class="pill" style="margin:0 4px 4px 0">${s.tag} ${s.location}${s.sizeCode ? ` · ${s.sizeCode}` : ''}</span>`)}` : html`<span class="muted">None recorded yet</span>`;
   const ro = (k, v) => html`<div class="field"><div class="field-label">${k}</div><div class="ro">${v || html`<span class="muted">—</span>`}</div></div>`;
   el.innerHTML = String(html`<div class="page stack" style="max-width:1400px">
     ${pageHead({
@@ -141,9 +141,9 @@ export function renderInspection(el, id) {
     }
     const keep = (n, d) => $(`[name="${n}"]`, box)?.value ?? d;
     const date = keep('visitDate', dateInput(visit)), time = keep('visitTime', `${String(visit.getHours()).padStart(2, '0')}:${String(visit.getMinutes()).padStart(2, '0')}`);
-    const list = techniciansFor(i.zoneId, joinDateTime(date, time));
+    const list = techniciansFor(i.zoneId, joinDateTime(date, time), enquiryGroups(e));
     const card = x => html`<label class="shutter ${chosen === x.tech.id ? 'on' : ''}"><input type="radio" name="tech" value="${x.tech.id}" ${chosen === x.tech.id ? 'checked' : ''}>
-      <span class="grow"><b>${x.tech.name}</b> <span class="muted small">${x.tech.code}</span><br><span class="small muted">Main zone ${zoneLabel(x.tech.mainZoneId)}${(x.tech.extraZoneIds || []).length ? ` · also ${x.tech.extraZoneIds.map(zoneCode).join(', ')}` : ''}${x.tech.skills ? ` · ${x.tech.skills}` : ''}</span></span>
+      <span class="grow"><b>${x.tech.name}</b> <span class="muted small">${x.tech.code}</span><br><span class="small muted">Main zone ${zoneLabel(x.tech.mainZoneId)}${(x.tech.extraZoneIds || []).length ? ` · also ${x.tech.extraZoneIds.map(zoneCode).join(', ')}` : ''}${x.tech.skills ? ` · ${x.tech.skills}` : ''}</span>${x.missing.length ? html`<br><span class="small" style="color:var(--amber-ink)">Does not work on ${x.missing.map(g => vsLabel('PRODUCT_GROUP', g)).join(', ')}</span>` : ''}</span>
       <span class="small ${x.visits ? '' : 'muted'}">${x.visits} visit(s) that day</span></label>`;
     const inZone = list.filter(x => x.match), others = list.filter(x => !x.match);
     box.innerHTML = String(html`<div class="card-head"><h2>${i.technicianId ? 'Change technician' : 'Assign technician'}</h2><span class="pill blue">Zone ${zoneLabel(i.zoneId)}</span></div>

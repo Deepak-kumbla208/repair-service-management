@@ -114,7 +114,7 @@ function visitCard(v, edit) {
   return html`<div class="vcard ${late ? 'late' : ''}" style="--zc:${{ A: '#378ADD', B: '#1D9E75', C: '#BA7517', D: '#7F77DD' }[zoneCode(v.zoneId)] || '#378ADD'}">
     <div class="row"><b>${v.customer}</b><span class="grow"></span>${late ? pill(`Overdue ${Math.round((new Date(`${todayStr()}T00:00`) - new Date(`${visitDate(v)}T00:00`)) / 86400000)} days`, 'red') : pill(v.status, v.status === 'Confirmed' ? 'amber' : '')}</div>
     <div class="l"><span class="k">Visit</span><span><a href="#/amc-visits/${v.id}">${v.contractNo} · <b>${v.n} of ${v.of}</b></a> · ${v.confirmedDate ? `${short(v.confirmedDate)} (${v.confirmedVia || 'agreed'})` : `planned ${short(v.plannedDate)}`}</span></div>
-    <div class="l"><span class="k">Site</span><span>${v.site} · <span class="zone-chip">${zoneCode(v.zoneId)}</span> · ${v.shutters.length} shutters · ${v.workHours} team-hours${v.days > 1 ? ` (${v.days} days)` : ''}</span></div>
+    <div class="l"><span class="k">Site</span><span>${v.site} · <span class="zone-chip">${zoneCode(v.zoneId)}</span> · ${v.shutters.length} products · ${v.workHours} team-hours${v.days > 1 ? ` (${v.days} days)` : ''}</span></div>
     ${v.status === 'Scheduled' ? html`<div class="l"><span class="k">Booked</span><span>${empName(v.technicianId)} · ${short(visitDate(v))} ${fmtHour(v.blocks[0].from)}</span></div>`
       : html`<div class="l"><span class="k">Suggested</span><span>${slotText(s)}</span></div>`}
     ${edit ? html`<div class="row" style="margin-top:7px">${v.status === 'Scheduled' ? html`<button class="btn small" data-change="${v.id}">Move</button>`

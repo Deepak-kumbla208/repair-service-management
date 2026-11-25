@@ -33,7 +33,7 @@ const FLOWS = {
     { who: OPS, text: 'Job Closure: click "Completed & documented" (it closes, being paid). Then use Linked documents to walk back to the enquiry.', route: () => { const j = job('enq_co_dsh_3'); return j ? `closure/${j.id}` : 'closure'; } },
   ] },
   amc: { title: 'AMC contract', sub: 'BOQ → estimate → quotation → contract → visit → failed item → instalment', steps: [
-    { who: OPS, text: 'Open ABC Industries\' AMC enquiry (13 shutters) and click "Create estimate": 5,993.44 with GST, as the Excel.', route: () => enqRoute('enq_co_dsh_1') },
+    { who: OPS, text: 'Open ABC Industries\' AMC enquiry (13 roller shutters) and click "Create estimate": 5,993.44 with GST, as the Excel.', route: () => enqRoute('enq_co_dsh_1') },
     { who: OPS, text: 'Click "Create quotation", then "Submit for check".', route: () => est('enq_co_dsh_1') },
     { who: APR, text: 'As the Approver, click "Approve" (a 30-day term is approved with it).', route: () => approve('enq_co_dsh_1') },
     { who: OPS, text: '"Send to customer", then "Record acceptance" with a PO: the contract is made as a draft.', route: () => qt('enq_co_dsh_1') },

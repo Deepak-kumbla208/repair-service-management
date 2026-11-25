@@ -5,6 +5,7 @@ import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, $$, go, on, debounce, fmtNum, pill, toast, openModal, chipGroup, readForm, foldHeader } from '../core/ui.js';
 import { vsOptions, zoneLabel, productName, findSite } from '../core/lookups.js';
+import { sizeText } from '../core/products.js';
 import { estimateSummary, canEdit, saveEstimate, reviseEstimate, estimateProblems, revisions, canRevise as mayRevise } from '../core/estimates.js';
 import { describe, addSiteTo, removeSiteFrom, setCovered, otherSites, isRenewal } from '../core/amc-estimates.js';
 import { createFromEstimate } from '../core/quotations.js';
@@ -20,9 +21,9 @@ const row = (label, value) => html`<div class="field"><div class="field-label">$
 function kpiHtml(est, s, cur, sees) {
   const mk = sees ? html`<div><b>${fmtNum(s.markupPct, 1)} %</b><span>Markup on cost · ${fmtNum(s.marginOnPricePct, 1)} % on price</span></div>` : '';
   if (est.jobType === 'GS') {
-    return html`<div class="kpi"><div><b>${m2(s.total)}</b><span>Total quote (${cur}) incl. ${est.taxLabel || 'tax'}</span></div><div><b>${s.metrics.shutters}</b><span>Shutters · ${fmtNum(s.metrics.teamHrs)} team-hours</span></div>${mk}</div>`;
+    return html`<div class="kpi"><div><b>${m2(s.total)}</b><span>Total quote (${cur}) incl. ${est.taxLabel || 'tax'}</span></div><div><b>${s.metrics.shutters}</b><span>Products · ${fmtNum(s.metrics.teamHrs)} team-hours</span></div>${mk}</div>`;
   }
-  return html`<div class="kpi ${sees ? 'k4' : ''}"><div><b>${m2(s.total)}</b><span>Total quote (${cur}) incl. ${est.taxLabel || 'tax'}</span></div><div><b>${m2(s.metrics.perShutterYear)}</b><span>Per shutter per year</span></div>
+  return html`<div class="kpi ${sees ? 'k4' : ''}"><div><b>${m2(s.total)}</b><span>Total quote (${cur}) incl. ${est.taxLabel || 'tax'}</span></div><div><b>${m2(s.metrics.perShutterYear)}</b><span>Per product per year</span></div>
     <div><b>${m2(s.metrics.perMonth)}</b><span>Per month · ${m2(s.metrics.perMonthEx)} before ${est.taxLabel || 'tax'}</span></div>${mk}</div>`;
 }
 
@@ -76,14 +77,14 @@ export function renderAmcEstimate(el, id) {
 
   const sameVisits = () => { const v = [...new Set(est.sites.map(s => Number(s.visits)))]; return v.length === 1 ? v[0] : ''; };
   const paintProps = () => {
-    // Sites change from the Shutters tab (add, remove, covered shutters), so the header's list is repainted too.
-    $('#sitesBox', el).innerHTML = String(html`${est.sites.map((x, i) => row(`Site ${i + 1}`, html`${x.name} · <span class="zone-chip">${zoneLabel(x.zoneId).split(' ')[0] || '—'}</span> · ${x.typed ? 'typed counts' : `${x.shutterIds.length} shutters`}`))}`);
+    // Sites change from the Products to service tab (add, remove, covered products), so the header's list is repainted too.
+    $('#sitesBox', el).innerHTML = String(html`${est.sites.map((x, i) => row(`Site ${i + 1}`, html`${x.name} · <span class="zone-chip">${zoneLabel(x.zoneId).split(' ')[0] || '—'}</span> · ${x.typed ? 'typed counts' : `${x.shutterIds.length} product${x.shutterIds.length === 1 ? '' : 's'}`}`))}`);
     $('#props', el).innerHTML = String(html`<div>
       <div class="form-sec">${gs ? 'Servicing' : 'Contract'}</div>
       ${row('Type', `${gs ? 'General Servicing' : 'AMC'} (from the enquiry)`)}
       ${gs ? row('Visits', 'One visit, no contract') : html`
         ${ctx.editable ? html`<div class="field"><label>Period (months)</label><input type="number" step="1" data-h="periodMonths" value="${est.periodMonths}"></div>` : row('Period', `${est.periodMonths} months`)}
-        <div class="field"><label>Visits per year</label>${chipGroup('visitsAll', VISITS, sameVisits(), !ctx.editable)}${sameVisits() === '' ? html`<div class="sub">Different per site (Shutters tab)</div>` : ''}</div>
+        <div class="field"><label>Visits per year</label>${chipGroup('visitsAll', VISITS, sameVisits(), !ctx.editable)}${sameVisits() === '' ? html`<div class="sub">Different per site (Products to service tab)</div>` : ''}</div>
         <div class="field"><label>Billing</label>${chipGroup('billing', vsOptions('BILLING'), est.billing, !ctx.editable)}</div>`}</div>
       <div><div class="form-sec">Costing</div>
       <div class="field"><label>Costing Level</label>${chipGroup('costingLevel', vsOptions('COSTING_LEVEL').map(o => (o.value === 'LINE' ? { ...o, label: 'Line (per site)' } : o)), est.costingLevel, !ctx.editable)}</div>
@@ -126,7 +127,7 @@ export function renderAmcEstimate(el, id) {
     const list = otherSites(est);
     openModal({
       title: 'Add a site of this customer',
-      body: html`<div class="form-lines">${list.map(x => html`<label class="check" style="display:flex;margin:5px 0"><input type="checkbox" name="s_${x.id}"> ${x.name} · Zone ${zoneLabel(x.zoneId) || '—'} · ${(x.shutters || []).length} shutters</label>`)}</div>`,
+      body: html`<div class="form-lines">${list.map(x => html`<label class="check" style="display:flex;margin:5px 0"><input type="checkbox" name="s_${x.id}"> ${x.name} · Zone ${zoneLabel(x.zoneId) || '—'} · ${(x.shutters || []).length} products</label>`)}</div>`,
       actions: [{ label: 'Cancel' }, { label: 'Add', kind: 'primary', onClick: b => { const d = readForm(b); change(() => list.filter(x => d[`s_${x.id}`]).forEach(x => Object.assign(est, addSiteTo(est, x.id)))); paintProps(); paint(); } }],
     });
   }
@@ -135,9 +136,9 @@ export function renderAmcEstimate(el, id) {
     const { site } = findSite(x.siteId);
     const list = (site?.shutters || []).filter(s => s.status !== 'Inactive');
     openModal({
-      title: `Covered shutters at ${x.name}`,
+      title: `Covered products at ${x.name}`,
       body: html`<div class="form-lines">${list.map(sh => html`<label class="check" style="display:flex;margin:4px 0"><input type="checkbox" name="c_${sh.id}" ${x.shutterIds.includes(sh.id) ? 'checked' : ''} ${ctx.editable ? '' : 'disabled'}>
-        <b style="margin:0 6px">${sh.tag}</b> ${sh.location} · ${productName(sh.productId)} · ${sh.sizeCode}${sh.fireRated ? ' · fire-rated' : ''}</label>`)}</div>`,
+        <b style="margin:0 6px">${sh.tag}</b> ${sh.location} · ${productName(sh.productId)}${sh.sizeCode ? ` · ${sizeText(sh)}` : ''}${sh.fireRated ? ' · fire-rated' : ''}</label>`)}</div>`,
       actions: ctx.editable ? [{ label: 'Cancel' }, { label: 'Save', kind: 'primary', onClick: b => { const d = readForm(b); change(() => Object.assign(est, setCovered(est, key, list.filter(sh => d[`c_${sh.id}`]).map(sh => sh.id)))); paintProps(); paint(); } }] : [{ label: 'Close' }],
     });
   }

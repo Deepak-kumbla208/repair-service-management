@@ -3,7 +3,8 @@
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, on, go, debounce, tiles, pill, fmtDate, fmtTime, toast, icon } from '../core/ui.js';
-import { zoneLabel, findSite, empName } from '../core/lookups.js';
+import { zoneLabel, findSite, empName, productName } from '../core/lookups.js';
+import { sizeText } from '../core/products.js';
 import { isToday, cleanLines } from '../core/enquiries.js';
 import { startReport, reportDraft } from '../core/inspections.js';
 import { svrSheetHtml } from '../web/print-svr.js';
@@ -128,7 +129,7 @@ export function mJob(page, id) {
     <div class="m-section">Visit</div>
     <div class="m-card small">${when(i.visitAt)} · confirmed by ${i.confirmedBy || '—'} · ${empName(i.technicianId)}${i.notes ? html`<br>${i.notes}` : ''}</div>
     <div class="m-section">Customer products at this site</div>
-    ${site?.shutters?.length ? html`${site.shutters.map(s => html`<div class="m-card small"><b>${s.tag}</b> ${s.location} · size ${s.sizeCode}${s.motor ? ` · motor ${s.motor}` : ''}</div>`)}` : html`<div class="muted small">None recorded yet; the report adds them from Job scope.</div>`}
+    ${site?.shutters?.length ? html`${site.shutters.map(s => html`<div class="m-card small"><b>${s.tag}</b> ${s.location} · ${productName(s.productId)}${s.sizeCode ? ` · ${sizeText(s)}` : ''}${s.motor ? ` · ${s.motor}` : ''}</div>`)}` : html`<div class="muted small">None recorded yet; the report adds them from Job scope.</div>`}
     ${(e.attachments || []).length ? html`<div class="m-section">Attachments</div>${e.attachments.map(a => html`<div class="m-card small"><a href="#" data-open="${a.id}">${a.name}</a></div>`)}` : ''}
   `);
   // Preview: the saved report, or before the start the pre-filled form built in memory (nothing saved, no Time In).

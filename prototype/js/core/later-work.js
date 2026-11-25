@@ -30,7 +30,10 @@ export function lineInfo(q, lineKey) {
   const sh = est?.shutters.find(s => s.key === lineKey);
   const found = rep?.shutters.find(s => s.key === lineKey);
   const m = sh ? null : est?.materials.find(x => x.lineKey === lineKey);
-  return { shutterKey: sh?.key || '', tag: sh?.tag || '', productId: sh?.productId || '', location: sh?.location || '', sizeCode: sh?.sizeCode || '',
+  // A fixed-price product (a submission) keeps its product, qty and unit.
+  const f = sh || m ? null : (est?.fixed || []).find(x => x.lineKey === lineKey);
+  return { shutterKey: sh?.key || '', tag: sh?.tag || '', productId: sh?.productId || f?.productId || '', location: sh?.location || '', sizeCode: sh?.sizeCode || '',
+    qty: sh?.notKept ? sh.qty : f ? f.qty : 1, uom: sh?.notKept ? sh.uom : f ? f.unit : 'Nos', fixed: !!f,
     fault: found?.finding || sh?.fault || '', action: found?.action || '', priority: found?.priority || 'NORMAL',
     part: m ? { itemId: m.itemId, name: m.name, qty: m.qty, unit: m.unit, remarks: m.remarks || '' } : null };
 }
@@ -104,7 +107,8 @@ export function quoteLaterWork(enqId) {
   if (done && !['Lost', 'Cancelled'].includes(done.status)) return { enquiry: done, estimate: currentEstimate(done.id) || createEstimate(done.id) };
   if (lw.status !== 'Open') return null;
   const lines = lw.items.map(i => (i.part ? { itemRef: i.part.itemId ? `itm:${i.part.itemId}` : '', itemName: i.part.name, qty: i.part.qty, unit: i.part.unit, description: i.part.remarks }
-    : i.productId ? { itemRef: `prd:${i.productId}`, itemName: productName(i.productId), qty: 1, unit: 'Nos', description: `${i.tag} ${i.location}: ${i.action || i.fault}`.trim() }
+    : i.productId ? { itemRef: `prd:${i.productId}`, itemName: productName(i.productId), qty: i.qty || 1, unit: i.uom || 'Nos',
+      description: i.fixed ? String(i.description || '').split(': ').slice(1).join(': ') : `${[i.tag, i.location].filter(Boolean).join(' ')}: ${i.action || i.fault}`.trim() }
       : { itemRef: '', itemName: '', qty: null, description: i.description }));
   const enq = saveNewEnquiry({
     receivedAt: new Date().toISOString(), channel: 'OTHER', channelOther: `Later work from ${e.no}`, type: 'REPAIR', enquiryStatus: 'WARM', priority: 'MEDIUM', siteInspection: 'NO',

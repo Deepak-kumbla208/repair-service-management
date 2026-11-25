@@ -5,7 +5,8 @@
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, readForm, field, fmtDate } from '../core/ui.js';
-import { technicians, empName } from '../core/lookups.js';
+import { technicians, empName, vsLabel } from '../core/lookups.js';
+import { missingGroups } from '../core/products.js';
 import { jobDraft, termBlocks, suggestSlot, firstFree, freeStart, scheduleProblems, jobDuration, earliestDate, helpers, defaultHelper, fmtHour, dayStart, dayEnd } from '../core/jobs.js';
 import { splitOf } from '../core/later-work.js';
 
@@ -34,16 +35,20 @@ export function bindTech(b, q, ctx) {
     return jobDraft(q, { split, paymentTerm: c.paymentTerm || q.paymentTerm });
   };
   const rank = t => (t.mainZoneId === st.draft.zoneId ? 0 : (t.extraZoneIds || []).includes(st.draft.zoneId) ? 1 : 2);
+  // Technicians who work on all the job's product groups first (Employee master, Works on), then by zone.
+  const misses = t => missingGroups(t, st.draft.groups || []);
+  const order = (a, b2) => (misses(a).length ? 1 : 0) - (misses(b2).length ? 1 : 0) || rank(a) - rank(b2);
 
   function fill(techId = '') {
     const d = st.draft;
     const hours = jobDuration(d);
     const sug = techId ? firstFree(d, techId) : suggestSlot(d);
-    const techs = technicians().slice().sort((a, b2) => rank(a) - rank(b2));
+    const techs = technicians().slice().sort(order);
     const tech = techId || sug?.technicianId || techs[0]?.id || '';
     const opts = techs.map(t => {
       const f = firstFree(d, t.id);
       return { value: t.id, label: [t.name, ['zone match', 'extra zone', ''][rank(t)], inspector.has(t.id) ? 'did the site inspection' : '',
+        misses(t).length ? `does not work on ${misses(t).map(g => vsLabel('PRODUCT_GROUP', g)).join(', ')}` : '',
         f ? `free ${dayText(f.date)} ${fmtHour(f.start)}` : 'no free time in 2 weeks'].filter(Boolean).join(' · ') };
     });
     st.hours = hours;
@@ -82,6 +87,7 @@ export function bindTech(b, q, ctx) {
     const c = ctx();
     st.draft = draftNow();
     const why = c.linesCut ? 'With fewer lines, the next revision goes for the counter-check first: assign the technician when it is accepted.'
+      : st.draft.noVisit ? 'Only fixed-price products: there is no site visit to schedule. Mark the job done on its page when the work is finished.'
       : termBlocks(st.draft) ? 'The new payment term needs the Approver before scheduling: assign the technician on the scheduling board after approval.' : '';
     tick.disabled = !!why;
     if (why) tick.checked = false;

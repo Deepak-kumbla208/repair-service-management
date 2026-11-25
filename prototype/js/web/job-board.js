@@ -5,6 +5,7 @@ import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, toast, tiles, openModal, readForm, field } from '../core/ui.js';
 import { zoneCode, technicians, empName, vsLabel } from '../core/lookups.js';
+import { missingGroups } from '../core/products.js';
 import { suggestSlot, earliestDate, bookings, jobDuration, setPartReady, scheduleJob, scheduleProblems, freeStart, helpers, defaultHelper, nextWorkday, isWorkday, dayStart, fmtHour, seesJob, INSPECTION_HOURS } from '../core/jobs.js';
 import { pageHead } from './shell.js';
 import { render } from '../app.js';
@@ -22,7 +23,7 @@ function jobCard(j, sug) {
   const blocked = !j.termApproved;
   const on = state.sel === j.id;
   return html`<div class="jobc ${zc(j.zoneId)} ${on ? 'on' : ''}" data-pick="${j.id}" style="${on ? 'outline:2px solid var(--blue-500)' : ''}">
-    <div class="row"><b>${j.no}</b><span class="zone-chip">${zoneCode(j.zoneId)}</span>${j.type === 'GS' ? html`<span class="pill purple">General servicing</span>` : ''}<span class="grow"></span>${blocked ? (j.termNote ? html`<span class="pill red">Term returned</span>` : html`<span class="pill amber">Waiting for Approver</span>`) : html`<span class="pill blue">To schedule</span>`}</div>
+    <div class="row"><b>${j.no}</b><span class="zone-chip">${zoneCode(j.zoneId)}</span>${j.type === 'GS' ? html`<span class="pill purple">General servicing</span>` : ''}${j.noVisit ? html`<span class="pill purple">No site visit</span>` : ''}<span class="grow"></span>${blocked ? (j.termNote ? html`<span class="pill red">Term returned</span>` : html`<span class="pill amber">Waiting for Approver</span>`) : html`<span class="pill blue">To schedule</span>`}</div>
     <div class="strong" style="margin-top:3px">${j.customer} · ${j.site}</div>
     <div class="l"><span class="k">Work</span><span>${j.tags.join(', ') || j.lines.length + ' line(s)'} · ${j.workHours} h + ${j.travelHours} h travel</span></div>
     <div class="l"><span class="k">Crew</span><span>${j.crew.label}</span></div>
@@ -114,7 +115,10 @@ export function renderJobBoard(el) {
 
 export function scheduleDialog(el, job, slot) {
   const hours = jobDuration(job);
-  const techs = technicians().map(t => ({ value: t.id, label: `${t.name}${t.mainZoneId === job.zoneId ? ' · zone match' : (t.extraZoneIds || []).includes(job.zoneId) ? ' · extra zone' : ''}` }));
+  // Technicians who work on all the job's product groups first, then the rest (with what they do not work on).
+  const misses = t => missingGroups(t, job.groups || []);
+  const techs = technicians().slice().sort((a, b) => (misses(a).length ? 1 : 0) - (misses(b).length ? 1 : 0))
+    .map(t => ({ value: t.id, label: `${t.name}${t.mainZoneId === job.zoneId ? ' · zone match' : (t.extraZoneIds || []).includes(job.zoneId) ? ' · extra zone' : ''}${misses(t).length ? ` · does not work on ${misses(t).map(g => vsLabel('PRODUCT_GROUP', g)).join(', ')}` : ''}` }));
   const tech = slot.technicianId || techs[0]?.value;
   openModal({
     title: `Schedule ${job.no}`,

@@ -1,8 +1,8 @@
 // Customer rules: next code, duplicate check (by mobile and email), quick-create from an enquiry,
-// sites, and the shutter register kept at each site.
+// sites, and the customer products (register) kept at each site.
 import * as store from './store.js';
-import { classifySize, toMetres } from './costing.js';
-import { sizes } from './lookups.js';
+import { toMetres } from './costing.js';
+import { productOf, classifyFor, tagMaker } from './products.js';
 
 export const digits = s => String(s || '').replace(/\D/g, '');
 const sameMobile = (a, b) => digits(a).length >= 7 && digits(a).slice(-8) === digits(b).slice(-8);
@@ -48,13 +48,18 @@ export function addSite(customerId, { name, address, blockUnit, postal, zoneId, 
   return site;
 }
 
-// Build a shutter register entry; sizes are kept in metres and classified by the one size rule. Without a measured
-// width and height the size tapped on site (sizeCode) is kept.
-export function makeShutter({ tag, location, productId, width, height, unit = 'm', motor = '', serial = '', installDate = '', sizeCode = '' }, source = 'Manual') {
+// Build a customer product (register entry). Its size comes from what was measured, by its product's size set: width ×
+// height (kept in metres too) or one figure (measure, e.g. 5.5 kW); without a measure the size tapped on site is kept.
+// A product with no size set has no size.
+export function makeShutter({ tag, location, productId, width, height, unit = 'm', measure = null, motor = '', serial = '', installDate = '', sizeCode = '' }, source = 'Manual') {
   const widthM = toMetres(width, unit), heightM = toMetres(height, unit);
-  return { id: store.uid('sht_'), tag, location, productId, width, height, unit, widthM, heightM, sizeCode: classifySize(widthM, heightM, sizes()) || sizeCode, motor, serial, installDate, status: 'Active', source };
+  const p = productOf(productId);
+  const code = classifyFor(p, { width, height, unit, measure }) || sizeCode;
+  return { id: store.uid('sht_'), tag, location, productId, width, height, unit, widthM, heightM, measure: measure ?? null, sizeCode: code, motor, serial, installDate, status: 'Active', source };
 }
 
+// The next tag for a product at a site (RS-4, BP-1 …).
+export const productTag = (site, productId) => tagMaker(site)(productId);
 export function nextShutterTag(site, prefix = 'RS-') {
   const nums = (site.shutters || []).map(s => parseInt(String(s.tag).replace(/\D/g, ''), 10)).filter(n => !isNaN(n));
   return `${prefix}${(nums.length ? Math.max(...nums) : 0) + 1}`;
@@ -63,7 +68,7 @@ export function nextShutterTag(site, prefix = 'RS-') {
 export function addShutters(customerId, siteId, shutters, note) {
   const c = store.get('customers', customerId);
   const sites = c.sites.map(s => (s.id === siteId ? { ...s, shutters: [...(s.shutters || []), ...shutters] } : s));
-  store.update('customers', customerId, { sites }, note || `Added ${shutters.length} shutter(s) to the shutter register`);
+  store.update('customers', customerId, { sites }, note || `Added ${shutters.length} customer product(s)`);
 }
 
 export const shutterCount = c => (c.sites || []).reduce((n, s) => n + (s.shutters || []).length, 0);

@@ -9,7 +9,7 @@ export function openPalette() {
   const back = document.createElement('div');
   back.className = 'palette-back';
   back.innerHTML = String(html`<div class="palette" role="dialog" aria-label="Search">
-    <div class="palette-in"><span class="muted">⌕</span><input type="search" placeholder="Search enquiries, customers, sites, shutters, reports, masters…" aria-label="Search"><kbd>Esc</kbd></div>
+    <div class="palette-in"><span class="muted">⌕</span><input type="search" placeholder="Search enquiries, customers, sites, products, reports, masters…" aria-label="Search"><kbd>Esc</kbd></div>
     <div class="palette-res"><div class="empty">Type to search. Results are limited to what ${auth.role()?.name || 'your role'} can open.</div></div>
     <div class="palette-foot"><span>Shows only what your role can open</span><span class="grow"></span><span>↑↓ move</span><span>Enter open</span><span>Esc close</span></div>
   </div>`);

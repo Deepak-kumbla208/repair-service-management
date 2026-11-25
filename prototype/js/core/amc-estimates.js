@@ -1,11 +1,13 @@
-// AMC and General Servicing estimates (the team lead's AMC estimator: Labour_Matrix, Shutters, Transport, Equipment,
-// Overhead & Margin, Summary), pre-filled from the enquiry, each site's shutter register and the masters.
+// AMC and General Servicing estimates (the team lead's AMC estimator: Labour_Matrix, Shutters (now "Products to
+// service"), Transport, Equipment, Overhead & Margin, Summary), pre-filled from the enquiry, each site's customer
+// products and the masters.
 // The calculations are in costing.js (summarizeAmc); this file builds, checks and revises the estimate's data.
 import * as store from './store.js';
 import * as auth from './auth.js';
 import { findSite, zones } from './lookups.js';
 import { hourlyRate, amcSiteRow, summarizeAmc } from './costing.js';
 import { companyTax, latestReport } from './estimates.js';
+import { matrixRows, amcKey } from './products.js';
 
 const rid = () => store.uid('r_');
 const num = v => Number(v) || 0;
@@ -17,19 +19,20 @@ export const AMC_DEFAULTS = { costingLevel: 'JOB', sharedCosts: 'SPREAD', overhe
   billing: 'MONTHLY', periodMonths: 12, renewalDays: 60, liftHeightM: 4 };
 export const amcDefaults = () => ({ ...AMC_DEFAULTS, ...(auth.company()?.txDefaults?.amc || {}) });
 
-// Labour_Matrix from the masters: the AMC rate set of the Labour master and the AMC hours of the Shutter Size master.
+// Labour_Matrix from the masters: the AMC rate set of the Labour master, the servicing hours of every size in Product
+// Size, and of every product with standard hours (Product master). Each row has a key: "WH:M" (size set and size) or
+// "P:<product id>"; matrices saved before keyed rows by the size code alone.
 export function amcMatrix() {
   const rows = store.list('labour', l => l.rateSet === 'AMC' && l.status !== 'Inactive');
   const pick = code => rows.find(l => l.code === code) || rows[0];
   const rate = l => ({ labourId: l?.id || '', name: l?.name || '', monthly: num(l?.monthly), days: l?.days || 26, hours: l?.hours || 8, rate: hourlyRate(l?.monthly, l?.days, l?.hours) });
-  const limits = s => (s.maxWidth == null ? 'larger' : `≤ ${s.maxWidth} m W × ≤ ${s.maxHeight} m H`);
-  const sizes = store.list('sizes', s => s.status !== 'Inactive').sort((a, b) => a.order - b.order)
-    .map(s => ({ code: s.code, name: s.name, limits: limits(s), teamHrs: num(s.amcTeamHrs), extraWorkers: num(s.amcExtraWorkers), extraHrs: num(s.amcExtraHrs) }));
-  return { team: rate(pick('LAB-A1')), extra: rate(pick('LAB-A2')), sizes };
+  return { team: rate(pick('LAB-A1')), extra: rate(pick('LAB-A2')), sizes: matrixRows() };
 }
+export const rowKey = z => z.key || z.code;
 
 const covered = site => (site?.shutters || []).filter(s => s.status !== 'Inactive');
-export const countBySize = list => list.reduce((c, s) => ({ ...c, [s.sizeCode]: (c[s.sizeCode] || 0) + 1 }), {});
+// Counts by Labour_Matrix row: a product's size (in its size set), or the product itself when it has no size.
+export const countBySize = list => list.reduce((c, s) => { const k = amcKey(s); return k ? { ...c, [k]: (c[k] || 0) + 1 } : c; }, {});
 const zoneOf = id => store.get('zones', id);
 
 // One Shutters-tab row for a customer site: every active shutter of its register is covered (untick to leave one out);
@@ -63,11 +66,11 @@ function liftRows(sites, rep) {
 }
 
 export function describe(est) {
-  const shutters = (est.sites || []).reduce((t, s) => t + amcSiteRow(s, est.matrix).shutters, 0);
+  const n = (est.sites || []).reduce((t, s) => t + amcSiteRow(s, est.matrix).shutters, 0);
   const where = (est.sites || []).map(s => s.name).join(', ');
-  if (est.jobType === 'GS') return `General servicing of ${shutters} shutter${shutters === 1 ? '' : 's'} at ${where}`;
+  if (est.jobType === 'GS') return `General servicing of ${n} product${n === 1 ? '' : 's'} at ${where}`;
   const v = [...new Set((est.sites || []).map(s => num(s.visits)))];
-  return `Annual maintenance contract: ${shutters} shutter${shutters === 1 ? '' : 's'} at ${where}, ${v.join(' / ')} visit${v.length === 1 && v[0] === 1 ? '' : 's'} a year, ${est.periodMonths} months`;
+  return `Annual maintenance contract: ${n} product${n === 1 ? '' : 's'} at ${where}, ${v.join(' / ')} visit${v.length === 1 && v[0] === 1 ? '' : 's'} a year, ${est.periodMonths} months`;
 }
 
 // Everything an AMC / GS estimate needs, pre-filled. from: an AMC contract being renewed (same sites, shutters, visits).
@@ -104,7 +107,7 @@ export function removeSiteFrom(est, key) {
   const sites = est.sites.filter(s => s.key !== key);
   return { ...est, sites, transport: transportRows(sites, est.transport), equipment: est.equipment.filter(r => r.siteKey !== key), materials: est.materials.filter(r => r.siteKey !== key) };
 }
-// Tick or untick shutters of a site's register; the counts by size follow.
+// Tick or untick the products of a site; the counts by size follow.
 export function setCovered(est, key, shutterIds) {
   const sites = est.sites.map(s => {
     if (s.key !== key) return s;
@@ -120,7 +123,7 @@ export const isRenewal = est => !!store.get('enquiries', est.enquiryId)?.renewsC
 export function amcProblems(est) {
   const s = summarizeAmc(est, zones());
   const p = [];
-  if (!s.metrics.shutters) p.push('No shutters are covered yet (Shutters tab).');
+  if (!s.metrics.shutters) p.push('No products are covered yet (Products to service tab).');
   est.sites.forEach(x => { if (!num(x.visits)) p.push(`${x.name}: enter the visits per year.`); });
   est.sites.forEach(x => { if (x.zoneId && !est.transport.some(t => t.zoneId === x.zoneId)) p.push(`${x.name}: its zone has no Transport row.`); });
   if (!s.direct) p.push('The estimate has no cost yet.');
@@ -134,8 +137,8 @@ export function amcChecks(q, est, add) {
   add(q.customerId === enq.customerId, `Customer and contact match ${enq.no}`);
   est.sites.forEach(x => {
     const r = amcSiteRow(x, est.matrix);
-    if (x.typed) add(false, `${x.name}: ${r.shutters} shutters typed from the BOQ (no shutter register yet; it is made when the contract starts)`);
-    else { const all = covered(findSite(x.siteId).site).length; add(true, `${x.name}: ${r.shutters} of ${all} shutters in the register covered, ${x.visits} visit${x.visits === 1 ? '' : 's'} a year`); }
+    if (x.typed) add(false, `${x.name}: ${r.shutters} products typed from the BOQ (none recorded at the site yet; they are recorded when the contract starts)`);
+    else { const all = covered(findSite(x.siteId).site).length; add(true, `${x.name}: ${r.shutters} of ${all} customer products covered, ${x.visits} visit${x.visits === 1 ? '' : 's'} a year`); }
   });
   est.transport.filter(t => t.placeholder).forEach(t => add(false, `${t.zoneLabel}: AMC rate ${num(t.rate).toFixed(2)} / travel ${num(t.hrs)} h per trip is a placeholder`));
   const s = summarizeAmc(est, zones());

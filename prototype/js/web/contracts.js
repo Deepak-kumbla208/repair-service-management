@@ -5,6 +5,7 @@ import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, go, on, fmtDate, pill, toast, openModal, readForm, confirmBox, popMenu, fmtNum, foldHeader } from '../core/ui.js';
 import { vsLabel, zoneLabel, empName } from '../core/lookups.js';
+import { countText } from '../core/products.js';
 import { saveBlob, getUrl } from '../core/media.js';
 import { canEditContract, saveContract, activateContract, activateProblems, cancelContract, renewContract, visitsOf, contractProgress, daysLeft, plannedDates, billingLines,
   refreshAmc } from '../core/contracts.js';
@@ -97,7 +98,7 @@ export function renderContract(el, id) {
           <div><b>${draft ? '—' : left >= 0 ? `${left} days` : 'Ended'}</b><span>${draft ? 'Starts after activation' : `Ends ${fmtDate(c.end)}`}</span></div></div></div>
       <div class="card"><div class="card-head"><h2>Visit plan (${draft ? c.sites.reduce((t, s) => t + s.visits, 0) : visits.length})</h2></div><div id="ctVisits"></div></div>
       <div class="card"><div class="card-head"><h2>Billing plan (${c.plan.length})</h2></div><div id="ctBilling"></div></div>
-      <div class="card"><div class="card-head"><h2>Sites &amp; shutters (${c.sites.length})</h2></div><div id="ctSites"></div></div>
+      <div class="card"><div class="card-head"><h2>Sites &amp; products (${c.sites.length})</h2></div><div id="ctSites"></div></div>
       <div class="card"><div class="card-head"><h2>History</h2></div>${activityHtml(c, 'contracts')}</div>
     </div>
   </div>`);
@@ -114,7 +115,7 @@ export function renderContract(el, id) {
         <td>${visitDate(v) !== v.plannedDate ? html`<b>${fmtDate(visitDate(v))}</b> <span class="muted small">(was ${fmtDate(v.plannedDate)})</span>` : fmtDate(v.plannedDate)}</td>
         <td>${visitPill(v)}</td><td>${v.technicianId ? empName(v.technicianId) : html`<span class="muted">—</span>`}</td><td>${v.signoff?.signedAt ? v.reportNo : html`<span class="muted">—</span>`}</td>
         <td>${v.signoff?.signedAt ? (v.failures?.length ? `${v.failures.length} failed item${v.failures.length > 1 ? 's' : ''}` : 'All pass') : ''}</td></tr>`)}</tbody></table>
-      <p class="mini-note">Each visit covers all the covered shutters of its site. Dates are about two weeks into each period; book them on <a href="#/amc-scheduling">AMC Scheduling</a>.</p>`;
+      <p class="mini-note">Each visit covers all the covered products of its site. Dates are about two weeks into each period; book them on <a href="#/amc-scheduling">AMC Scheduling</a>.</p>`;
   };
   const billingTab = () => {
     const lines = draft ? billingLines(c, c.start) : c.billingPlan;
@@ -128,12 +129,12 @@ export function renderContract(el, id) {
       <p class="mini-note">Invoices come only from this plan; visits never raise invoices. Each line's draft appears by itself on its bill date. The left-over cents sit on the last instalment.</p>`;
   };
   const sitesTab = () => html`${c.sites.map(s => html`<div class="row" style="margin:6px 0"><b>${s.name}</b> <span class="zone-chip">${zoneLabel(s.zoneId).split(' ')[0]}</span> ${zoneLabel(s.zoneId).split(' · ')[1] || ''} · ${s.visits} visit${s.visits > 1 ? 's' : ''} a year · ${fmtNum(s.teamHrs)} team-hours (${s.days} day${s.days > 1 ? 's' : ''})${s.access ? html` · <span class="muted">${s.access}</span>` : ''}</div>
-    ${s.typed ? html`<div class="note small">Counts typed from the BOQ (${Object.entries(s.counts || {}).filter(([, n]) => n).map(([k, n]) => `${n} ${k}`).join(', ')}). "Activate" adds them to the shutter register.</div>`
-      : html`<table class="tbl"><thead><tr><th>Tag</th><th>Location</th><th>Type</th><th>Size</th><th>Fire-rated</th><th>Last visit</th></tr></thead><tbody>${s.shutters.map(sh => {
+    ${s.typed ? html`<div class="note small">Counts typed from the BOQ (${countText(s.counts)}). "Activate" records them as customer products.</div>`
+      : html`<table class="tbl"><thead><tr><th>Tag</th><th>Location</th><th>Product</th><th>Size</th><th>Fire-rated</th><th>Last visit</th></tr></thead><tbody>${s.shutters.map(sh => {
         const last = visits.filter(v => v.siteKey === s.key && v.signoff?.signedAt).sort((a, b) => b.n - a.n)[0];
         const st = last?.checklist?.[sh.shutterId];
         const fails = st ? Object.entries(st.items || {}).filter(([, x]) => x.r === 'F').length : 0;
-        return html`<tr><td><b>${sh.tag}</b></td><td>${sh.location}</td><td>${sh.typeName}</td><td>${sh.sizeCode}</td><td>${sh.fireRated ? 'Yes' : 'No'}</td>
+        return html`<tr><td><b>${sh.tag}</b></td><td>${sh.location}</td><td>${sh.typeName}</td><td>${sh.sizeText || sh.sizeCode || html`<span class="muted">no size</span>`}</td><td>${sh.fireRated ? 'Yes' : 'No'}</td>
           <td>${last ? html`${fails ? pill(`${fails} fail`, 'red') : pill('Pass', 'green')} <span class="muted small">visit ${last.n}</span>` : html`<span class="muted">—</span>`}</td></tr>`; })}</tbody></table>`}`)}`;
   // The plans follow the start date of a draft, so both are repainted when it changes.
   const paintTab = () => { $('#ctVisits', el).innerHTML = String(visitTab()); $('#ctBilling', el).innerHTML = String(billingTab()); $('#ctSites', el).innerHTML = String(sitesTab()); };
@@ -151,12 +152,12 @@ export function renderContract(el, id) {
     const cur = store.get('contracts', c.id);
     openModal({
       title: `Activate ${c.no}`, body: html`<p>From <b>${fmtDate(cur.start)}</b> to <b>${fmtDate(cur.end)}</b>: ${cur.sites.reduce((t, s) => t + s.visits, 0)} visits are planned and ${cur.plan.length} billing line${cur.plan.length > 1 ? 's are' : ' is'} created.${cur.start <= new Date().toISOString().slice(0, 10) ? ' The first invoice is drafted now.' : ''}</p>
-        ${cur.sites.some(s => s.typed) ? html`<p class="small">The typed shutter counts are added to the shutter register (location "to confirm").</p>` : ''}`,
+        ${cur.sites.some(s => s.typed) ? html`<p class="small">The typed counts are recorded as customer products (location "to confirm").</p>` : ''}`,
       actions: [{ label: 'Cancel' }, { label: 'Activate', kind: 'primary', onClick: () => { const err = activateContract(c.id); if (err.length) { toast(err[0], 'bad'); return false; } toast(`${c.no} is active`); render(); } }],
     });
   });
   $('#renew', el)?.addEventListener('click', async () => {
-    if (!await confirmBox(`Renew ${c.no}`, 'A renewal enquiry is created with an estimate pre-filled from this contract (same sites, shutters and visits, today’s rates). It then goes to the quotation and the counter-check as usual.', 'Renew')) return;
+    if (!await confirmBox(`Renew ${c.no}`, 'A renewal enquiry is created with an estimate pre-filled from this contract (same sites, products and visits, today’s rates). It then goes to the quotation and the counter-check as usual.', 'Renew')) return;
     const r = renewContract(c.id); toast(`${r.enquiry.no} and ${r.estimate.no} created`); go(`estimates/${r.estimate.id}`);
   });
   $('#more', el)?.addEventListener('click', e => popMenu(e.currentTarget, [{ label: draft ? 'Cancel the contract' : 'Terminate the contract', onClick: () => openModal({

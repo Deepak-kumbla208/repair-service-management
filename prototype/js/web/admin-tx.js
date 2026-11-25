@@ -44,7 +44,7 @@ function defaultsFields(type, ro) {
       ${type.key === 'AMCEST' ? html`${chips('visitsPerYear', 'Visits a year', [1, 2, 3, 4, 6, 12].map(v => ({ value: v, label: String(v) })), d.visitsPerYear, ro)}
         ${chips('billing', 'Billing', vsOptions('BILLING'), d.billing, ro, 'Instalments, in advance')}
         ${num('periodMonths', 'Contract', d.periodMonths, { suffix: 'months', ro })}
-        ${num('liftHeightM', 'Scissor lift above', d.liftHeightM, { suffix: 'm shutter height', ro, step: '0.5' })}` : ''}`;
+        ${num('liftHeightM', 'Scissor lift above', d.liftHeightM, { suffix: 'm product height', ro, step: '0.5' })}` : ''}`;
   }
   if (type.key === 'QT') {
     const d = txDefaults();

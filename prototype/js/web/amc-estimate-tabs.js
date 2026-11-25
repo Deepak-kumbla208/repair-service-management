@@ -1,4 +1,4 @@
-// The AMC estimate's Excel tabs (team lead's AMC estimator) as tables: Summary, Labour_Matrix, Shutters, Transport,
+// The AMC estimate's Excel tabs (team lead's AMC estimator) as tables: Summary, Labour_Matrix, Products to service (the Shutters sheet), Transport,
 // Equipment, Materials (optional) and Overhead & Margin. Same columns and formulas as the Excel; every pre-filled value
 // stays editable. Cells carry data-p, the path of the value they edit (e.g. "sites.0.visits").
 import * as store from '../core/store.js';
@@ -13,7 +13,7 @@ const pc = v => `${(v * 100).toFixed(1)} %`;
 const num = v => Number(v) || 0;
 const rid = () => store.uid('r_');
 
-export const AMC_TABS = [['summary', 'Summary'], ['matrix', 'Labour_Matrix'], ['shutters', 'Shutters'], ['transport', 'Transport'], ['equipment', 'Equipment'], ['materials', 'Materials'], ['overhead', 'Overhead & Margin']];
+export const AMC_TABS = [['summary', 'Summary'], ['matrix', 'Labour_Matrix'], ['shutters', 'Products to service'], ['transport', 'Transport'], ['equipment', 'Equipment'], ['materials', 'Materials'], ['overhead', 'Overhead & Margin']];
 
 function inp(ctx, path, v, { type = 'number', w = 64, step = 'any' } = {}) {
   if (!ctx.editable) return type === 'number' ? fmtNum(v, 2) : v;
@@ -53,9 +53,9 @@ function summaryTab(est, ctx, s) {
       <div>
         <h3 style="margin:0 0 6px">${est.jobType === 'GS' ? 'Servicing metrics' : 'AMC Metrics (per contract year)'}</h3>
         <table class="tbl"><tbody>
-          <tr><td>Total shutters ${est.jobType === 'GS' ? 'to service' : 'under contract'}</td><td class="num"><b>${s.metrics.shutters}</b></td></tr>
+          <tr><td>Total products ${est.jobType === 'GS' ? 'to service' : 'under contract'}</td><td class="num"><b>${s.metrics.shutters}</b></td></tr>
           <tr><td>Total site visits ${est.jobType === 'GS' ? '' : 'per year'}</td><td class="num"><b>${s.metrics.visits}</b></td></tr>
-          ${est.jobType === 'GS' ? '' : html`<tr><td>Selling price per shutter per year</td><td class="num"><b>${m2(s.metrics.perShutterYear)}</b></td></tr>
+          ${est.jobType === 'GS' ? '' : html`<tr><td>Selling price per product per year</td><td class="num"><b>${m2(s.metrics.perShutterYear)}</b></td></tr>
             <tr><td>Total quote per month (÷ 12)</td><td class="num"><b>${m2(s.metrics.perMonth)}</b></td></tr><tr><td class="muted">Per month before ${est.taxLabel || 'tax'}</td><td class="num">${m2(s.metrics.perMonthEx)}</td></tr>`}
         </tbody></table>
         ${plan.length > 1 ? html`<h3 style="margin:12px 0 6px">Billing plan</h3><table class="tbl"><tbody>
@@ -65,12 +65,15 @@ function summaryTab(est, ctx, s) {
       </div>
     </div>
     <h3 style="margin:12px 0 6px">Zone wise</h3>
-    <table class="tbl"><thead><tr><th>Zone (from Transport)</th><th class="num">No. of Shutters</th><th class="num">Site Visits per Year</th><th class="num">Transport Cost</th><th class="num">% of Transport</th></tr></thead><tbody>
+    <table class="tbl"><thead><tr><th>Zone (from Transport)</th><th class="num">No. of Products</th><th class="num">Site Visits per Year</th><th class="num">Transport Cost</th><th class="num">% of Transport</th></tr></thead><tbody>
       ${s.zoneTable.map(z => html`<tr><td><span class="zone-chip">${z.code}</span> ${z.name}</td><td class="num">${z.shutters}</td><td class="num">${z.visits}</td><td class="num">${m2(z.cost)}</td><td class="num">${pc(z.pct)}</td></tr>`)}
       <tr><td>Other / unassigned zones</td><td class="num">${s.zoneOther.shutters}</td><td class="num">${s.zoneOther.visits}</td><td class="num">${m2(s.zoneOther.cost)}</td><td class="num">${pc(s.zoneOther.pct)}</td></tr>
       <tr class="sum"><td><b>TOTAL</b></td><td class="num"><b>${s.metrics.shutters}</b></td><td class="num"><b>${s.metrics.visits}</b></td><td class="num"><b>${m2(s.heads.transport)}</b></td><td class="num"><b>${s.heads.transport ? '100.0 %' : '0.0 %'}</b></td></tr>
     </tbody></table>`;
 }
+
+// A Labour_Matrix row's label: the size and its size set, or the product with no size.
+const rowLabel = z => (z.key?.startsWith('P:') ? z.name : `${z.code} – ${z.name}${z.setName ? ` · ${z.setName}` : ''}`);
 
 function matrixTab(est, ctx) {
   const m = est.matrix;
@@ -79,33 +82,43 @@ function matrixTab(est, ctx) {
   return html`<h3 style="margin:0 0 6px">1. Labour Rate Card <span class="muted small" style="font-weight:400">from the Labour master (AMC set)</span></h3>
     <table class="tbl edit"><thead><tr><th>Team</th><th class="num">Monthly Cost</th><th class="num">Days per Month</th><th class="num">Hrs per Day</th><th class="num">Rate per Hr</th></tr></thead><tbody>
       ${rate('team', 'Standard Team (1+1)')}${rate('extra', 'Additional Worker')}</tbody></table>
-    <h3 style="margin:12px 0 6px">2. Labour Matrix (per shutter, per visit) <span class="muted small" style="font-weight:400">from the Shutter Size master</span></h3>
-    <table class="tbl edit"><thead><tr><th>Size Category</th><th>Shutter Size (W × H)</th><th class="num">Std Team Hrs per Shutter</th><th class="num">Additional Workers</th><th class="num">Addl. Worker Hrs (each)</th><th class="num">Labour Cost per Shutter per Visit</th></tr></thead><tbody>
-      ${m.sizes.map((z, i) => html`<tr><td>${z.code} – ${z.name}</td><td>${z.limits}</td><td class="num">${inp(ctx, `matrix.sizes.${i}.teamHrs`, z.teamHrs, { w: 56 })}</td>
+    <h3 style="margin:12px 0 6px">2. Labour Matrix (per product, per visit) <span class="muted small" style="font-weight:400">sizes from the Product Size master; products with no size from the Product master</span></h3>
+    <table class="tbl edit"><thead><tr><th>Size / Product</th><th>Limit</th><th class="num">Std Team Hrs per Product</th><th class="num">Additional Workers</th><th class="num">Addl. Worker Hrs (each)</th><th class="num">Labour Cost per Product per Visit</th></tr></thead><tbody>
+      ${m.sizes.map((z, i) => html`<tr><td>${rowLabel(z)}</td><td>${z.limits}</td><td class="num">${inp(ctx, `matrix.sizes.${i}.teamHrs`, z.teamHrs, { w: 56 })}</td>
         <td class="num">${inp(ctx, `matrix.sizes.${i}.extraWorkers`, z.extraWorkers, { w: 50, step: 1 })}</td><td class="num">${inp(ctx, `matrix.sizes.${i}.extraHrs`, z.extraHrs, { w: 56 })}</td>
         <td class="num">${m2(matrixCost(z, m.team.rate, m.extra.rate))}</td></tr>`)}</tbody></table>
-    <p class="mini-note">Cost per shutter = team hrs × team rate + additional workers × their hrs × additional worker rate, as in the Excel.</p>`;
+    <p class="mini-note">Cost per product = team hrs × team rate + additional workers × their hrs × additional worker rate, as in the Excel.</p>`;
 }
 
+// Products to service (the Excel's Shutters sheet): one row per site with its totals, then the counts by size or product
+// (a column per site). A site with nothing recorded gets typed counts from the BOQ.
 function shuttersTab(est, ctx, s, more) {
   const gs = est.jobType === 'GS';
-  const sizes = est.matrix.sizes;
-  const tot = code => est.sites.reduce((t, x) => t + num(x.counts?.[code]), 0);
-  return html`<table class="tbl edit"><thead><tr><th>Sl</th><th>Site / Location</th><th>Zone</th><th class="num">Visits ${gs ? '' : 'per Year'}</th>${sizes.map(z => html`<th class="num">${z.code}</th>`)}
-      <th class="num">Total Shutters</th><th class="num">Std Team Hrs per Visit</th><th class="num">Days on site</th><th class="num">Labour Cost per Visit</th><th class="num">${gs ? 'Labour Cost' : 'Annual Labour Cost'}</th>${ctx.editable && est.sites.length > 1 ? html`<th></th>` : ''}</tr></thead><tbody>
+  const rows = est.matrix.sizes;
+  const key = z => z.key || z.code;
+  const anyTyped = est.sites.some(x => x.typed);
+  const shown = rows.filter(z => anyTyped || est.sites.some(x => num(x.counts?.[key(z)]) > 0));
+  const tot = z => est.sites.reduce((t, x) => t + num(x.counts?.[key(z)]), 0);
+  const multi = ctx.editable && est.sites.length > 1;
+  return html`<table class="tbl edit"><thead><tr><th>Sl</th><th>Site / Location</th><th>Zone</th><th class="num">Visits ${gs ? '' : 'per Year'}</th>
+      <th class="num">Total Products</th><th class="num">Std Team Hrs per Visit</th><th class="num">Days on site</th><th class="num">Labour Cost per Visit</th><th class="num">${gs ? 'Labour Cost' : 'Annual Labour Cost'}</th>${multi ? html`<th></th>` : ''}</tr></thead><tbody>
     ${est.sites.map((x, i) => { const r = amcSiteRow(x, est.matrix); return html`<tr><td>${i + 1}</td>
       <td>${x.name}${x.typed ? html` ${placeholderTag('typed from BOQ')}` : html`<br><button type="button" class="btn link small" data-cover="${x.key}" style="padding:0">${x.shutterIds.length} covered ▾</button>`}</td>
       <td><span class="zone-chip">${store.get('zones', x.zoneId)?.code || '—'}</span></td>
       <td class="num">${gs ? 1 : inp(ctx, `sites.${i}.visits`, x.visits, { w: 46, step: 1 })}</td>
-      ${sizes.map(z => html`<td class="num">${x.typed ? inp(ctx, `sites.${i}.counts.${z.code}`, x.counts?.[z.code] || 0, { w: 46, step: 1 }) : num(x.counts?.[z.code])}</td>`)}
       <td class="num"><b>${r.shutters}</b></td><td class="num">${fmtNum(r.hrsVisit)}</td><td class="num">${r.days}</td><td class="num">${m2(r.perVisit)}</td><td class="num">${m2(r.annual)}</td>
-      ${ctx.editable && est.sites.length > 1 ? html`<td><button type="button" class="btn link small" data-rmsite="${x.key}" title="Remove this site">✕</button></td>` : ''}</tr>`; })}
-    <tr class="sum"><td></td><td><b>TOTAL</b></td><td></td><td class="num">${s.metrics.visits}</td>${sizes.map(z => html`<td class="num">${tot(z.code)}</td>`)}<td class="num"><b>${s.metrics.shutters}</b></td>
-      <td></td><td></td><td></td><td class="num"><b>${m2(s.heads.labour)}</b></td>${ctx.editable && est.sites.length > 1 ? html`<td></td>` : ''}</tr>
+      ${multi ? html`<td><button type="button" class="btn link small" data-rmsite="${x.key}" title="Remove this site">✕</button></td>` : ''}</tr>`; })}
+    <tr class="sum"><td></td><td><b>TOTAL</b></td><td></td><td class="num">${s.metrics.visits}</td><td class="num"><b>${s.metrics.shutters}</b></td>
+      <td></td><td></td><td></td><td class="num"><b>${m2(s.heads.labour)}</b></td>${multi ? html`<td></td>` : ''}</tr>
   </tbody></table>
+  <h3 style="margin:12px 0 6px">Counts by size or product</h3>
+  ${shown.length ? html`<table class="tbl edit"><thead><tr><th>Size / Product</th><th class="num">Hrs each</th>${est.sites.map(x => html`<th class="num">${x.name}</th>`)}${est.sites.length > 1 ? html`<th class="num">Total</th>` : ''}</tr></thead><tbody>
+    ${shown.map(z => html`<tr><td>${rowLabel(z)}</td><td class="num">${fmtNum(z.teamHrs)}</td>
+      ${est.sites.map((x, i) => html`<td class="num">${x.typed ? inp(ctx, `sites.${i}.counts.${key(z)}`, x.counts?.[key(z)] || 0, { w: 46, step: 1 }) : num(x.counts?.[key(z)]) || html`<span class="muted">–</span>`}</td>`)}
+      ${est.sites.length > 1 ? html`<td class="num">${tot(z)}</td>` : ''}</tr>`)}</tbody></table>` : html`<div class="muted">Nothing covered yet.</div>`}
   ${ctx.editable && !gs && more ? html`<button type="button" class="add-dashed" data-addsite="1" style="margin-top:6px">+ Add a site of this customer (${more} more)</button>` : ''}
   ${s.sites.filter(x => x.days > 1).map(x => html`<div class="note warn small" style="margin-top:8px">${est.sites.find(y => y.key === x.key).name}: ${fmtNum(x.hrsVisit)} team-hours = ${x.days} days on site per visit. The price counts one trip per visit, as the Excel does; the calendar books ${x.days} days.</div>`)}
-  <p class="mini-note">Counts come from each site's shutter register; click "covered" to leave a shutter out. A site with no register gets typed counts; the contract adds them to the register.</p>`;
+  <p class="mini-note">Counts come from each site's customer products: by size for a product with a size set, else by product. Click "covered" to leave a product out. A site with nothing recorded gets typed counts; the contract records them as customer products.</p>`;
 }
 
 function transportTab(est, ctx) {
@@ -115,7 +128,7 @@ function transportTab(est, ctx) {
     ${est.transport.map((r, i) => html`<tr><td>${i + 1}</td><td>${r.zoneLabel}${r.placeholder ? html` ${placeholderTag()}` : ''}</td><td>${r.distance}</td><td>${r.vehicle}</td><td class="num">${visits(r.zoneId)}</td>
       <td class="num">${inp(ctx, `transport.${i}.hrs`, r.hrs, { w: 56 })}</td><td class="num">${inp(ctx, `transport.${i}.rate`, r.rate, { w: 64 })}</td><td class="num">${m2(visits(r.zoneId) * num(r.hrs) * num(r.rate))}</td></tr>`)}
     <tr class="sum"><td></td><td><b>TOTAL</b></td><td></td><td></td><td class="num">${est.sites.reduce((t, x) => t + num(x.visits), 0)}</td><td></td><td></td><td class="num"><b>${m2(total)}</b></td></tr>
-  </tbody></table><p class="mini-note">One row per zone the sites are in. Visits come from the Shutters tab; travel hours and the AMC rate from the Transport master. Cost = visits × travel hrs × rate.</p>`;
+  </tbody></table><p class="mini-note">One row per zone the sites are in. Visits come from the Products to service tab; travel hours and the AMC rate from the Transport master. Cost = visits × travel hrs × rate.</p>`;
 }
 
 function equipmentTab(est, ctx) {
@@ -125,7 +138,7 @@ function equipmentTab(est, ctx) {
     ${est.equipment.length ? html`${est.equipment.map((r, i) => html`<tr><td>${i + 1}</td><td>${sel(ctx, `equipment.${i}.equipmentId`, r.equipmentId, opts)}${r.reason ? html`<br><span class="muted small">${r.reason}</span>` : ''}</td>
       <td>${sel(ctx, `equipment.${i}.siteKey`, r.siteKey, siteOptions(est))}</td><td>${r.ownership}</td><td>${r.basis}</td><td class="num">${inp(ctx, `equipment.${i}.qty`, r.qty, { w: 44, step: 1 })}</td>
       <td class="num">${inp(ctx, `equipment.${i}.duration`, r.duration, { w: 50 })}</td><td class="num">${visitsOf(est, r.siteKey)}</td><td class="num">${inp(ctx, `equipment.${i}.rate`, r.rate, { w: 64 })}</td><td class="num">${m2(amount(r))}</td>${del(ctx, 'equipment', i)}</tr>`)}`
-      : html`<tr><td colspan="11" class="empty">No equipment. A scissor lift is added by itself for a site with a shutter taller than ${fmtNum(amcDefaults().liftHeightM)} m.</td></tr>`}
+      : html`<tr><td colspan="11" class="empty">No equipment. A scissor lift is added by itself for a site with a product taller than ${fmtNum(amcDefaults().liftHeightM)} m.</td></tr>`}
     <tr class="sum"><td></td><td><b>TOTAL</b></td><td colspan="7"></td><td class="num"><b>${m2(est.equipment.reduce((t, r) => t + amount(r), 0))}</b></td>${delHead(ctx)}</tr>
   </tbody></table>${addBtn(ctx, 'equipment', 'Add equipment')}<p class="mini-note">Amount = Qty × Duration per visit × Visits per year × Rate, as in the Excel. Visits come from the chosen site.</p>`;
 }

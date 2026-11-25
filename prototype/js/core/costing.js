@@ -16,8 +16,8 @@ const sum = (rows, f) => rows.reduce((t, r) => t + f(r), 0);
 
 export const toMetres = (value, unit) => (value == null || value === '' ? null : unit === 'ft' ? Number(value) * FT_TO_M : Number(value));
 
-// One size rule (PLAN.md, decision A4): a shutter gets the smallest size whose width AND height both fit.
-// sizes: Shutter Size master rows with maxWidth / maxHeight in metres (blank = no limit, e.g. XL).
+// One size rule (PLAN.md, decision A4): a product gets the smallest size whose width AND height both fit.
+// sizes: the Width × height size set's rows (Product Size master) with maxWidth / maxHeight in metres (blank = no limit, e.g. XL).
 export function classifySize(widthM, heightM, sizes) {
   if (!widthM || !heightM) return '';
   const ordered = [...sizes].filter(s => s.status !== 'Inactive').sort((a, b) => a.order - b.order);
@@ -33,8 +33,9 @@ export const otRate = (hourly, multiplier = 1.5) => Number(hourly || 0) * multip
 // Total man-hours on the Site Viewing Report, section 3.
 export const manHours = (persons, days, hoursPerDay) => Number(persons || 0) * Number(days || 0) * Number(hoursPerDay || 0);
 
-// ---------- Repair labour from the shutters (rate card, PLAN.md) ----------
-// Hours for one shutter: the Shutter Size master's repair hours × qty (no factor by shutter type: user, 2 Nov 2026).
+// ---------- Repair labour by size (rate card, PLAN.md) ----------
+// Hours of a product costed by size: its size's repair hours (Product Size master) × qty (no factor by product: user,
+// 2 Nov 2026). Products with standard hours or a fixed price: core/products.js repairLabour.
 // Returns { teamHrs, extraWorkers, extraHrs } so the Labour tab can count labour once.
 export function shutterLabour(size, qty = 1) {
   if (!size) return { teamHrs: 0, extraWorkers: 0, extraHrs: 0 };
@@ -62,6 +63,10 @@ export function materialRow(r) {
 }
 // Equipment: Amount = Qty × Duration × Rate.
 export const equipmentRow = r => num(r.qty) * num(r.duration) * num(r.rate);
+// A fixed-price product (a submission, a design): Amount = Qty × Price. It is a selling price: no overhead, markup or
+// shared cost is added to it (user, 25 Nov 2026).
+export const fixedRow = r => round2(num(r.qty) * num(r.price));
+const fixedOf = (est, pick = () => true) => sum((est.fixed || []).filter(pick), fixedRow);
 
 // Overheads: each row is a % of direct cost or a fixed amount (Overhead_Margin sheet, rows 6–15).
 export const pctOverhead = rows => sum(rows || [], r => (r.basis === 'FIXED' ? 0 : num(r.value) / 100));
@@ -93,7 +98,8 @@ export function summarize(est, zones = []) {
   const overhead = direct * pctOverhead(est.overheads) + fixedOverhead(est.overheads);
   const cbm = direct + overhead;
   const margin = marginAmount(est.marginBasis, est.marginPct, cbm);
-  const sell = cbm + margin;
+  const fixed = fixedOf(est);
+  const sell = cbm + margin + fixed;
   const subtotal = round2(sell);
   const taxRate = num(est.taxRate);
   const tax = round2(subtotal * taxRate / 100);
@@ -101,7 +107,7 @@ export function summarize(est, zones = []) {
   const transportByZone = zones.map(z => ({ zoneId: z.id, label: `Zone ${z.code} · ${z.name}`, cost: sum((est.transport || []).filter(r => r.zoneId === z.id), transportRow) }));
   const zoned = sum(transportByZone, z => z.cost);
   return {
-    heads: h, direct, overhead, cbm, margin, sell, subtotal, taxRate, tax, total: round2(subtotal + tax),
+    heads: h, direct, overhead, cbm, margin, fixed, sell, subtotal, taxRate, tax, total: round2(subtotal + tax),
     pct: { labour: pctOf(h.labour), transport: pctOf(h.transport), materials: pctOf(h.materials), equipment: pctOf(h.equipment), direct: pctOf(direct), overhead: pctOf(overhead), cbm: pctOf(cbm), margin: pctOf(margin) },
     markupPct: cbm ? (margin / cbm) * 100 : 0,
     marginOnPricePct: sell ? (margin / sell) * 100 : 0,
@@ -119,20 +125,23 @@ export function linePrices(est, subtotal) {
   const keys = new Set(lines.map(l => l.key));
   const p = pctOverhead(est.overheads), fixed = fixedOverhead(est.overheads);
   const sharedDirect = headsTotal(heads(est, r => !keys.has(r.lineKey)));
-  const own = lines.map(l => ({ key: l.key, description: l.description, direct: headsTotal(heads(est, r => r.lineKey === l.key)) }));
-  const priceOf = (direct, extraOverhead) => {
+  const own = lines.map(l => ({ key: l.key, description: l.description, direct: headsTotal(heads(est, r => r.lineKey === l.key)), fixedPrice: fixedOf(est, r => r.lineKey === l.key) }));
+  // A line's price: its cost with overhead and markup, plus its fixed-price products as they are.
+  const priceOf = (direct, extraOverhead, fixedPrice = 0) => {
     const cost = direct + direct * p + extraOverhead;
-    return { cost, price: cost + marginAmount(est.marginBasis, est.marginPct, cost) };
+    return { cost, price: cost + marginAmount(est.marginBasis, est.marginPct, cost) + fixedPrice };
   };
   let out;
   if (est.sharedCosts === 'OWN_LINE') {
-    out = own.map(l => ({ ...l, shared: 0, ...priceOf(l.direct, 0) }));
+    out = own.map(l => ({ ...l, shared: 0, ...priceOf(l.direct, 0, l.fixedPrice) }));
     if (sharedDirect || fixed) out.push({ key: '_shared', description: est.sharedLabel || 'Transport & mobilisation', direct: sharedDirect, shared: 0, ...priceOf(sharedDirect, fixed), isShared: true });
   } else {
+    // Shared costs follow each line's direct cost; a line with only a fixed price takes none (unless no line has a cost).
     const base = sum(own, l => l.direct);
+    const costed = own.filter(l => !(l.fixedPrice && !l.direct)).length || own.length;
     out = own.map(l => {
-      const w = base ? l.direct / base : 1 / (own.length || 1);
-      return { ...l, shared: sharedDirect * w, ...priceOf(l.direct + sharedDirect * w, fixed * w) };
+      const w = base ? l.direct / base : (l.fixedPrice && !l.direct && costed !== own.length ? 0 : 1 / costed);
+      return { ...l, shared: sharedDirect * w, ...priceOf(l.direct + sharedDirect * w, fixed * w, l.fixedPrice) };
     });
   }
   return allocateCents(out, subtotal ?? round2(sum(out, l => l.price)));
@@ -173,18 +182,19 @@ export function ageBucket(daysOverdue) {
 // Billing plan: how many invoices a contract year has. ONCE = General Servicing (no contract).
 export const BILLING_COUNT = { MONTHLY: 12, QUARTERLY: 4, HALF: 2, YEARLY: 1, ONCE: 1 };
 
-// Labour_Matrix F: cost per shutter per visit = team hrs × team rate + extra workers × their hrs × extra worker rate.
+// Labour_Matrix F: cost per product per visit = team hrs × team rate + extra workers × their hrs × extra worker rate.
 export const matrixCost = (size, teamRate, extraRate) => num(size.teamHrs) * num(teamRate) + num(size.extraWorkers) * num(size.extraHrs) * num(extraRate);
 // Days on site for one visit (8 working hours a day); a screen helper for the calendar, not part of the price.
 export const daysOnSite = (teamHrs, hoursPerDay = 8) => Math.max(1, Math.ceil(num(teamHrs) / hoursPerDay - 1e-9));
 
-// One row of the Shutters sheet: J total shutters, K std team hrs per visit, L labour per visit, M annual labour (L × D).
+// One row of the Shutters sheet ("Products to service"): J total products, K std team hrs per visit, L labour per visit,
+// M annual labour (L × D). Counts are keyed by Labour_Matrix row (its key, or its size code in matrices saved before).
 export function amcSiteRow(site, matrix) {
   const sizes = matrix?.sizes || [];
-  const count = code => num(site.counts?.[code]);
-  const shutters = sum(sizes, s => count(s.code));
-  const hrsVisit = sum(sizes, s => count(s.code) * num(s.teamHrs));
-  const perVisit = sum(sizes, s => count(s.code) * matrixCost(s, matrix.team?.rate, matrix.extra?.rate));
+  const count = s => num(site.counts?.[s.key || s.code]);
+  const shutters = sum(sizes, s => count(s));
+  const hrsVisit = sum(sizes, s => count(s) * num(s.teamHrs));
+  const perVisit = sum(sizes, s => count(s) * matrixCost(s, matrix.team?.rate, matrix.extra?.rate));
   return { shutters, hrsVisit, perVisit, annual: perVisit * num(site.visits), days: daysOnSite(hrsVisit) };
 }
 
@@ -200,7 +210,7 @@ export function amcRows(est) {
   const transport = (est.sites || []).map(s => { const z = zoneRow(s.zoneId); return { key: `tr_${s.key}`, zoneId: s.zoneId, hrs: num(s.visits) * num(z?.hrs), rate: num(z?.rate), lineKey: s.key }; });
   const equipment = (est.equipment || []).map(r => ({ ...r, duration: num(r.duration) * visitsFor(est, r.siteKey), lineKey: r.siteKey || '' }));
   const materials = (est.materials || []).map(r => ({ ...r, qty: num(r.qty) * visitsFor(est, r.siteKey), lineKey: r.siteKey || '' }));
-  const lines = (est.sites || []).map(s => { const x = amcSiteRow(s, est.matrix); return { key: s.key, tag: '', description: `${s.name}: ${x.shutters} shutter${x.shutters === 1 ? '' : 's'}, ${num(s.visits)} visit${num(s.visits) === 1 ? '' : 's'} a year` }; });
+  const lines = (est.sites || []).map(s => { const x = amcSiteRow(s, est.matrix); return { key: s.key, tag: '', description: `${s.name}: ${x.shutters} product${x.shutters === 1 ? '' : 's'}, ${num(s.visits)} visit${num(s.visits) === 1 ? '' : 's'} a year` }; });
   return { labour, transport, equipment, materials, lines };
 }
 

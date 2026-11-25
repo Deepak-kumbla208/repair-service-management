@@ -134,14 +134,18 @@ export function arrive(coll, id) {
   store.setStatus(coll, id, 'On site');
 }
 
-// The Inspection Check List (Value Set Master "AMC Inspection Check List"; draft until the team lead sends the real one).
+// The Inspection Check List (Value Set Master "AMC Inspection Check List"; drafts until the team lead sends real ones).
+// Each item belongs to one check list (General, Pump, DB panel …); each product names the check list it uses.
 export const checkItems = () => (valueSet('AMC_CHECKLIST')?.values || []).filter(v => v.active).sort((a, b) => a.order - b.order)
-  .map(v => ({ code: v.code, label: v.label, hint: v.hint || '', applies: v.applies || 'ALL' }));
-export const appliesTo = (it, sh) => it.applies === 'ALL' || (it.applies === 'MOTOR' && sh.motorised) || (it.applies === 'FIRE' && sh.fireRated);
+  .map(v => ({ code: v.code, label: v.label, hint: v.hint || '', applies: v.applies || 'ALL', list: v.list || 'GENERAL' }));
+// A product covered before check lists per product keeps the General list; its product's list today otherwise.
+const listOf = sh => sh.checklist || store.get('products', sh.productId)?.checklist || 'GENERAL';
+export const inList = (it, sh) => it.list === listOf(sh);
+export const appliesTo = (it, sh) => inList(it, sh) && (it.applies === 'ALL' || (it.applies === 'MOTOR' && sh.motorised) || (it.applies === 'FIRE' && sh.fireRated));
 
 export function shutterState(d, sh) {
   const saved = d.checklist?.[sh.shutterId] || {};
-  const items = checkItems().map(it => ({ ...it, on: appliesTo(it, sh), ...(saved.items?.[it.code] || {}) }));
+  const items = checkItems().filter(it => inList(it, sh)).map(it => ({ ...it, on: appliesTo(it, sh), ...(saved.items?.[it.code] || {}) }));
   const live = items.filter(i => i.on);
   return { items, unsafe: !!saved.unsafe, total: live.length, answered: live.filter(i => i.r).length, fails: live.filter(i => i.r === 'F').length, off: items.length - live.length };
 }
@@ -173,7 +177,7 @@ export function signoffProblems(coll, d) {
   const p = [];
   const s = signOf(coll, d);
   if (!d.steps?.checkInAt) p.push('Check in first.');
-  if (!(d.shutters || []).length) p.push('No shutters to check: add them to the site\'s shutter register first.');
+  if (!(d.shutters || []).length) p.push('No products to check: add them to the site\'s customer products first.');
   if (!d.safeIsolation) p.push('Tick "Safe isolation done" before the checklist.');
   (d.shutters || []).forEach(sh => { const st = shutterState(d, sh); if (st.answered < st.total) p.push(`${sh.tag}: ${st.total - st.answered} item(s) not checked yet.`); });
   failuresOf(d).forEach(f => { if (!f.note.trim() || !f.photoId) p.push(`${f.tag} ${f.label}: a failed item needs a photo and a note.`); });
@@ -253,7 +257,7 @@ export function raiseRepair(coll, d) {
     const unsafe = fresh.some(f => f.unsafe);
     created = saveNewEnquiry({
       receivedAt: nowIso(), channel: 'OTHER', channelOther: ref, type: 'REPAIR', enquiryStatus: 'HOT', priority: 'HIGH', siteInspection: 'NO', recordedBy: store.currentActor(),
-      remarks: unsafe ? 'A shutter was taken out of service as unsafe.' : '', attachments: fresh.flatMap(photo), customerId: d.customerId, contactId: con?.id || '', contactName: con?.name || d.contact,
+      remarks: unsafe ? 'A product was taken out of service as unsafe.' : '', attachments: fresh.flatMap(photo), customerId: d.customerId, contactId: con?.id || '', contactName: con?.name || d.contact,
       mobile: con?.mobile || d.phone, email: con?.email || '', siteId: d.siteId,
       lines: fresh.map(f => ({ itemRef: f.itemId ? `itm:${f.itemId}` : '', itemName: f.itemId ? store.get('items', f.itemId)?.name || '' : '', qty: f.itemId ? f.qty : null, description: `${f.tag} ${f.location}: ${f.label}${f.note ? ` – ${f.note}` : ''}` })),
     });

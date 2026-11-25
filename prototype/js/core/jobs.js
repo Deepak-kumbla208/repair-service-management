@@ -13,6 +13,7 @@ import { snapshot, registerCounts } from './contracts.js';
 import { workWeek, isWorkday, nextWorkday } from './setup.js';
 import { fmtDate } from './ui.js';
 import { rowText } from './enquiries.js';
+import { groupsOf, missingGroups } from './products.js';
 
 // The working day comes from Company Setup (default 08:30–17:30, Monday–Saturday).
 export const dayStart = () => workWeek().start;
@@ -48,10 +49,14 @@ function repairFields(q) {
   // The quotation's wording; a row that shows its own qty ("Tension spring: worn · 2 Nos") gets the count back.
   const lines = q.costingLevel === 'LINE' ? (q.split?.rows || q.rows).filter(r => !r.isShared).map(r => ({ key: r.lineKey, description: rowText(r) }))
     : est.lines.map(l => ({ key: l.key, description: l.description }));
+  // Only fixed-price products (a submission, a design): no site visit; the office marks the work done.
+  const taken = est.lines.filter(l => inJob(l.key));
+  const noVisit = taken.length > 0 && taken.every(l => (est.fixed || []).some(f => f.lineKey === l.key));
   return {
     type: 'REPAIR', enquiryId: q.enquiryId, enquiryNo: q.enquiryNo, quotationId: q.id, quotationNo: `${q.no} Rev ${q.rev}`, estimateId: est.id,
     customerId: q.customerId, customer: q.customer, contact: q.contact, phone: q.phone, siteId: q.siteId, site: q.site, address: q.address, zoneId: zone?.id || '',
-    tags: est.shutters.filter(s => inJob(s.key)).map(s => s.tag), subject: q.split ? lines.map(l => l.description).join('; ') : q.description, lines,
+    tags: est.shutters.filter(s => inJob(s.key) && s.tag).map(s => s.tag), subject: q.split ? lines.map(l => l.description).join('; ') : q.description, lines,
+    groups: groupsOf(est.shutters.filter(s => inJob(s.key)).map(s => s.productId)), noVisit,
     crew: crewOf(extra),
     workHours: round2(teamRows.reduce((t, r) => t + (Number(r.hrs) || 0) + (Number(r.otHrs) || 0), 0)), travelHours: Number(zone?.roundTripHours) || 0,
     parts: est.materials.filter(m => inJob(m.lineKey)).map(m => ({ key: m.key, itemId: m.itemId, name: m.name, qty: m.qty, unit: m.unit, leadDays: m.leadDays, ready: !m.leadDays })),
@@ -65,7 +70,7 @@ export function createJobFromQuotation(q) {
   return store.insert('jobs', { no, ...repairFields(q), ...EMPTY_RUN }, { status: 'To schedule', note: `${no} created from ${q.no} Rev ${q.rev}` });
 }
 
-// A General Servicing job's details (one site, one visit, no contract): the covered shutters, their AMC servicing
+// A General Servicing job's details (one site, one visit, no contract): the covered products, their AMC servicing
 // hours, crew and travel from the estimate.
 function gsFields(q, shutters) {
   const est = store.get('estimates', q.estimateId);
@@ -74,7 +79,7 @@ function gsFields(q, shutters) {
   const { site } = findSite(s.siteId);
   const zone = store.get('zones', s.zoneId || enq.zoneId);
   const r = amcSiteRow(s, est.matrix);
-  const extra = Math.max(0, ...est.matrix.sizes.filter(z => Number(s.counts?.[z.code]) > 0).map(z => Number(z.extraWorkers) || 0));
+  const extra = Math.max(0, ...est.matrix.sizes.filter(z => Number(s.counts?.[z.key || z.code]) > 0).map(z => Number(z.extraWorkers) || 0));
   const lines = q.costingLevel === 'LINE' ? q.rows.filter(x => !x.isShared).map(x => ({ key: x.lineKey, description: x.description })) : [{ key: 'gs', description: q.description }];
   return {
     type: 'GS', enquiryId: q.enquiryId, enquiryNo: q.enquiryNo, quotationId: q.id, quotationNo: `${q.no} Rev ${q.rev}`, estimateId: est.id,
@@ -138,10 +143,11 @@ export function freeStart(techId, ds, hours, exceptJobId = '') {
   }
   return t + hours <= dayEnd() + 0.01 ? t : null;
 }
-// Suggest a technician (zone first, then free time) and the first day the parts are ready.
+// Suggest a technician (one who works on the job's product groups, then zone first, then free time) and the first day
+// the parts are ready.
 export function suggestSlot(job, days = 14) {
   const hours = jobDuration(job);
-  const techs = technicians().map(t => ({ t, rank: t.mainZoneId === job.zoneId ? 0 : (t.extraZoneIds || []).includes(job.zoneId) ? 1 : 2 })).sort((a, b) => a.rank - b.rank);
+  const techs = technicians().map(t => ({ t, rank: (missingGroups(t, job.groups || []).length ? 3 : 0) + (t.mainZoneId === job.zoneId ? 0 : (t.extraZoneIds || []).includes(job.zoneId) ? 1 : 2) })).sort((a, b) => a.rank - b.rank);
   let d = new Date(`${earliestDate(job)}T00:00`);
   for (let i = 0; i < days; i++, d = nextWorkday(d)) {
     for (const { t } of techs) {
@@ -296,6 +302,19 @@ export function completeWorkDone(jobId) {
   store.setStatus('jobs', jobId, 'Work done');
   store.setStatus('enquiries', j.enquiryId, 'Completed', j.no);
   if (!invoiceForJob(jobId)) createInvoice(jobId, { post: false, note: 'draft made when the Work Done form was signed' });
+  return [];
+}
+
+// A job of fixed-price products only (a submission, a design) has no site visit: the office marks the work done, and
+// the draft invoice is made as when a Work Done form is signed.
+export function markDoneNoVisit(jobId, note = '') {
+  const j = store.get('jobs', jobId);
+  if (!j?.noVisit || j.status !== 'To schedule') return ['Only a job with no site visit, not yet scheduled, can be marked done here.'];
+  const w = workDoneFor(j);
+  store.update('jobs', jobId, { workDone: { ...w, comments: note, noVisit: true, signedAt: nowIso(), markedBy: store.currentActor() } }, `Work marked done by the office (no site visit)${note ? `: ${note}` : ''}`);
+  store.setStatus('jobs', jobId, 'Work done', 'No site visit');
+  store.setStatus('enquiries', j.enquiryId, 'Completed', j.no);
+  if (!invoiceForJob(jobId)) createInvoice(jobId, { post: false, note: 'draft made when the work was marked done' });
   return [];
 }
 

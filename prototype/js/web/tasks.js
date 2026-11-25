@@ -100,7 +100,7 @@ export function taskDetail(t, { compact = false } = {}) {
     const p = contractProgress(c);
     return html`<div class="card"><div class="card-head"><h2>${t.title}</h2></div>
       <p>${c.no} for ${c.customer} ends on <b>${fmtDate(c.end)}</b>. ${p.done} of ${p.visits} visits done; ${cur} ${m2(p.paid)} paid of ${m2(c.total)}.</p>
-      <p class="small muted">Renew creates a renewal enquiry with an estimate pre-filled from this contract (same sites, shutters and visits, today's rates). It then goes to the quotation and the counter-check.</p>
+      <p class="small muted">Renew creates a renewal enquiry with an estimate pre-filled from this contract (same sites, products and visits, today's rates). It then goes to the quotation and the counter-check.</p>
       <div class="apr-foot"><a class="btn" href="#/contracts/${c.id}">Open ${c.no}</a><span class="grow"></span><button class="btn" data-do="decline">Not renewing</button><button class="btn primary" data-do="renew">⟳ Renew now</button></div></div>`;
   }
   if (t.kind === 'laterWork') {

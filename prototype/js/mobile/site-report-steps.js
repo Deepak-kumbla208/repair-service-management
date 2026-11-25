@@ -1,8 +1,9 @@
 // Phone: Site Viewing Report steps 2–7, one per section of the team lead's form.
 // Photos (step 2) are attached to the report but are not part of the printed form.
 import { html, $, $$, field, readForm, toast, MIC, icon } from '../core/ui.js';
-import { zones, items, products, productName, sizes, findSite } from '../core/lookups.js';
-import { manHours, classifySize } from '../core/costing.js';
+import { zones, items, products, productName, findSite, vsLabel } from '../core/lookups.js';
+import { manHours } from '../core/costing.js';
+import { productOf, isPhysical, keeps, setOfProduct, sizesOf, isTwoFigure, classifyFor, unitOfProduct, sizeText, wholeUnit } from '../core/products.js';
 import { removeBlob } from '../core/media.js';
 import { savePhotos, signaturePad } from '../core/capture.js';
 import { isProductRow, reportShutters, jobScope, newProductRow, findingOf, findingRows, findingsText, otherFindings, priorityOptions } from '../core/inspections.js';
@@ -17,35 +18,49 @@ function readSection(body, prefix, current) {
 }
 
 // "Products and findings" (printed as Customer Complaint / Findings): one row per enquiry line, ticked once checked on
-// site. A product row also takes the type, qty, location and size (tap S / M / L / XL, or measure); a product the
-// customer already has at the site is tapped instead. Each product (each line with no product) then gets its fault,
-// the action needed and a priority. Fields are named by row or product key, so adding or removing one never mixes up
-// the others.
-const sizeList = () => sizes().filter(z => z.status !== 'Inactive').sort((a, b) => a.order - b.order);
+// site. A product row also takes the product, qty, location and, when its product has a size set, the size (tap S / M /
+// L / XL, or measure: width × height, or one figure such as kW); a product the customer already has at the site is
+// tapped instead. Each product (each line with no product) then gets its fault, the action needed and a priority.
+// Fields are named by row or product key, so adding or removing one never mixes up the others.
 const micInput = (name, value, placeholder = '') => html`<div class="with-mic"><input type="text" name="${name}" value="${value}" placeholder="${placeholder}"><button type="button" class="mic" data-mic="${name}" title="Voice input">${MIC}</button></div>`;
 function findRow(r, k, s) {
   const f = findingOf(r, k);
   return html`<div class="find-row" data-fk="${k}" data-of="${r.key}">
-    ${s ? html`<div class="find-who"><b>${s.tag}</b>${s.isNew ? html`<span class="tag new">new</span>` : ''}<span class="small muted">${productName(s.productId)}${s.sizeCode ? ` · ${s.sizeCode}` : ''}</span></div>` : ''}
+    ${s ? html`<div class="find-who">${s.notKept ? html`<b>${s.qty} ${s.uom || ''}</b><span class="small muted">${productName(s.productId)}</span>`
+      : html`<b>${s.tag}</b>${s.isNew ? html`<span class="tag new">new</span>` : ''}<span class="small muted">${productName(s.productId)}${s.sizeCode ? ` · ${sizeText(s)}` : ''}</span>`}</div>` : ''}
     <div class="field"><label>Fault found</label>${micInput(`ff_${k}`, f.fault)}</div>
     <div class="field"><label>Action needed</label>${micInput(`fa_${k}`, f.action)}</div>
     <div class="field"><label>Priority</label><span class="chips prio">${priorityOptions().map(o => html`<label class="chip p-${o.value}"><input type="radio" name="fp_${k}" value="${o.value}" ${o.value === f.priority ? 'checked' : ''}><span>${o.label}</span></label>`)}</span></div>
   </div>`;
 }
+// The size line of a product row, from its product's size set: tap the size, or measure (width × height in metres,
+// or one figure in the set's unit, e.g. kW). A product with no size set has none.
+function sizeLine(r, p) {
+  const set = setOfProduct(p);
+  if (!set) return '';
+  const k = r.key;
+  const measure = isTwoFigure(set)
+    ? html`or W <input type="number" step="0.01" min="0" name="pw_${k}" value="${r.width ?? ''}"> × H <input type="number" step="0.01" min="0" name="ph_${k}" value="${r.height ?? ''}"> m`
+    : html`or <input type="number" step="any" min="0" name="pv_${k}" value="${r.measure ?? ''}"> ${set.unit}`;
+  return html`<div class="field spanall"><label>Size · ${set.name.toLowerCase()}</label><div class="row wrap" style="gap:8px"><span class="chips">${sizesOf(p).map(z => html`<label class="chip"><input type="radio" name="ps_${k}" value="${z.code}" ${z.code === r.sizeCode ? 'checked' : ''}><span>${z.code}</span></label>`)}</span>
+    <span class="small muted measure">${measure}</span></div></div>`;
+}
 function askRow(r, site, used, shutters) {
   const k = r.key, linked = r.linkIds || [];
-  const fresh = (Number(r.qty) || 1) - linked.length; // new products this row records for the customer
-  const mine = (site?.shutters || []).filter(s => linked.includes(s.id) || (s.status !== 'Inactive' && !used.has(s.id) && s.productId === r.productId));
+  const p = productOf(r.productId);
+  const kept = !p || keeps(p);
+  const fresh = kept ? (Number(r.qty) || 1) - linked.length : 1; // new products this row records (or the work-only product itself)
+  const uom = r.uom || unitOfProduct(p);
+  const mine = kept ? (site?.shutters || []).filter(s => linked.includes(s.id) || (s.status !== 'Inactive' && !used.has(s.id) && s.productId === r.productId)) : [];
   return html`<div class="ask ${r.done ? 'on' : ''}">
     ${r.added ? html`<div class="row"><b class="grow">${r.n}. ${r.text}</b><span class="tag">added on site</span><button type="button" class="btn link small" data-droprow="${k}">Remove</button></div>`
       : html`<label class="check"><input type="checkbox" name="ask_${k}" data-auto="${r.done && r.autoTick ? 1 : ''}" ${r.done ? 'checked' : ''}> <b>${r.n}.</b> ${r.text}</label>`}
     ${isProductRow(r) ? html`<div class="grid g2 ask-prod">
-      <div class="field spanall"><label>Product</label><select name="pt_${k}">${products().map(p => html`<option value="${p.id}" ${p.id === r.productId ? 'selected' : ''}>${p.name}</option>`)}</select></div>
-      <div class="field"><label>Qty</label><input type="number" min="1" step="1" name="pq_${k}" value="${r.qty || 1}"></div>
+      <div class="field spanall"><label>Product</label><select name="pt_${k}">${products().filter(x => isPhysical(x) || x.id === r.productId).map(x => html`<option value="${x.id}" ${x.id === r.productId ? 'selected' : ''}>${x.name}</option>`)}</select></div>
+      <div class="field"><label>Qty (${uom})</label><input type="number" min="${wholeUnit(uom) ? 1 : 0}" step="${wholeUnit(uom) ? 1 : 'any'}" name="pq_${k}" value="${r.qty || 1}"></div>
       ${fresh > 0 ? html`<div class="field"><label>Location${linked.length ? ' of the new one' : ''}</label><input name="pl_${k}" value="${r.location || ''}" placeholder="e.g. Back door"></div>
-        <div class="field spanall"><label>Size</label><div class="row wrap" style="gap:8px"><span class="chips">${sizeList().map(z => html`<label class="chip"><input type="radio" name="ps_${k}" value="${z.code}" ${z.code === r.sizeCode ? 'checked' : ''}><span>${z.code}</span></label>`)}</span>
-          <span class="small muted measure">or W <input type="number" step="0.01" min="0" name="pw_${k}" value="${r.width ?? ''}"> × H <input type="number" step="0.01" min="0" name="ph_${k}" value="${r.height ?? ''}"> m</span></div></div>` : ''}
-      ${mine.length ? html`<div class="field spanall"><label>Already a customer product? Tap it</label><div class="chips">${mine.map(s => html`<label class="chip"><input type="checkbox" data-link="${k}" value="${s.id}" ${linked.includes(s.id) ? 'checked' : ''}><span>${s.tag} ${s.location} · ${s.sizeCode}</span></label>`)}</div></div>` : ''}
+        ${sizeLine(r, p)}` : ''}
+      ${mine.length ? html`<div class="field spanall"><label>Already a customer product? Tap it</label><div class="chips">${mine.map(s => html`<label class="chip"><input type="checkbox" data-link="${k}" value="${s.id}" ${linked.includes(s.id) ? 'checked' : ''}><span>${s.tag} ${s.location}${s.sizeCode ? ` · ${s.sizeCode}` : ''}</span></label>`)}</div></div>` : ''}
     </div>` : ''}
     <div class="finds">${isProductRow(r) ? shutters.filter(s => s.rowKey === k).map(s => findRow(r, s.key, s)) : findRow(r, k)}</div>
   </div>`;
@@ -86,11 +101,17 @@ const step2 = {
       if (keys.length) r.found = { ...a.found, ...Object.fromEntries(keys.map(fk => [fk, { fault: d[`ff_${fk}`] ?? '', action: d[`fa_${fk}`] ?? '', priority: d[`fp_${fk}`] || findingOf(a, fk).priority }])) };
       if (!isProductRow(a)) return r;
       r.productId = d[`pt_${k}`] || a.productId;
-      r.qty = Math.max(1, Math.round(d[`pq_${k}`] ?? a.qty ?? 1), (a.linkIds || []).length);
+      const p = productOf(r.productId), changed = r.productId !== a.productId;
+      // Another product brings its own unit and size set: the size is found again.
+      r.uom = changed ? unitOfProduct(p) : a.uom || unitOfProduct(p);
+      const q = Number(d[`pq_${k}`] ?? a.qty ?? 1) || 1;
+      r.qty = Math.max(wholeUnit(r.uom) ? Math.max(1, Math.round(q)) : q, (a.linkIds || []).length);
       r.location = d[`pl_${k}`] ?? a.location;
-      r.width = has(`pw_${k}`) ? d[`pw_${k}`] : a.width;
-      r.height = has(`ph_${k}`) ? d[`ph_${k}`] : a.height;
-      r.sizeCode = classifySize(r.width, r.height, sizes()) || d[`ps_${k}`] || a.sizeCode || ''; // measured wins over tapped
+      r.width = has(`pw_${k}`) ? d[`pw_${k}`] : changed ? null : a.width;
+      r.height = has(`ph_${k}`) ? d[`ph_${k}`] : changed ? null : a.height;
+      r.measure = has(`pv_${k}`) ? d[`pv_${k}`] : changed ? null : a.measure ?? null;
+      const tapped = d[`ps_${k}`] || (changed ? '' : a.sizeCode) || '';
+      r.sizeCode = setOfProduct(p) ? classifyFor(p, { width: r.width, height: r.height, unit: 'm', measure: r.measure }) || tapped : ''; // measured wins over tapped
       if (a.added && /^\d+ × /.test(a.text)) r.text = `${r.qty} × ${productName(r.productId)}`;
       return r;
     });
@@ -103,7 +124,7 @@ const step2 = {
   bind(body, rep, ctx) {
     // Adding, removing or linking a product, or a new qty or type, draws the rows again.
     const change = fn => { const cur = step2.read(body, rep); const asked = fn(cur.asked); ctx.save({ s2: cur.s2, asked, shutters: reportShutters(rep, asked) }); ctx.repaint(); };
-    $('#addProd', body).addEventListener('click', () => change(rows => [...rows, newProductRow(rows, products()[0]?.id)]));
+    $('#addProd', body).addEventListener('click', () => change(rows => [...rows, newProductRow(rows, products().find(isPhysical)?.id)]));
     $$('[data-droprow]', body).forEach(b => b.addEventListener('click', () => change(rows => rows.filter(r => r.key !== b.dataset.droprow).map((r, i) => ({ ...r, n: i + 1 })))));
     $$('[data-link]', body).forEach(cb => cb.addEventListener('change', () => change(rows => rows.map(r => {
       if (r.key !== cb.dataset.link) return r;
@@ -125,15 +146,17 @@ const step2 = {
       if (written && !cb.checked) setTick(cb, true, true);
       else if (!written && cb.checked && cb.dataset.auto === '1') setTick(cb, false, false);
     });
-    // Measuring picks the size; tapping a size clears the measurement.
+    // Measuring picks the size (width × height, or one figure such as kW); tapping a size clears the measurement.
+    const val = n => $(`[name="${n}"]`, body)?.value;
     body.addEventListener('input', e => {
-      const k = e.target.name?.match(/^p[wh]_(.+)$/)?.[1];
+      const k = e.target.name?.match(/^p[whv]_(.+)$/)?.[1];
       if (!k) return;
-      const code = classifySize(Number($(`[name="pw_${k}"]`, body).value), Number($(`[name="ph_${k}"]`, body).value), sizes());
+      const p = productOf(val(`pt_${k}`));
+      const code = classifyFor(p, { width: Number(val(`pw_${k}`)), height: Number(val(`ph_${k}`)), unit: 'm', measure: val(`pv_${k}`) });
       const radio = code && $(`[name="ps_${k}"][value="${code}"]`, body);
       if (radio) radio.checked = true;
     });
-    $$('[name^="ps_"]', body).forEach(r => r.addEventListener('change', () => { const k = r.name.slice(3); $(`[name="pw_${k}"]`, body).value = ''; $(`[name="ph_${k}"]`, body).value = ''; }));
+    $$('[name^="ps_"]', body).forEach(r => r.addEventListener('change', () => { const k = r.name.slice(3); ['pw', 'ph', 'pv'].forEach(x => { const i = $(`[name="${x}_${k}"]`, body); if (i) i.value = ''; }); }));
     $('#photoIn', body).addEventListener('change', async e => {
       ctx.save(step2.read(body, rep));
       const ids = await savePhotos(e.target.files);
@@ -197,7 +220,7 @@ const step4 = {
 const step5 = {
   title: 'Materials / spare parts',
   render: rep => html`
-    <datalist id="itemList">${items().map(i => html`<option value="${i.name}">${i.code}${i.spec ? ` · ${i.spec}` : ''}</option>`)}</datalist>
+    <datalist id="itemList">${items().map(i => html`<option value="${i.name}">${i.code}${i.spec ? ` · ${i.spec}` : ''}${i.groupCode ? ` · ${vsLabel('PRODUCT_GROUP', i.groupCode)}` : ''}</option>`)}</datalist>
     <p class="small muted" style="margin:0 0 6px">Pick from the Material/Item master (type to search) or type a new part.</p>
     ${rep.s5.rows.map((r, i) => html`<div class="mat-row" data-row="${i}"><div class="row"><b>${i + 1}.</b><span class="grow"></span><button type="button" class="btn link small" data-delrow="${i}">Remove</button></div>
       <div class="grid g2">

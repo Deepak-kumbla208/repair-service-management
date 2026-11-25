@@ -22,14 +22,15 @@ export function checklist(job) {
     item('Site viewing report', rep?.status === 'Submitted', rep?.no, rep ? `reports/${rep.id}` : '', enq?.siteInspection !== 'YES'),
     item('Estimate', est, est && `${est.no} Rev ${est.rev}`, est ? `estimates/${est.id}` : ''),
     item('Quotation accepted', q?.status === 'Accepted', q && `${q.no} Rev ${q.rev}${q.acceptance?.poNo ? ` · PO ${q.acceptance.poNo}` : ''}`, q ? `quotations/${q.id}` : ''),
-    item('Job scheduled', job.start, job.no, `jobs/${job.id}`),
-    job.type === 'GS' ? item('Inspection check list signed by the customer', w.signedAt, w.signedAt ? 'Both signatures' : '', `jobs/${job.id}/service`)
+    job.noVisit ? item('Work marked done (no site visit)', w.signedAt, w.signedAt ? 'Marked by the office' : '', `jobs/${job.id}`)
+      : item('Job scheduled', job.start, job.no, `jobs/${job.id}`),
+    job.noVisit ? null : job.type === 'GS' ? item('Inspection check list signed by the customer', w.signedAt, w.signedAt ? 'Both signatures' : '', `jobs/${job.id}/service`)
       : item('Work Done form signed by the customer', w.signedAt, w.signedAt ? 'Both signatures' : '', `jobs/${job.id}/workdone`),
-    item('Company stamp photo', w.cust?.stampId, '', `jobs/${job.id}`, true),
-    item('Before and after photos', job.photosBefore?.length && job.photosAfter?.length, `${job.photosBefore?.length || 0} before · ${job.photosAfter?.length || 0} after`, `jobs/${job.id}`, true),
+    job.noVisit ? null : item('Company stamp photo', w.cust?.stampId, '', `jobs/${job.id}`, true),
+    job.noVisit ? null : item('Before and after photos', job.photosBefore?.length && job.photosAfter?.length, `${job.photosBefore?.length || 0} before · ${job.photosAfter?.length || 0} after`, `jobs/${job.id}`, true),
     item('Invoice posted', inv?.status === 'Posted', inv?.no, inv ? `invoices/${inv.id}` : ''),
     item('Payment received in full', inv?.status === 'Posted' && balanceOf(inv) <= 0, pays.map(p => p.no).join(', '), inv ? `invoices/${inv.id}` : '', true),
-  ];
+  ].filter(Boolean); // a job with no site visit has no Work Done form or photos
 }
 
 // Estimated vs actual: hours on site, labour, parts, and the margin left.

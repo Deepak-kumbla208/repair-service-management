@@ -101,7 +101,7 @@ function bindPhotos(body, j, repaint) {
 }
 
 const RENDER = {
-  before: j => html`<p class="small muted" style="margin:0 0 6px">Take photos of each shutter before you start.</p>${photosBlock(j, 'photosBefore', 'Before photos')}`,
+  before: j => html`<p class="small muted" style="margin:0 0 6px">Take photos of each product before you start.</p>${photosBlock(j, 'photosBefore', 'Before photos')}`,
   works: j => {
     const w = j.workDone, s1 = w.s1;
     return html`${sec(1, 'PROJECT & WORK DETAILS')}

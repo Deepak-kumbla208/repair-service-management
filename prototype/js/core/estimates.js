@@ -4,7 +4,8 @@
 import * as store from './store.js';
 import * as auth from './auth.js';
 import { findSite, zones, productName, withCompany } from './lookups.js';
-import { summarize, summarizeAmc, shutterLabour, hourlyRate, otRate, round2 } from './costing.js';
+import { summarize, summarizeAmc, hourlyRate, otRate, round2 } from './costing.js';
+import { productOf, repairLabour, isFixed, costingOf, COSTING } from './products.js';
 import { cancelTasksFor } from './workflow.js';
 import { amcPrefill, amcProblems, describe } from './amc-estimates.js';
 import { cleanLines, lineText as enquiryLineText } from './enquiries.js';
@@ -35,32 +36,41 @@ function repairRates() {
 const findItem = (id, name) => store.get('items', id) || store.findOne('items', i => i.name.toLowerCase() === String(name || '').trim().toLowerCase());
 const equipmentByCode = code => store.findOne('equipment', e => e.code === code && e.status !== 'Inactive');
 
-// Line text: the site report's action needed, else the fault: "RS-1 Front shop: replace the motor (parts: 1 × Motor 400 kg single phase)"
+// Line text: the site report's action needed, else the fault: "RS-1 Front shop: replace the motor (parts: 1 × Motor 400 kg
+// single phase)"; a work-only product starts with its quantity: "15 m Lightning conductor tape, Roof: replace the tape".
 function lineText(s, mats) {
   const parts = mats.map(m => `${m.qty} × ${m.name}`).join(', ');
-  return `${s.tag} ${s.location}: ${s.action || s.fault || 'repair'}${parts ? ` (parts: ${parts})` : ''}`;
+  const who = s.notKept ? `${s.qty} ${s.uom || ''} ${s.typeName}${s.location ? `, ${s.location}` : ''}`.replace(/\s+/g, ' ') : `${s.tag} ${s.location}`;
+  return `${who}: ${s.action || s.fault || 'repair'}${parts ? ` (parts: ${parts})` : ''}`;
 }
+// A fixed-price product (a submission, a design) is a line at its price: no labour, and no overhead, markup or shared cost.
+const fixedRow = (l, lineKey) => { const p = productOf(l.itemRef.slice(4)); return { key: rid(), lineKey, productId: p?.id || '', name: l.itemName, qty: Number(l.qty) || 1, unit: l.unit || p?.unit || 'Nos', price: Number(p?.price) || 0 }; };
+const isFixedLine = l => l.itemRef?.startsWith('prd:') && isFixed(productOf(l.itemRef.slice(4)));
 
 // Everything an estimate needs, pre-filled. rep may be null (repair without inspection).
 export function prefill(enq, rep) {
   const { site } = findSite(enq.siteId);
   const d = txDefaults();
   const rates = repairRates();
-  const sizes = store.list('sizes');
   const zone = store.get('zones', rep?.s3?.zoneId || enq.zoneId);
   const ot = !!(rep?.s3?.afterHours || rep?.s3?.weekend);
   const days = Number(rep?.s3?.days) || 1;
 
   // A repair enquiry made from failed checklist items (AMC visit or GS job) brings its shutters and parts.
   const fromFails = !rep && (enq.failures || []).length ? failedShutters(enq, site) : null;
+  // Each product's repair hours: its size's hours (Product Size), or its standard hours × qty (a work-only product such
+  // as 15 m of tape keeps its qty and unit).
   const shutters = (fromFails?.shutters || rep?.shutters || []).map(s => {
-    const size = sizes.find(z => z.code === s.sizeCode);
-    return { key: s.key, tag: s.tag, location: s.location, productId: s.productId, typeName: productName(s.productId), width: s.width, height: s.height, unit: s.unit,
-      qty: 1, fault: s.finding || '', action: s.action || '', sizeCode: s.sizeCode, ...shutterLabour(size, 1) };
+    const qty = s.notKept ? Number(s.qty) || 1 : 1;
+    return { key: s.key, tag: s.tag, location: s.location, productId: s.productId, typeName: productName(s.productId), width: s.width, height: s.height, unit: s.unit, measure: s.measure ?? null,
+      qty, uom: s.notKept ? s.uom : 'Nos', notKept: !!s.notKept, fault: s.finding || '', action: s.action || '', sizeCode: s.sizeCode, ...repairLabour(productOf(s.productId), s.sizeCode, qty) };
   });
 
   // With no report, each enquiry product line becomes a line; a line naming a part or material brings its row.
   const enqLines = rep || fromFails ? [] : cleanLines(enq.lines).map(l => ({ ...l, key: rid() }));
+  // Fixed-price products come from the enquiry lines, with or without a report.
+  const fixedLines = rep ? cleanLines(enq.lines).filter(isFixedLine).map(l => ({ ...l, key: rid() })) : [];
+  const fixed = [...fixedLines, ...enqLines.filter(isFixedLine)].map(l => fixedRow(l, l.key));
   // Materials: the site report's section 5 (or the enquiry lines that name a part or material).
   const srcRows = fromFails ? fromFails.rows : rep ? rep.s5.rows : enqLines.filter(l => l.itemRef.startsWith('itm:')).map(l => ({ itemId: l.itemRef.slice(4), name: l.itemName, qty: l.qty, unit: l.unit, remarks: l.description, lineKey: l.key }));
   const one = shutters.length === 1 ? shutters[0].key : '';
@@ -78,20 +88,27 @@ export function prefill(enq, rep) {
     m.lineKey = m.key;
     return { key: m.key, tag: '', qty: m.qty, unit: m.unit || 'Nos', partKey: m.key, description: enquiryLineText({ itemName: m.name, qty: m.qty, unit: m.unit, description: m.remarks }) };
   }) : [];
-  const lines = shutters.length || partLines.length
-    ? [...shutters.map(s => ({ key: s.key, tag: s.tag, qty: 1, unit: 'Nos', description: lineText(s, materials.filter(m => m.lineKey === s.key)) })), ...partLines]
+  const lines = shutters.length || partLines.length || fixedLines.length
+    ? [...shutters.map(s => ({ key: s.key, tag: s.tag, qty: s.qty, unit: s.uom, description: lineText(s, materials.filter(m => m.lineKey === s.key)) })), ...partLines,
+      ...fixedLines.map(l => ({ key: l.key, tag: '', qty: l.qty || 1, unit: l.unit || 'Nos', description: enquiryLineText(l) }))]
     : enqLines.map(l => ({ key: l.key, tag: '', qty: l.qty || 1, unit: l.unit || 'Nos', partKey: materials.find(m => m.lineKey === l.key)?.key || '', description: enquiryLineText(l) }));
 
-  // Labour: one row per shutter for the team, plus one for extra workers (L / XL). Overtime or weekend → OT column.
+  // Labour: one row per product for the team, plus one for extra workers (big sizes). Overtime or weekend → OT column.
+  // With no report, a product line with standard hours brings its hours × qty too (a size is known only from a report).
   const labour = [];
-  shutters.forEach(s => {
-    const hrs = (h, r) => (ot ? { hrs: 0, otHrs: h } : { hrs: h, otHrs: 0 });
-    if (s.teamHrs) labour.push({ key: rid(), ...rates.team, team: 1, ...hrs(s.teamHrs), lineKey: s.key, forTag: s.tag });
-    if (s.extraWorkers && s.extraHrs) labour.push({ key: rid(), ...rates.extra, team: s.extraWorkers, ...hrs(s.extraHrs), lineKey: s.key, forTag: s.tag });
-  });
+  const hrs = h => (ot ? { hrs: 0, otHrs: h } : { hrs: h, otHrs: 0 });
+  const addLabour = (key, tag, x) => {
+    if (x.teamHrs) labour.push({ key: rid(), ...rates.team, team: 1, ...hrs(x.teamHrs), lineKey: key, forTag: tag });
+    if (x.extraWorkers && x.extraHrs) labour.push({ key: rid(), ...rates.extra, team: x.extraWorkers, ...hrs(x.extraHrs), lineKey: key, forTag: tag });
+  };
+  shutters.forEach(s => addLabour(s.key, s.tag, s));
+  enqLines.filter(l => l.itemRef?.startsWith('prd:') && costingOf(productOf(l.itemRef.slice(4))) === COSTING.HOURS)
+    .forEach(l => addLabour(l.key, '', repairLabour(productOf(l.itemRef.slice(4)), '', l.qty || 1)));
 
-  // Transport: the site's zone; No. of Hrs = trips (site report days) × the zone's round trip; Repair rate.
-  const transport = zone ? [{ key: rid(), zoneId: zone.id, zoneLabel: `Zone ${zone.code} · ${zone.name}`, distance: zone.distance || '', vehicle: zone.vehicle || '',
+  // Transport: the site's zone; No. of Hrs = trips (site report days) × the zone's round trip; Repair rate. Only
+  // fixed-price products (a submission, a design) need no visit, so no transport.
+  const visit = !!rep || !!fromFails || enqLines.some(l => !isFixedLine(l));
+  const transport = zone && visit ? [{ key: rid(), zoneId: zone.id, zoneLabel: `Zone ${zone.code} · ${zone.name}`, distance: zone.distance || '', vehicle: zone.vehicle || '',
     trips: days, roundTrip: Number(zone.roundTripHours) || 0, hrs: round2(days * (Number(zone.roundTripHours) || 0)), rate: Number(zone.repairRate) || 0, lineKey: '' }] : [];
 
   // Equipment: the ticks in site report section 4; nothing is charged when the customer provides it.
@@ -110,7 +127,7 @@ export function prefill(enq, rep) {
       date: today(), preparedBy: store.currentActor(), findings: oneLine(String(rep?.s2?.findings || '').replace(/^\s*\d+\.\s+/gm, '')) || enq.description, description: oneLine(rep?.s2?.description) || enq.description },
     costingLevel: d.costingLevel, sharedCosts: d.sharedCosts, sharedLabel: zone ? `Transport & mobilisation (Zone ${zone.code})` : 'Transport & mobilisation',
     overheads: [{ key: rid(), name: 'Overheads', basis: 'PCT', value: d.overheadPct }], marginBasis: d.marginBasis, marginPct: d.marginPct,
-    ...companyTax(), shutters, lines, labour, transport, materials, equipment, afterHours: ot,
+    ...companyTax(), shutters, lines, labour, transport, materials, equipment, fixed, afterHours: ot,
     svrManHours: rep ? (Number(rep.s3.persons) || 0) * (Number(rep.s3.days) || 0) * (Number(rep.s3.hoursPerDay) || 0) : 0,
   };
 }
@@ -190,7 +207,7 @@ export function createEstimate(enqId, opts = {}) {
 export const canEdit = est => est.status === 'Draft' && auth.can('estimation', 'edit');
 // Saves only the estimate's content, and only while it is a draft: a late autosave from the page can never undo
 // "Create quotation" (status, quotation link) or edit a quoted revision.
-const CONTENT = ['header', 'costingLevel', 'sharedCosts', 'sharedLabel', 'overheads', 'marginBasis', 'marginPct', 'shutters', 'lines', 'labour', 'transport', 'materials', 'equipment',
+const CONTENT = ['header', 'costingLevel', 'sharedCosts', 'sharedLabel', 'overheads', 'marginBasis', 'marginPct', 'shutters', 'lines', 'labour', 'transport', 'materials', 'equipment', 'fixed',
   'periodMonths', 'billing', 'matrix', 'sites'];
 // Overhead and markup stay as the Admin set them unless this user's role may change them.
 const PRICING = ['overheads', 'marginBasis', 'marginPct'];
@@ -238,7 +255,7 @@ export function reviseEstimate(id, { without = [], note = '' } = {}) {
     const drop = r => without.includes(r.lineKey);
     copy.lines = copy.lines.filter(l => !without.includes(l.key));
     copy.shutters = copy.shutters.filter(s => !without.includes(s.key));
-    ['labour', 'materials', 'transport', 'equipment'].forEach(k => { copy[k] = copy[k].filter(r => !drop(r)); });
+    ['labour', 'materials', 'transport', 'equipment', 'fixed'].forEach(k => { copy[k] = (copy[k] || []).filter(r => !drop(r)); });
     copy.header = { ...copy.header, description: copy.lines.map(l => l.description).join('; ') };
   }
   // The Approver's comment travels only when the live quotation was returned.
@@ -260,8 +277,9 @@ export function estimateProblems(est) {
   if (est.kind === 'AMC') return amcProblems(est);
   const s = estimateSummary(est);
   const p = [];
-  if (!s.direct) p.push('The estimate has no cost yet.');
+  if (!s.direct && !s.fixed) p.push('The estimate has no cost yet.');
   if (est.materials.some(m => m.noRate && !m.rate)) p.push('A material has no rate (not in the Material/Item master).');
+  (est.fixed || []).filter(f => !(Number(f.price) > 0)).forEach(f => p.push(`${f.name} has no price (Products to repair tab).`));
   if (est.costingLevel === 'LINE' && !est.lines.length) p.push('Line costing needs at least one line.');
   if (!String(est.header.description || '').trim()) p.push('Enter the description (Summary tab).');
   return p;

@@ -3,11 +3,11 @@
 // approvals; the Operations Executive sees technicians' leave-site requests.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, go, fmtDate, fmtDateTime, fmtDuration, toast, tiles, pill, MIC } from '../core/ui.js';
+import { html, $, go, fmtDate, fmtDateTime, fmtDuration, fmtNum, toast, tiles, pill, MIC } from '../core/ui.js';
 import { vsLabel } from '../core/lookups.js';
 import { myTasks, cannotDecide } from '../core/workflow.js';
-import { decideQuotation, autoChecks } from '../core/quotations.js';
-import { estimateSummary } from '../core/estimates.js';
+import { decideQuotation, autoChecks, repriceAtCheck } from '../core/quotations.js';
+import { estimateSummary, withMarkup, markupChanged } from '../core/estimates.js';
 import { approveJobTerm, confirmLeave } from '../core/jobs.js';
 import { renewContract, declineRenewal, contractProgress } from '../core/contracts.js';
 import { invoiceForJob, balanceOf } from '../core/billing.js';
@@ -28,6 +28,54 @@ export function taskLabel(t) {
   if (t.kind === 'renewal') return 'AMC renewal';
   if (t.kind === 'laterWork') return 'Later work';
   return t.docType === 'job' ? 'Payment term' : t.level > 1 ? `Approval level ${t.level}` : 'Counter-check';
+}
+
+// Counter-check: selling price, markup and how the price is made up (drawn again as the Approver changes a figure).
+function costTop(s) {
+  const parts = [['Materials', s.heads.materials, '#378ADD'], ['Labour', s.heads.labour, '#1D9E75'], ['Transport', s.heads.transport, '#BA7517'], ['Equipment', s.heads.equipment, '#7F77DD'], ['Overhead', s.overhead, '#888780'], ['Margin', s.margin, '#3B6D11']].filter(p => p[1] > 0);
+  return html`<div class="kpi"><div><b>${m2(s.subtotal)}</b><span>Selling price</span></div><div><b>${s.markupPct.toFixed(1)} %</b><span>Markup on cost</span></div><div><b>${s.marginOnPricePct.toFixed(1)} %</b><span>Margin on price</span></div></div>
+    <div class="bar">${parts.map(p => html`<span style="width:${(p[1] / s.sell) * 100}%;background:${p[2]}"></span>`)}</div>
+    <div class="legend">${parts.map(p => html`<span><i style="background:${p[2]}"></i>${p[0]} ${m2(p[1])}</span>`)}</div>`;
+}
+// "See markup" shows the figures; "Change markup" (web, for someone who may decide this task) makes them editable.
+const mayReprice = (t, q, compact) => !compact && auth.changesMarkup() && !cannotDecide(t) && q.status === 'Submitted';
+function costCard(t, q, est, s, compact) {
+  const taxRow = `${q.taxLabel} ${q.taxRate} %`;
+  if (!auth.seesMarkup()) return html`<div class="card"><div class="card-head"><h2>Price</h2></div><table class="tbl cost-tbl"><tbody>
+    <tr class="sum"><td>Selling price</td><td class="num">${m2(s.subtotal)}</td></tr><tr><td>${taxRow}</td><td class="num">${m2(q.tax)}</td></tr><tr class="grand"><td>Total quote</td><td class="num">${m2(q.total)}</td></tr></tbody></table></div>`;
+  const head = html`<div class="card-head"><h2>Cost and margin</h2><span class="muted small">from the estimate</span></div><div id="mkTop">${costTop(s)}</div>`;
+  if (!mayReprice(t, q, compact)) return html`<div class="card">${head}<table class="tbl cost-tbl" style="margin-top:10px"><tbody>
+    <tr><td>Direct cost</td><td class="num">${m2(s.direct)}</td></tr><tr><td>Overhead</td><td class="num">${m2(s.overhead)}</td></tr><tr><td>Margin</td><td class="num">${m2(s.margin)}</td></tr>
+    <tr class="sum"><td>Selling price</td><td class="num">${m2(s.subtotal)}</td></tr><tr><td>${taxRow}</td><td class="num">${m2(q.tax)}</td></tr><tr class="grand"><td>Total quote</td><td class="num">${m2(q.total)}</td></tr></tbody></table></div>`;
+  const pct = est.overheads.find(o => o.basis === 'PCT');
+  const fixed = est.overheads.filter(o => o.basis === 'FIXED').reduce((n, o) => n + (Number(o.value) || 0), 0);
+  const box = (name, v) => html`<input type="number" name="${name}" min="0" step="0.5" value="${v}" style="width:76px"> % <span class="muted small">set at ${fmtNum(v)} %</span>`;
+  return html`<div class="card">${head}<table class="tbl edit cost-tbl" style="margin-top:10px"><tbody>
+    <tr><td>Direct cost</td><td></td><td class="num">${m2(s.direct)}</td></tr>
+    <tr><td>Overhead</td><td>${pct ? box('ovPct', pct.value) : ''}${fixed ? html` <span class="muted small">${pct ? '+ ' : ''}${m2(fixed)} fixed</span>` : ''}</td><td class="num" id="fOv">${m2(s.overhead)}</td></tr>
+    <tr><td>${est.marginBasis === 'MARGIN' ? 'Margin on price' : 'Markup on cost'}</td><td>${box('mkPct', est.marginPct)}</td><td class="num" id="fMk">${m2(s.margin)}</td></tr>
+    <tr class="sum"><td>Selling price</td><td></td><td class="num" id="fSell">${m2(s.subtotal)}</td></tr>
+    <tr><td>${taxRow}</td><td></td><td class="num" id="fTax">${m2(s.tax)}</td></tr>
+    <tr class="grand"><td>Total quote</td><td></td><td class="num" id="fTotal">${m2(s.total)}</td></tr></tbody></table>
+    <p class="mini-note" id="mkNote" hidden></p></div>`;
+}
+// The price follows the two boxes as they change; nothing is saved until Approve.
+function bindMarkup(el, t) {
+  const mk = $('[name="mkPct"]', el);
+  if (!mk) return;
+  const ov = $('[name="ovPct"]', el), btn = $('[data-do="approve"]', el), note = $('#mkNote', el);
+  const est = store.get('estimates', store.get('quotations', t.docId).estimateId);
+  const was = estimateSummary(est).subtotal;
+  const update = () => {
+    const next = withMarkup(est, { overheadPct: ov?.value, marginPct: mk.value });
+    const s = estimateSummary(next), changed = markupChanged(est, next);
+    $('#mkTop', el).innerHTML = String(costTop(s));
+    [['#fOv', s.overhead], ['#fMk', s.margin], ['#fSell', s.subtotal], ['#fTax', s.tax], ['#fTotal', s.total]].forEach(([id, v]) => { $(id, el).textContent = m2(v); });
+    btn.textContent = changed ? `✓ Approve at ${m2(s.subtotal)}` : '✓ Approve';
+    note.hidden = !changed;
+    note.textContent = changed ? `Selling price was ${m2(was)}. Write why in the comment. Return does not keep these figures.` : '';
+  };
+  [ov, mk].forEach(i => i?.addEventListener('input', update));
 }
 
 // The decision panel for one task, shared with the phone (compact = true).
@@ -75,27 +123,20 @@ export function taskDetail(t, { compact = false } = {}) {
   const q = store.get('quotations', t.docId);
   const est = store.get('estimates', q.estimateId);
   const s = estimateSummary(est);
-  const parts = [['Materials', s.heads.materials, '#378ADD'], ['Labour', s.heads.labour, '#1D9E75'], ['Transport', s.heads.transport, '#BA7517'], ['Equipment', s.heads.equipment, '#7F77DD'], ['Overhead', s.overhead, '#888780'], ['Margin', s.margin, '#3B6D11']].filter(p => p[1] > 0);
   const checks = html`<div class="card"><div class="card-head"><h2>${t.title}</h2></div>
       <div class="muted small" style="margin:-6px 0 8px">Submitted by ${auth.userName(q.submittedBy)} · ${fmtDateTime(q.submittedAt)} · from ${q.estimateNo}${t.level > 1 ? ` · level ${t.level}: ${t.rules.map(r => r.name).join(', ')}` : ''}</div>
       <ul class="chk">${autoChecks(q).map(c => html`<li><span class="${c.tone === 'ok' ? 'ok' : 'wn'}">${c.tone === 'ok' ? '✓' : '!'}</span><span>${c.text}</span></li>`)}</ul></div>
-    <div class="card"><div class="card-head"><h2>Cost and margin</h2><span class="muted small">from the estimate</span></div>
-      <div class="kpi"><div><b>${m2(s.subtotal)}</b><span>Selling price</span></div><div><b>${s.markupPct.toFixed(1)} %</b><span>Markup on cost</span></div><div><b>${s.marginOnPricePct.toFixed(1)} %</b><span>Margin on price</span></div></div>
-      <div class="bar">${parts.map(p => html`<span style="width:${(p[1] / s.sell) * 100}%;background:${p[2]}"></span>`)}</div>
-      <div class="legend">${parts.map(p => html`<span><i style="background:${p[2]}"></i>${p[0]} ${m2(p[1])}</span>`)}</div>
-      <table class="tbl cost-tbl" style="margin-top:10px"><tbody>
-        <tr><td>Direct cost</td><td class="num">${m2(s.direct)}</td></tr><tr><td>Overhead</td><td class="num">${m2(s.overhead)}</td></tr><tr><td>Margin</td><td class="num">${m2(s.margin)}</td></tr>
-        <tr class="sum"><td>Selling price</td><td class="num">${m2(s.subtotal)}</td></tr><tr><td>${q.taxLabel} ${q.taxRate} %</td><td class="num">${m2(q.tax)}</td></tr><tr class="grand"><td>Total quote</td><td class="num">${m2(q.total)}</td></tr>
-      </tbody></table></div>`;
-  return html`${checks}${decision(compact, t)}`;
+    ${costCard(t, q, est, s, compact)}`;
+  return html`${checks}${decision(compact, t, mayReprice(t, q, compact) && auth.seesMarkup() ? 'Comment (needed to return, or to change overhead or markup)' : '')}`;
 }
 
 // The decision buttons; off for the person who submitted the document (nobody approves their own document).
-const decision = (compact = false, t = null) => cannotDecide(t) ? html`<div class="note warn small" style="margin-top:10px">${cannotDecide(t)}</div>` : html`<div class="apr-foot" style="${compact ? 'flex-direction:column;align-items:stretch' : ''}"><div class="with-mic grow"><textarea name="comment" placeholder="Comment (needed to return)" style="min-height:58px"></textarea><button type="button" class="mic" data-mic="comment" title="Voice input">${MIC}</button></div>
+const decision = (compact = false, t = null, hint = '') => cannotDecide(t) ? html`<div class="note warn small" style="margin-top:10px">${cannotDecide(t)}</div>` : html`<div class="apr-foot" style="${compact ? 'flex-direction:column;align-items:stretch' : ''}"><div class="with-mic grow"><textarea name="comment" placeholder="${hint || 'Comment (needed to return)'}" style="min-height:58px"></textarea><button type="button" class="mic" data-mic="comment" title="Voice input">${MIC}</button></div>
   <div style="display:flex;flex-direction:column;gap:6px"><button class="btn primary" data-do="approve">✓ Approve</button><button class="btn danger" data-do="return">↩ Return</button></div></div>`;
 
 // Carry out a decision; returns an error text or ''. extra: the "Remind again on" date of a later-work task.
-export function actOnTask(t, action, comment, extra = '') {
+// markup: the counter-check's overhead % and markup %, used only when approving.
+export function actOnTask(t, action, comment, extra = '', markup = null) {
   if (!myTasks().some(x => x.id === t.id)) return 'This task is not for your role.';
   if (cannotDecide(t)) return cannotDecide(t);
   if (action === 'return' && !comment.trim()) return 'Write a comment to say what needs changing.';
@@ -111,6 +152,7 @@ export function actOnTask(t, action, comment, extra = '') {
   if (t.kind === 'renewal' && action === 'decline') { declineRenewal(t.docId, comment); return ''; }
   if (t.kind === 'renewal') { const r = renewContract(t.docId); go(`estimates/${r.estimate.id}`); return ''; }
   if (t.docType === 'job') { approveJobTerm(t.id, action, comment); return ''; }
+  if (action === 'approve' && markup) { const r = repriceAtCheck(t.docId, markup, comment); if (r?.error) return r.error; }
   decideQuotation(t.id, action, comment);
   return '';
 }
@@ -135,12 +177,14 @@ export function renderTasks(el, openId) {
     </div>` : html`<div class="card"><div class="empty">Nothing is waiting for you.</div></div>`}
   </div>`);
   bindMics(el);
+  if (t) bindMarkup(el, t);
   el.onclick = e => {
     const tb = e.target.closest('[data-task]');
     if (tb) { sel.id = tb.dataset.task; renderTasks(el); return; }
     const b = e.target.closest('[data-do]');
     if (!b) return;
-    const err = actOnTask(t, b.dataset.do, $('[name="comment"]', el)?.value || '', $('[name="snooze"]', el)?.value || '');
+    const mk = $('[name="mkPct"]', el);
+    const err = actOnTask(t, b.dataset.do, $('[name="comment"]', el)?.value || '', $('[name="snooze"]', el)?.value || '', mk ? { overheadPct: $('[name="ovPct"]', el)?.value, marginPct: mk.value } : null);
     if (err) { toast(err, 'bad'); return; }
     toast(`${t.docNo}: ${DONE[b.dataset.do] || 'approved'}`);
     sel.id = '';

@@ -31,7 +31,9 @@ const visitsOf = (est, key) => (key ? num(est.sites.find(s => s.key === key)?.vi
 
 function summaryTab(est, ctx, s) {
   const cur = auth.company().currency;
-  const head = (label, v, p, cls = '') => html`<tr class="${cls}"><td>${label}</td><td class="num">${m2(v)}</td><td class="num">${p == null ? '' : pc(p)}</td></tr>`;
+  // Without the "See markup" right: overhead is one line, and margin and the percentages are not shown.
+  const sees = auth.seesMarkup();
+  const head = (label, v, p, cls = '') => html`<tr class="${cls}"><td>${label}</td><td class="num">${m2(v)}</td>${sees ? html`<td class="num">${p == null ? '' : pc(p)}</td>` : ''}</tr>`;
   const desc = ctx.editable ? html`<textarea data-p="header.description" rows="2" style="width:100%;border:0;border-bottom:1px solid #C9C7BE;border-radius:0;min-height:40px">${est.header.description}</textarea>` : est.header.description;
   const lines = est.costingLevel === 'LINE'
     ? html`<table class="tbl"><thead><tr><th style="width:30px">#</th><th>Line (one per site)</th><th class="num">Direct cost</th><th class="num">Price</th></tr></thead><tbody>
@@ -41,11 +43,11 @@ function summaryTab(est, ctx, s) {
   const plan = s.plan;
   return html`${lines}
     <div class="split" style="margin-top:12px">
-      <table class="tbl cost-tbl"><thead><tr><th>Cost Head</th><th class="num">Amount (${cur})</th><th class="num" style="white-space:normal">% of Selling Price</th></tr></thead><tbody>
+      <table class="tbl cost-tbl"><thead><tr><th>Cost Head</th><th class="num">Amount (${cur})</th>${sees ? html`<th class="num" style="white-space:normal">% of Selling Price</th>` : ''}</tr></thead><tbody>
         ${head('Labour', s.heads.labour, s.pct.labour)}${head('Transport', s.heads.transport, s.pct.transport)}${head('Equipment', s.heads.equipment, s.pct.equipment)}
         ${s.heads.materials ? head('Materials', s.heads.materials, s.pct.materials) : ''}
-        ${head('DIRECT COST', s.direct, s.pct.direct, 'sum')}${head('Overhead', s.overhead, s.pct.overhead)}${head('COST BEFORE MARGIN', s.cbm, s.pct.cbm, 'sum')}
-        ${head('Margin', s.margin, s.pct.margin)}${head('SELLING PRICE', s.subtotal, s.sell ? 1 : 0, 'sum')}
+        ${head('DIRECT COST', s.direct, s.pct.direct, 'sum')}${head('Overhead', s.overhead, s.pct.overhead)}${sees ? head('COST BEFORE MARGIN', s.cbm, s.pct.cbm, 'sum') : ''}
+        ${sees ? head('Margin', s.margin, s.pct.margin) : ''}${head('SELLING PRICE', s.subtotal, s.sell ? 1 : 0, 'sum')}
         ${head(`${est.taxLabel || 'Tax'} ${fmtNum(est.taxRate)} %${plan.length > 1 ? ` (on the ${plan.length} invoices)` : ''}`, s.tax, null)}${head('TOTAL QUOTE', s.total, null, 'grand')}
       </tbody></table>
       <div>

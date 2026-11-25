@@ -34,6 +34,7 @@ import { renderVisitList, renderVisit } from './web/visits.js';
 import { refreshAmc } from './core/contracts.js';
 import { refreshLaterWork } from './core/later-work.js';
 import { isOffline } from './core/offline.js';
+import { upgradeMarkupRights } from './core/setup.js';
 import { drawGuideBar } from './web/guide.js';
 import { mRepairJob, mRepairStep } from './mobile/repair-job.js';
 import { mService, mServiceStep, mShutter } from './mobile/service.js';
@@ -152,7 +153,7 @@ export function render() {
   if (!route || route === 'login') return replaceRoute(view === 'mobile' ? 'm/home' : 'home');
   // The daily check (instalment invoices on their bill dates, renewal reminders, contract ends) runs on the office's
   // side; an offline phone has no server to run it, and doing it there too would make the same invoice twice.
-  if (!isOffline()) { refreshAmc(); refreshLaterWork(); }
+  if (!isOffline()) { refreshAmc(); refreshLaterWork(); upgradeMarkupRights(); }
   const wanted = routeForView(route, view);
   if (wanted !== route) return replaceRoute(wanted);
 

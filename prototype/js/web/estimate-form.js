@@ -18,7 +18,7 @@ const pc = v => `${(v * 100).toFixed(1)} %`;
 const TAB_KEY = 'rsmEstTab';
 const row = (label, value) => html`<div class="field"><div class="field-label">${label}</div><div class="ro">${value || html`<span class="muted">—</span>`}</div></div>`;
 
-function summaryTab(est, ctx, s) {
+function summaryTab(est, ctx, s, sees) {
   const desc = ctx.editable
     ? html`<textarea data-h="description" rows="2" style="border:0;border-bottom:1px solid #C9C7BE;border-radius:0;min-height:40px">${est.header.description}</textarea>`
     : est.header.description;
@@ -29,13 +29,14 @@ function summaryTab(est, ctx, s) {
     </tbody></table><p class="mini-note">Line costing: one priced row per line on the quotation. Any rounding cent sits on the biggest line, so the total equals Job costing.</p>`
     : html`<table class="tbl"><thead><tr><th style="width:30px">S#</th><th>Description</th><th class="num" style="width:50px">Qty</th></tr></thead><tbody><tr><td>1</td><td class="wrap">${desc}</td><td class="num">1</td></tr></tbody></table>
       <p class="mini-note">Job costing: the quotation shows one price for the whole job.</p>`;
-  const head = (label, v, p, cls = '') => html`<tr class="${cls}"><td>${label}</td><td class="num">${m2(v)}</td><td class="num">${p == null ? '' : pc(p)}</td></tr>`;
+  // Without the "See markup" right: overhead is one line, and margin and the percentages are not shown.
+  const head = (label, v, p, cls = '') => html`<tr class="${cls}"><td>${label}</td><td class="num">${m2(v)}</td>${sees ? html`<td class="num">${p == null ? '' : pc(p)}</td>` : ''}</tr>`;
   return html`${lines}
     <div class="split" style="margin-top:12px">
-      <table class="tbl cost-tbl"><thead><tr><th>Cost Head</th><th class="num">Amount (${auth.company().currency})</th><th class="num" style="white-space:normal">% of Selling Price</th></tr></thead><tbody>
+      <table class="tbl cost-tbl"><thead><tr><th>Cost Head</th><th class="num">Amount (${auth.company().currency})</th>${sees ? html`<th class="num" style="white-space:normal">% of Selling Price</th>` : ''}</tr></thead><tbody>
         ${head('Labour', s.heads.labour, s.pct.labour)}${head('Transport', s.heads.transport, s.pct.transport)}${head('Materials', s.heads.materials, s.pct.materials)}${head('Equipment', s.heads.equipment, s.pct.equipment)}
-        ${head('DIRECT COST', s.direct, s.pct.direct, 'sum')}${head('Overhead', s.overhead, s.pct.overhead)}${head('COST BEFORE MARGIN', s.cbm, s.pct.cbm, 'sum')}
-        ${head('Margin', s.margin, s.pct.margin)}${head('SELLING PRICE', s.subtotal, s.sell ? 1 : 0, 'sum')}${head(`${est.taxLabel || 'Tax'} ${fmtNum(est.taxRate)} %`, s.tax, null)}${head('TOTAL QUOTE', s.total, null, 'grand')}
+        ${head('DIRECT COST', s.direct, s.pct.direct, 'sum')}${head('Overhead', s.overhead, s.pct.overhead)}${sees ? head('COST BEFORE MARGIN', s.cbm, s.pct.cbm, 'sum') : ''}
+        ${sees ? head('Margin', s.margin, s.pct.margin) : ''}${head('SELLING PRICE', s.subtotal, s.sell ? 1 : 0, 'sum')}${head(`${est.taxLabel || 'Tax'} ${fmtNum(est.taxRate)} %`, s.tax, null)}${head('TOTAL QUOTE', s.total, null, 'grand')}
       </tbody></table>
       <div><h3 style="margin:0 0 6px">Transport – zone wise</h3>
         <table class="tbl"><thead><tr><th>Zone</th><th class="num">Cost</th><th class="num">% of Transport</th></tr></thead><tbody>
@@ -46,7 +47,8 @@ function summaryTab(est, ctx, s) {
     </div>`;
 }
 
-const kpiHtml = (s, cur) => html`<div class="kpi"><div><b>${m2(s.total)}</b><span>Total quote (${cur})</span></div><div><b>${fmtNum(s.markupPct, 1)} %</b><span>Markup on cost</span></div><div><b>${fmtNum(s.marginOnPricePct, 1)} %</b><span>Margin on price</span></div></div>`;
+const kpiHtml = (s, cur, sees) => html`<div class="kpi"><div><b>${m2(s.total)}</b><span>Total quote (${cur})</span></div>${sees ? html`<div><b>${fmtNum(s.markupPct, 1)} %</b><span>Markup on cost</span></div><div><b>${fmtNum(s.marginOnPricePct, 1)} %</b><span>Margin on price</span></div>`
+  : html`<div><b>${m2(s.subtotal)}</b><span>Selling price before tax</span></div>`}</div>`;
 
 export function renderEstimate(el, id) {
   const saved = store.get('estimates', id);
@@ -57,9 +59,14 @@ export function renderEstimate(el, id) {
   const q = est.quotationId ? store.get('quotations', est.quotationId) : null;
   const ctx = { editable: canEdit(est) };
   const cur = auth.company().currency;
+  // Overhead and markup are set by the Admin; the Overhead & Margin tab and the margin fields follow the role's rights.
+  const sees = auth.seesMarkup(), mayPrice = ctx.editable && auth.changesMarkup();
+  const tabs = TABS.filter(([k]) => k !== 'overheads' || sees);
+  const kpi = s => kpiHtml(s, cur, sees);
   const revs = revisions(est.no);
   const newer = revs.find(r => r.rev > est.rev);
   let tab = sessionStorage.getItem(TAB_KEY) || 'summary';
+  if (!tabs.some(([k]) => k === tab)) tab = 'summary';
   const canRevise = !newer && mayRevise(est);
   const rep = est.reportId ? store.get('siteReports', est.reportId) : null;
 
@@ -93,7 +100,7 @@ export function renderEstimate(el, id) {
       <div class="card"><div class="card-head"><h2>Costing</h2></div><div class="form-lines fcols" id="props"></div></div>
       <div class="card"><div class="card-head"><h2>Cost sheet</h2></div>
         <div id="kpi"></div>
-        <div class="etabs" id="tabs">${TABS.map(([k, label]) => html`<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${label}${k === 'shutters' || k === 'materials' ? ` (${est[k].length})` : ''}</button>`)}</div>
+        <div class="etabs" id="tabs">${tabs.map(([k, label]) => html`<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${label}${k === 'shutters' || k === 'materials' ? ` (${est[k].length})` : ''}</button>`)}</div>
         <div id="tab"></div>
       </div>
       <div class="card"><div class="card-head"><h2>Revisions</h2></div><div class="form-lines fcols">
@@ -106,16 +113,16 @@ export function renderEstimate(el, id) {
     $('#props', el).innerHTML = String(html`
       <div class="field"><label>Costing Level</label>${chipGroup('costingLevel', vsOptions('COSTING_LEVEL'), est.costingLevel, !ctx.editable)}</div>
       ${est.costingLevel === 'LINE' ? html`<div class="field"><label>Shared Costs</label>${chipGroup('sharedCosts', vsOptions('SHARED_COSTS'), est.sharedCosts, !ctx.editable)}</div>` : ''}
-      ${row('Overheads', est.overheads.map(o => (o.basis === 'FIXED' ? `${m2(o.value)} fixed` : `${fmtNum(o.value)} % of direct cost`)).join(' + '))}
-      <div class="field"><label>Margin basis</label>${chipGroup('marginBasis', vsOptions('MARGIN_BASIS'), est.marginBasis, !ctx.editable)}</div>
-      ${ctx.editable ? html`<div class="field"><label>Margin %</label><input type="number" step="any" data-h="marginPct" value="${est.marginPct}"></div>` : row('Margin %', `${fmtNum(est.marginPct)} %`)}
+      ${sees ? html`${row('Overheads', est.overheads.map(o => (o.basis === 'FIXED' ? `${m2(o.value)} fixed` : `${fmtNum(o.value)} % of direct cost`)).join(' + '))}
+      <div class="field"><label>Margin basis</label>${chipGroup('marginBasis', vsOptions('MARGIN_BASIS'), est.marginBasis, !mayPrice)}</div>
+      ${mayPrice ? html`<div class="field"><label>Margin %</label><input type="number" step="any" data-h="marginPct" value="${est.marginPct}"></div>` : row('Margin %', `${fmtNum(est.marginPct)} %`)}` : ''}
       ${row('Tax', est.taxCode ? `${est.taxCode} · ${est.taxLabel} ${fmtNum(est.taxRate)} %` : 'No tax charged')}`);
   };
 
   const paint = () => {
     const s = estimateSummary(est);
-    $('#kpi', el).innerHTML = String(kpiHtml(s, cur));
-    $('#tab', el).innerHTML = String(tab === 'summary' ? summaryTab(est, ctx, s) : html`<div class="tab-scroll">${tabHtml(tab, est, ctx, s)}</div>`);
+    $('#kpi', el).innerHTML = String(kpi(s));
+    $('#tab', el).innerHTML = String(tab === 'summary' ? summaryTab(est, ctx, s, sees) : html`<div class="tab-scroll">${tabHtml(tab, est, tab === 'overheads' ? { ...ctx, editable: mayPrice } : ctx, s)}</div>`);
   };
   const persist = debounce(() => saveEstimate(est.id, est), 250);
   const save = () => { persist(); };
@@ -124,8 +131,8 @@ export function renderEstimate(el, id) {
   const read = t => (t.type === 'number' ? (t.value === '' ? 0 : Number(t.value)) : t.value);
   el.addEventListener('input', e => {
     const t = e.target;
-    if (t.dataset.h) { if (t.dataset.h === 'marginPct') est.marginPct = read(t); else est.header[t.dataset.h] = read(t); save(); $('#kpi', el).innerHTML = String(kpiHtml(estimateSummary(est), cur)); }
-    else if (t.dataset.t && t.tagName !== 'SELECT') { est[t.dataset.t][+t.dataset.i][t.dataset.f] = read(t); save(); $('#kpi', el).innerHTML = String(kpiHtml(estimateSummary(est), cur)); }
+    if (t.dataset.h) { if (t.dataset.h === 'marginPct') est.marginPct = read(t); else est.header[t.dataset.h] = read(t); save(); $('#kpi', el).innerHTML = String(kpi(estimateSummary(est))); }
+    else if (t.dataset.t && t.tagName !== 'SELECT') { est[t.dataset.t][+t.dataset.i][t.dataset.f] = read(t); save(); $('#kpi', el).innerHTML = String(kpi(estimateSummary(est))); }
   });
   el.addEventListener('change', e => {
     const t = e.target;

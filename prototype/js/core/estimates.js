@@ -192,11 +192,14 @@ export const canEdit = est => est.status === 'Draft' && auth.can('estimation', '
 // "Create quotation" (status, quotation link) or edit a quoted revision.
 const CONTENT = ['header', 'costingLevel', 'sharedCosts', 'sharedLabel', 'overheads', 'marginBasis', 'marginPct', 'shutters', 'lines', 'labour', 'transport', 'materials', 'equipment',
   'periodMonths', 'billing', 'matrix', 'sites'];
+// Overhead and markup stay as the Admin set them unless this user's role may change them.
+const PRICING = ['overheads', 'marginBasis', 'marginPct'];
 export function saveEstimate(id, patch) {
   const cur = store.get('estimates', id);
   if (!cur || cur.status !== 'Draft') return cur;
   const p = {};
-  CONTENT.forEach(k => { if (k in patch) p[k] = patch[k]; });
+  const mayPrice = auth.changesMarkup();
+  CONTENT.forEach(k => { if (k in patch && (mayPrice || !PRICING.includes(k))) p[k] = patch[k]; });
   return store.update('estimates', id, p, false);
 }
 // The enquiry's live quotation revision (not superseded).
@@ -207,6 +210,13 @@ export const canRevise = est => {
   const q = liveQuotation(est.enquiryId);
   return est.status === 'Quoted' && auth.can('estimation', 'edit') && !!q && !CLOSED_QUOTE.includes(q.status);
 };
+// The estimate with other overhead % / markup % (a blank keeps the figure). Fixed overhead amounts stay. Nothing is saved.
+export function withMarkup(est, { overheadPct, marginPct }) {
+  const pick = (v, old) => (v === '' || v == null ? old : Number(v));
+  const pct = est.overheads.find(o => o.basis === 'PCT');
+  return { ...est, marginPct: pick(marginPct, est.marginPct), overheads: est.overheads.map(o => (o === pct ? { ...o, value: pick(overheadPct, o.value) } : o)) };
+}
+export const markupChanged = (a, b) => Number(a.marginPct) !== Number(b.marginPct) || a.overheads.some((o, i) => Number(o.value) !== Number(b.overheads[i].value));
 export const estimateSummary = est => (est.kind === 'AMC' ? summarizeAmc(est, zones()) : summarize(est, zones()));
 
 // Revise: Rev n+1 as a new draft; the old revision is kept (Superseded). without: line keys to drop

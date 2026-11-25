@@ -4,7 +4,7 @@
 import * as store from './store.js';
 import * as auth from './auth.js';
 import { withCompany } from './lookups.js';
-import { MENUS, MENU_RULES } from '../data/menus.js';
+import { MENUS, MENU_RULES, MARKUP_PRESET } from '../data/menus.js';
 
 const pad = n => String(n).padStart(2, '0');
 const dstr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -115,6 +115,17 @@ const roleRows = roleId => store.list('menuAccess', a => a.roleId === roleId);
 // A role that sees only its "own" work needs each user linked to an employee (who the work is assigned to).
 export const needsEmployee = roleId => roleRows(roleId).some(a => a.scope === 'own');
 export const isAdminRole = r => r?.code === 'ADMIN';
+// Data saved before the overhead and markup rights existed: give this company's roles the preset once (Admin every
+// right, Approver change, Management see). Once any role has one of them, nothing is added again.
+export function upgradeMarkupRights() {
+  const rows = store.list('menuAccess', a => a.menu === 'estimation');
+  if (!rows.length || rows.some(a => a.actions.includes('markup') || a.actions.includes('reprice'))) return;
+  rows.forEach(a => {
+    const code = store.get('roles', a.roleId)?.code;
+    const add = code === 'ADMIN' ? ['markup', 'reprice'] : MARKUP_PRESET[code] || [];
+    if (add.length) store.update('menuAccess', a.id, { actions: [...new Set([...a.actions, ...add])] }, false);
+  });
+}
 const activeAdmins = () => store.list('users', u => u.status !== 'Inactive' && isAdminRole(store.get('roles', u.roleId)));
 
 // The login card's second line, e.g. "Zone A (also B) · phone only".
@@ -242,6 +253,7 @@ export function saveAccess(roleId, next) {
     if (!b) { if (row) store.remove('menuAccess', row.id, summary); return; }
     const clean = { channel: rules.phone ? b.channel : 'web', actions: b.actions.filter(x => rules.actions.includes(x)), scope: rules.own ? b.scope : 'all' };
     if (!clean.actions.includes('view')) clean.actions.unshift('view');
+    if (clean.actions.includes('reprice') && !clean.actions.includes('markup')) clean.actions.push('markup'); // changing needs seeing
     if (row) store.update('menuAccess', row.id, clean, summary);
     else store.insert('menuAccess', { roleId, menu: m.key, ...clean }, { note: summary });
   });

@@ -17,13 +17,13 @@ const TAB_KEY = 'rsmAmcEstTab';
 const VISITS = [1, 2, 3, 4, 6, 12].map(n => ({ value: n, label: String(n) }));
 const row = (label, value) => html`<div class="field"><div class="field-label">${label}</div><div class="ro">${value || html`<span class="muted">—</span>`}</div></div>`;
 
-function kpiHtml(est, s, cur) {
+function kpiHtml(est, s, cur, sees) {
+  const mk = sees ? html`<div><b>${fmtNum(s.markupPct, 1)} %</b><span>Markup on cost · ${fmtNum(s.marginOnPricePct, 1)} % on price</span></div>` : '';
   if (est.jobType === 'GS') {
-    return html`<div class="kpi"><div><b>${m2(s.total)}</b><span>Total quote (${cur}) incl. ${est.taxLabel || 'tax'}</span></div><div><b>${s.metrics.shutters}</b><span>Shutters · ${fmtNum(s.metrics.teamHrs)} team-hours</span></div>
-      <div><b>${fmtNum(s.markupPct, 1)} %</b><span>Markup on cost · ${fmtNum(s.marginOnPricePct, 1)} % on price</span></div></div>`;
+    return html`<div class="kpi"><div><b>${m2(s.total)}</b><span>Total quote (${cur}) incl. ${est.taxLabel || 'tax'}</span></div><div><b>${s.metrics.shutters}</b><span>Shutters · ${fmtNum(s.metrics.teamHrs)} team-hours</span></div>${mk}</div>`;
   }
-  return html`<div class="kpi k4"><div><b>${m2(s.total)}</b><span>Total quote (${cur}) incl. ${est.taxLabel || 'tax'}</span></div><div><b>${m2(s.metrics.perShutterYear)}</b><span>Per shutter per year</span></div>
-    <div><b>${m2(s.metrics.perMonth)}</b><span>Per month · ${m2(s.metrics.perMonthEx)} before ${est.taxLabel || 'tax'}</span></div><div><b>${fmtNum(s.markupPct, 1)} %</b><span>Markup on cost · ${fmtNum(s.marginOnPricePct, 1)} % on price</span></div></div>`;
+  return html`<div class="kpi ${sees ? 'k4' : ''}"><div><b>${m2(s.total)}</b><span>Total quote (${cur}) incl. ${est.taxLabel || 'tax'}</span></div><div><b>${m2(s.metrics.perShutterYear)}</b><span>Per shutter per year</span></div>
+    <div><b>${m2(s.metrics.perMonth)}</b><span>Per month · ${m2(s.metrics.perMonthEx)} before ${est.taxLabel || 'tax'}</span></div>${mk}</div>`;
 }
 
 export function renderAmcEstimate(el, id) {
@@ -33,11 +33,15 @@ export function renderAmcEstimate(el, id) {
   const q = est.quotationId ? store.get('quotations', est.quotationId) : null;
   const ctx = { editable: canEdit(est) };
   const cur = auth.company().currency;
+  // Overhead and markup are set by the Admin; the Overhead & Margin tab and the margin fields follow the role's rights.
+  const sees = auth.seesMarkup(), mayPrice = ctx.editable && auth.changesMarkup();
+  const tabs = AMC_TABS.filter(([k]) => k !== 'overhead' || sees);
   const revs = revisions(est.no);
   const newer = revs.find(r => r.rev > est.rev);
   const canRevise = !newer && mayRevise(est);
   const gs = est.jobType === 'GS';
   let tab = sessionStorage.getItem(TAB_KEY) || 'summary';
+  if (!tabs.some(([k]) => k === tab)) tab = 'summary';
 
   el.innerHTML = String(html`<div class="page" style="max-width:1500px">
     <div class="page-head"><div class="grow">
@@ -63,7 +67,7 @@ export function renderAmcEstimate(el, id) {
         </div>` })}
       <div class="card"><div class="card-head"><h2>${gs ? 'Servicing' : 'Contract'} and costing</h2></div><div class="form-lines fcols" id="props"></div></div>
       <div class="card"><div class="card-head"><h2>Cost sheet</h2></div><div id="kpi"></div>
-        <div class="etabs" id="tabs">${AMC_TABS.map(([k, label]) => html`<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${label}</button>`)}</div>
+        <div class="etabs" id="tabs">${tabs.map(([k, label]) => html`<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${label}</button>`)}</div>
         <div id="tab"></div></div>
       <div class="card"><div class="card-head"><h2>Revisions</h2></div><div class="form-lines fcols">
         ${revs.map(r => { const rq = r.quotationId ? store.get('quotations', r.quotationId) : null; return row(`Rev ${r.rev}`, html`${r.id === est.id ? html`<b>this one</b>` : html`<a href="#/estimates/${r.id}">open</a>`} · ${r.status}${rq ? ` · ${rq.no} Rev ${rq.rev} ${rq.status}` : ''}`); })}</div></div>
@@ -83,16 +87,16 @@ export function renderAmcEstimate(el, id) {
         <div class="field"><label>Billing</label>${chipGroup('billing', vsOptions('BILLING'), est.billing, !ctx.editable)}</div>`}</div>
       <div><div class="form-sec">Costing</div>
       <div class="field"><label>Costing Level</label>${chipGroup('costingLevel', vsOptions('COSTING_LEVEL').map(o => (o.value === 'LINE' ? { ...o, label: 'Line (per site)' } : o)), est.costingLevel, !ctx.editable)}</div>
-      ${row('Overheads', est.overheads.map(o => (o.basis === 'FIXED' ? `${m2(o.value)} fixed` : `${fmtNum(o.value)} % of direct cost`)).join(' + '))}
-      <div class="field"><label>Margin basis</label>${chipGroup('marginBasis', vsOptions('MARGIN_BASIS'), est.marginBasis, !ctx.editable)}</div>
-      ${ctx.editable ? html`<div class="field"><label>Margin %</label><input type="number" step="any" data-h="marginPct" value="${est.marginPct}"></div>` : row('Margin %', `${fmtNum(est.marginPct)} %`)}
+      ${sees ? html`${row('Overheads', est.overheads.map(o => (o.basis === 'FIXED' ? `${m2(o.value)} fixed` : `${fmtNum(o.value)} % of direct cost`)).join(' + '))}
+      <div class="field"><label>Margin basis</label>${chipGroup('marginBasis', vsOptions('MARGIN_BASIS'), est.marginBasis, !mayPrice)}</div>
+      ${mayPrice ? html`<div class="field"><label>Margin %</label><input type="number" step="any" data-h="marginPct" value="${est.marginPct}"></div>` : row('Margin %', `${fmtNum(est.marginPct)} %`)}` : ''}
       ${row('Tax', est.taxCode ? `${est.taxCode} · ${est.taxLabel} ${fmtNum(est.taxRate)} %` : 'No tax charged')}</div>`);
   };
-  const paintKpi = () => { $('#kpi', el).innerHTML = String(kpiHtml(est, estimateSummary(est), cur)); };
+  const paintKpi = () => { $('#kpi', el).innerHTML = String(kpiHtml(est, estimateSummary(est), cur, sees)); };
   const paint = () => {
     const s = estimateSummary(est);
-    $('#kpi', el).innerHTML = String(kpiHtml(est, s, cur));
-    $('#tab', el).innerHTML = String(html`<div class="tab-scroll">${amcTabHtml(tab, est, ctx, s, otherSites(est).length)}</div>`);
+    $('#kpi', el).innerHTML = String(kpiHtml(est, s, cur, sees));
+    $('#tab', el).innerHTML = String(html`<div class="tab-scroll">${amcTabHtml(tab, est, tab === 'overhead' ? { ...ctx, editable: mayPrice } : ctx, s, otherSites(est).length)}</div>`);
   };
   const persist = debounce(() => saveEstimate(est.id, est), 250);
   // The description follows the sites and visits until someone writes their own.

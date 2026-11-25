@@ -88,7 +88,8 @@ export function renderQuotation(el, id) {
         ${editable ? html`<div class="field"><label>Findings</label><input type="text" name="findings" value="${q.findings}"></div>` : row('Findings', q.findings)}
         <div class="field"><label>Terms</label><div class="ro">${q.terms.length} terms from the Terms master ${editable ? html`<a href="#" id="editTerms">edit</a>` : ''}</div></div>
         <div id="terms" hidden>${q.terms.map((t, i) => html`<div class="field"><label>Term ${i + 1}</label><textarea name="term_${i}" rows="2">${t}</textarea></div>`)}</div></div>
-      ${q.approvals?.length ? html`<div class="card form-lines"><div class="card-head"><h2>Counter-check</h2></div>${q.approvals.map(a => row(`Level ${a.level}`, `${a.decision === 'return' ? 'Returned' : 'Approved'} by ${auth.userName(a.by)} · ${fmtDateTime(a.at)}${a.comment ? ` · ${a.comment}` : ''}`))}</div>` : ''}
+      ${q.approvals?.length ? html`<div class="card form-lines"><div class="card-head"><h2>Counter-check</h2></div>${q.approvals.map(a => row(`Level ${a.level}`, `${a.decision === 'return' ? 'Returned' : 'Approved'} by ${auth.userName(a.by)} · ${fmtDateTime(a.at)}${a.comment ? ` · ${a.comment}` : ''}`))}
+        ${(q.repriced || []).map(r => row('Price changed', `${m2(r.from)} → ${m2(r.to)} at the counter-check by ${auth.userName(r.by)}${auth.seesMarkup() ? ` · ${r.changes}` : ''}`))}</div>` : ''}
       ${q.sentAt || q.acceptance ? html`<div class="card form-lines"><div class="card-head"><h2>${q.acceptance ? 'Sent and accepted' : 'Sent'}</h2></div>
         ${q.sentAt ? row('Sent', `${fmtDateTime(q.sentAt)} by ${q.sentVia}`) : ''}
         ${q.acceptance ? html`${row('Method', vsLabel('ACCEPT_METHOD', q.acceptance.method))}${row('PO number', q.acceptance.poNo)}${row('Accepted by', `${q.acceptance.contact} · ${fmtDateTime(q.acceptance.at)}`)}` : ''}

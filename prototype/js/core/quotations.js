@@ -5,7 +5,7 @@
 import * as store from './store.js';
 import * as auth from './auth.js';
 import { findSite, withCompany } from './lookups.js';
-import { estimateSummary, reviseEstimate, txDefaults, companyTax, laterReport } from './estimates.js';
+import { estimateSummary, reviseEstimate, txDefaults, companyTax, laterReport, withMarkup, markupChanged } from './estimates.js';
 import { startApproval, levelsFor, openLevel, closeTask, cancelTasksFor, registerFacts } from './workflow.js';
 import { createJobFromQuotation, createGsJob, openTermTask, scheduleJob } from './jobs.js';
 import { createContractFromQuotation } from './contracts.js';
@@ -166,6 +166,35 @@ function approveFinal(id) {
   store.setStatus('quotations', id, 'Approved', 'Counter-checked; ready to send');
   store.setStatus('enquiries', q.enquiryId, 'Quotation approved', `${q.no} Rev ${q.rev} ready to send`);
   return store.get('quotations', id);
+}
+
+// Overhead % or markup % changed at the counter-check (Approver or Admin, with a comment): the estimate and the
+// quotation are re-priced in place on the same revision, because the customer has not seen it. Done just before the
+// approval, so the next approval level is worked out on the new price. Returns null when nothing changed, or { error }.
+export function repriceAtCheck(id, markup, comment = '') {
+  const q = store.get('quotations', id);
+  const est = store.get('estimates', q.estimateId);
+  const next = withMarkup(est, markup);
+  if (!markupChanged(est, next)) return null;
+  if (!auth.changesMarkup()) return { error: 'Your role cannot change overhead or markup.' };
+  if (q.status !== 'Submitted') return { error: 'This quotation is no longer in the counter-check.' };
+  const figures = [next.marginPct, ...next.overheads.map(o => o.value)].map(Number);
+  if (figures.some(v => !Number.isFinite(v) || v < 0) || (est.marginBasis === 'MARGIN' && Number(next.marginPct) >= 100)) return { error: 'Enter overhead and markup as 0 or more.' };
+  if (!comment.trim()) return { error: 'Write in the comment why overhead or markup changed.' };
+  const money = n => Number(n).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const oldOv = est.overheads.find(o => o.basis === 'PCT'), newOv = next.overheads.find(o => o.basis === 'PCT');
+  const changes = [oldOv && Number(oldOv.value) !== Number(newOv.value) && `Overhead ${oldOv.value} % → ${newOv.value} %`,
+    Number(est.marginPct) !== Number(next.marginPct) && `${est.marginBasis === 'MARGIN' ? 'Margin' : 'Markup'} ${est.marginPct} % → ${next.marginPct} %`].filter(Boolean).join(', ');
+  const before = q.subtotal;
+  store.update('estimates', est.id, { overheads: next.overheads, marginPct: next.marginPct }, `${changes} at the counter-check of ${q.no} Rev ${q.rev}: ${comment}`);
+  const { s, rows } = rowsFromEstimate(store.get('estimates', est.id));
+  // Job costing: one row, which keeps its wording.
+  const priced = est.costingLevel === 'LINE' ? rows : rows.map((r, i) => ({ ...r, description: q.rows[i]?.description ?? r.description }));
+  const amc = q.amc ? { ...q.amc, plan: s.plan, perMonth: s.metrics.perMonth } : null;
+  const entry = { at: new Date().toISOString(), by: store.currentActor(), changes, from: before, to: s.subtotal };
+  store.update('quotations', id, { rows: priced, subtotal: s.subtotal, tax: s.tax, total: s.total, amc, repriced: [...(q.repriced || []), entry] },
+    `${changes} at the counter-check (price ${money(before)} → ${money(s.subtotal)}): ${comment}`);
+  return entry;
 }
 
 // The Approver's decision on a quotation task: approve moves to the next level or finishes; return goes back to

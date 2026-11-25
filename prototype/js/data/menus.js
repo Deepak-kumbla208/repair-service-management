@@ -51,7 +51,8 @@ export const MOBILE_TABS = [
   { key: 'more', label: 'More', icon: '⋯', route: 'm/more', needs: null },
 ];
 
-export const ACTIONS = ['view', 'create', 'edit', 'cancel', 'approve', 'print'];
+// markup / reprice: see / change overhead and markup on estimates (team lead, 17 Nov 2026; Estimation only).
+export const ACTIONS = ['view', 'create', 'edit', 'cancel', 'approve', 'print', 'markup', 'reprice'];
 
 // What Menu Access offers per menu (problem 13 of the Part B plan check): only the rights its screens check
 // (cancelling is part of Edit), Mobile only where a phone screen exists, Own only where work is assigned to a person.
@@ -63,7 +64,7 @@ export const MENU_RULES = {
   product: { actions: MASTER_RIGHTS }, size: { actions: MASTER_RIGHTS }, valueset: { actions: MASTER_RIGHTS }, tax: { actions: MASTER_RIGHTS }, terms: { actions: MASTER_RIGHTS },
   enquiry: { actions: ['view', 'create', 'edit'], phone: true },
   inspection: { actions: ['view', 'edit', 'print'], phone: true, own: true },
-  estimation: { actions: ['view', 'create', 'edit'] },
+  estimation: { actions: ['view', 'create', 'edit', 'markup', 'reprice'] },
   quotation: { actions: ['view', 'edit', 'approve', 'print'], phone: true },
   job: { actions: ['view', 'edit', 'approve'], phone: true, own: true },
   amcContract: { actions: ['view', 'edit'] },
@@ -75,4 +76,7 @@ export const MENU_RULES = {
   companySetup: { actions: ['view', 'edit'] }, transactionSetup: { actions: ['view', 'edit'] }, userRole: { actions: ['view', 'edit'] },
   menuAccess: { actions: ['view', 'edit'] }, authWorkflow: { actions: ['view', 'edit'] },
 };
-export const ACTION_LABELS = { view: 'View', create: 'Create', edit: 'Edit', approve: 'Approve', print: 'Print' };
+export const ACTION_LABELS = { view: 'View', create: 'Create', edit: 'Edit', approve: 'Approve', print: 'Print', markup: 'See markup', reprice: 'Change markup' };
+// Overhead and markup rights before they existed (data saved earlier): Approver changes them at the counter-check,
+// Management sees them. The Admin role always has every right.
+export const MARKUP_PRESET = { APR: ['markup', 'reprice'], MGT: ['markup'] };

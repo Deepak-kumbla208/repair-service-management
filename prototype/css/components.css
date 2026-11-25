@@ -437,6 +437,7 @@ fieldset.ro-sec .mic, fieldset.ro-sec .add-dashed, fieldset.ro-sec .pm { display
 .logo-box { height: 96px; border: 1px dashed var(--line); border-radius: 6px; display: flex; align-items: center; justify-content: center; padding: 6px; text-align: center; }
 .logo-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .mx th, .mx td { text-align: center; padding-left: 5px; padding-right: 5px; }
+.mx th { white-space: normal; line-height: 1.2; vertical-align: bottom; }
 .mx td:first-child, .mx th:first-child { text-align: left; }
 .mx .grp td { background: var(--blue-50) !important; font-weight: 600; color: var(--navy-800); text-align: left; }
 .mx td.na { color: var(--faint); }

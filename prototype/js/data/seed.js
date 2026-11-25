@@ -1,5 +1,5 @@
 // Demo data for both companies: profile, roles, users, menu access, number series, masters and sample enquiries.
-import { MENUS, ACTIONS } from './menus.js';
+import { MENUS, ACTIONS, MARKUP_PRESET } from './menus.js';
 import { singaporeMasters, uaeMasters } from './seed-masters.js';
 import { approvalRules, TX_DEFAULTS, kosmicRepair } from './seed-stretch2.js';
 import { addAmcMasters, AMC_TX } from './seed-amc.js';
@@ -73,6 +73,8 @@ function accessFor(role) {
     set('enquiry', 'both', VP);
     set('quotation', 'both', ['view', 'approve', 'print']); // level-2 approvals (sample rule)
   }
+  // Overhead and markup: the Approver may change them at the counter-check, Management only sees them.
+  if (MARKUP_PRESET[role] && a.estimation) a.estimation = { ...a.estimation, actions: [...new Set([...a.estimation.actions, ...MARKUP_PRESET[role]])] };
   return a;
 }
 

@@ -55,6 +55,12 @@ export function can(menuKey, action = 'view', channel = view()) {
   return a.actions.includes(action);
 }
 
+// Overhead and markup on estimates (team lead, 17 Nov 2026): set by the Admin (Transaction Setup); Menu Access →
+// Estimation "See markup" / "Change markup" decides who sees them and who may change them (at the counter-check).
+// The person's right, wherever they are (web or phone).
+export const changesMarkup = () => can('estimation', 'reprice', 'web');
+export const seesMarkup = () => changesMarkup() || can('estimation', 'markup', 'web');
+
 // 'own' means the user sees only records assigned to them (technicians).
 export const scope = menuKey => accessRow(menuKey)?.scope || 'all';
 

@@ -315,7 +315,10 @@ export function autoChecks(q) {
   } else if (est.kind !== 'AMC') add(!!enq.fromService, enq.fromService ? `Lines from the failed check-list items of ${enq.fromService.no}` : 'No site report: lines were taken from the enquiry');
   add(Math.abs(estimateSummary(est).subtotal - q.subtotal) < 0.005, `Prices match ${q.estimateNo}`);
   const tax = companyTax();
-  add(q.taxRate === tax.taxRate, q.taxRate ? `${q.taxLabel} ${q.taxRate} % from the Tax master (${tax.taxCode})` : 'No tax charged (Company Setup)');
+  // The quotation's tax against today's company setting; a difference says what each side has.
+  const setting = tax.taxRate ? `${tax.taxLabel} ${tax.taxRate} %${tax.taxCode ? ` (${tax.taxCode})` : ''}` : 'no tax';
+  add(q.taxRate === tax.taxRate, q.taxRate === tax.taxRate ? (q.taxRate ? `${q.taxLabel} ${q.taxRate} % from the Tax master (${tax.taxCode})` : 'No tax charged (Company Setup)')
+    : `${q.taxRate ? `${q.taxLabel} ${q.taxRate} %` : 'No tax'} on this quotation, but Company Setup now charges ${setting}`);
   const termCount = termsFor(termsDocType(est)).length;
   add(q.terms.length >= termCount, `All ${termCount} ${termsDocType(est) === 'AMC' ? 'AMC' : 'quotation'} terms included`);
   const ph = (est.materials || []).filter(m => m.placeholder || m.noRate);

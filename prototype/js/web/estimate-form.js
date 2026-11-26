@@ -65,6 +65,7 @@ export function renderEstimate(el, id) {
   const kpi = s => kpiHtml(s, cur, sees);
   const revs = revisions(est.no);
   const newer = revs.find(r => r.rev > est.rev);
+  const tabLabel = (k, label) => (k === 'shutters' ? `${label} (${est.shutters.length + (est.fixed || []).length})` : k === 'materials' ? `${label} (${est.materials.length})` : label);
   let tab = sessionStorage.getItem(TAB_KEY) || 'summary';
   if (!tabs.some(([k]) => k === tab)) tab = 'summary';
   const canRevise = !newer && mayRevise(est);
@@ -100,7 +101,7 @@ export function renderEstimate(el, id) {
       <div class="card"><div class="card-head"><h2>Costing</h2></div><div class="form-lines fcols" id="props"></div></div>
       <div class="card"><div class="card-head"><h2>Cost sheet</h2></div>
         <div id="kpi"></div>
-        <div class="etabs" id="tabs">${tabs.map(([k, label]) => html`<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${label}${k === 'shutters' ? ` (${est.shutters.length + (est.fixed || []).length})` : k === 'materials' ? ` (${est.materials.length})` : ''}</button>`)}</div>
+        <div class="etabs" id="tabs">${tabs.map(([k, label]) => html`<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${tabLabel(k, label)}</button>`)}</div>
         <div id="tab"></div>
       </div>
       <div class="card"><div class="card-head"><h2>Revisions</h2></div><div class="form-lines fcols">
@@ -122,6 +123,7 @@ export function renderEstimate(el, id) {
   const paint = () => {
     const s = estimateSummary(est);
     $('#kpi', el).innerHTML = String(kpi(s));
+    $$('#tabs [data-tab]', el).forEach(b => { b.textContent = tabLabel(b.dataset.tab, tabs.find(([k]) => k === b.dataset.tab)[1]); });   // the counts follow added and removed rows
     $('#tab', el).innerHTML = String(tab === 'summary' ? summaryTab(est, ctx, s, sees) : html`<div class="tab-scroll">${tabHtml(tab, est, tab === 'overheads' ? { ...ctx, editable: mayPrice } : ctx, s)}</div>`);
   };
   const persist = debounce(() => saveEstimate(est.id, est), 250);

@@ -362,7 +362,8 @@ export function popMenu(anchor, items) {
 
 // A problem is never a pop-up in the far corner that fades (UX audit, finding 16). When it belongs to one field it is
 // shown under that field (fieldError). Any other problem is a red bar where the person is looking: above the buttons
-// of the open dialog, else under the page title (which stays in view), and it stays until something is changed.
+// of the open dialog, else under the page title (pinned in a large window; in a smaller one the bar itself is pinned
+// at the top of the page), and it stays until something is changed.
 function errorBar(msg) {
   const dialog = [...document.querySelectorAll('.modal-back')].pop();
   const host = dialog ? dialog.querySelector('.modal-foot') || dialog.querySelector('.modal-body') : $('.phone .m-body') || $('#content .page > .page-head');
@@ -370,7 +371,10 @@ function errorBar(msg) {
   document.querySelectorAll('.err-bar').forEach(x => { x.dataset.cleared = '1'; x.remove(); });
   const bar = Object.assign(document.createElement('div'), { className: 'err-bar', textContent: msg });
   bar.setAttribute('role', 'alert');
-  if (host.matches('.modal-foot')) host.before(bar); else if (host.matches('.page-head')) host.appendChild(bar); else host.prepend(bar);
+  if (host.matches('.modal-foot')) host.before(bar);
+  // In a laptop-size window the title scrolls away (css/ux.css), so the bar pins itself at the top of the page instead
+  else if (host.matches('.page-head')) { if (getComputedStyle(host).position === 'sticky') host.appendChild(bar); else { bar.classList.add('err-pin'); host.after(bar); } }
+  else host.prepend(bar);
   const clear = e => { if (!bar.isConnected || !e || !bar.contains(e.target)) { bar.dataset.cleared = '1'; bar.remove(); document.removeEventListener('input', clear, true); document.removeEventListener('change', clear, true); } };
   setTimeout(() => { document.addEventListener('input', clear, true); document.addEventListener('change', clear, true); }, 0);
   return bar;

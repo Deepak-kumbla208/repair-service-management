@@ -223,3 +223,13 @@ a.rowlink { white-space: nowrap; }
 /* The Approver's decision (comment, Approve, Return) stays in view under a long list of checks */
 #detail > .apr-foot { position: sticky; bottom: 0; z-index: 3; background: var(--page); padding: 10px 0 12px; margin-top: 0; box-shadow: 0 -6px 6px -6px rgba(4, 44, 83, .18); }
 a.rowlink { min-width: 24px; }
+
+/* Laptops and smaller windows: the page title scrolls away with the page, so the work gets the room (the user,
+   26 Nov 2026). It stays pinned only in a large window, at least 1800 x 800 (about a 1920 x 1080 monitor at 100 %);
+   a browser cannot know a screen's size in inches. A problem for the whole page then pins itself at the top of the
+   page instead of sitting in the title (errorBar in core/ui.js), and a job page section opens at the very top. */
+@media (max-width: 1799.98px), (max-height: 799.98px) {
+  .page-head { position: static; }
+  .job-sec { scroll-margin-top: 12px; }
+}
+.err-bar.err-pin { position: sticky; top: 0; z-index: 7; margin: 0 0 12px; }

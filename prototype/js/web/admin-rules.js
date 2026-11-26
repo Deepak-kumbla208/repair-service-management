@@ -79,7 +79,7 @@ export function renderRules(el) {
   const warn = rules.filter(r => r.active && !activeUsersOf(r.roleCode).length);
   const audit = store.list('audit', a => a.coll === 'approvalRules').sort((a, b) => b.at.localeCompare(a.at));
 
-  el.innerHTML = String(html`<div class="page" style="max-width:1500px">
+  el.innerHTML = String(html`<div class="page">
     ${pageHead({ crumb: 'Admin Setup', title: 'Authorization Workflow Master', sub: 'Approval rules · levels 1, 2, 3 and more · the same rules show on each Transaction Setup page',
       actions: edit ? html`<button class="btn primary" id="add">+ New rule</button>` : '' })}
     <div class="etabs"><button data-tab="all" class="${state.tab === 'all' ? 'on' : ''}">All (${rules.length})</button>${Object.entries(DOC_TYPES).map(([k, x]) => html`<button data-tab="${k}" class="${state.tab === k ? 'on' : ''}">${x.label} (${rules.filter(r => r.docType === k).length})</button>`)}</div>

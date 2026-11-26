@@ -6,6 +6,7 @@
 import * as store from './store.js';
 import * as auth from './auth.js';
 import { vsLabel } from './lookups.js';
+import { ux } from './ux.js';
 
 const TEST = {
   eq: (a, b) => a === b, neq: (a, b) => a !== b,
@@ -57,7 +58,26 @@ export function describeRule(rule) {
 export const matches = (rule, facts) => !rule.condition || rule.condition.field === 'all' || !!TEST[rule.condition.op]?.(facts[rule.condition.field], rule.condition.value);
 
 // The levels a document needs, lowest first: [{ level, roleCode, rules: [{ code, name }] }]
-export const levelsFor = (docType, doc) => levelsWith(store.list('approvalRules'), docType, doc);
+export const levelsFor = (docType, doc) => levelsWith(rulesInUse(), docType, doc);
+// Working style "Approval only when a rule asks for it": the rule "every quotation" is left out and a
+// limit takes its place (total with tax over the company's limit), so a small quotation with an Immediate payment
+// term goes out without waiting. The other rules (payment term, higher levels) apply as they are. Switched off, every
+// rule in the Authorization Workflow Master applies, as before.
+export function rulesInUse() {
+  const all = store.list('approvalRules');
+  const u = ux();
+  if (!u.approvalByRule) return all;
+  const every = r => r.docType === 'quotation' && (!r.condition || r.condition.field === 'all');
+  const first = all.find(r => every(r) && r.active);
+  if (!first) return all;
+  const limit = Number(u.approvalLimit) || 0;
+  return [...all.filter(r => !every(r)), { ...first, id: `${first.id}_limit`, code: 'QT_LIMIT', name: `Quotation over ${fmt(limit)}`, when: `Total with tax over ${fmt(limit)}`, condition: { field: 'total', op: 'gt', value: limit } }];
+}
+// Why a quotation needs no approval, or which rules ask for it: for the hint beside the Submit button.
+export function approvalNeeds(docType, doc) {
+  const levels = levelsFor(docType, doc);
+  return { needed: levels.length > 0, rules: levels.flatMap(l => l.rules.map(r => r.name)), byRule: ux().approvalByRule, limit: Number(ux().approvalLimit) || 0 };
+}
 // The same with a given set of rules ("Test a document" previews unsaved changes).
 export function levelsWith(allRules, docType, doc) {
   const facts = factsOf(docType, doc);

@@ -80,7 +80,7 @@ function repairStory(k, startDay, lost) {
     completeWorkDone(job.id);
     const inv = invoiceForJob(job.id);
     if (inv?.status === 'Posted' && inv.paymentTerm === 'IMMEDIATE') recordPayment({ invoiceId: inv.id, amount: inv.total, method: 'PAYNOW', reference: `PayNow ${inv.no}`, via: 'phone' });
-    requestLeave(job.id);
+    requestLeave(job.id, { auto: false });
   });
   at(on(ds, '12:30'), () => { as('ops'); const t = openTaskFor('job', job.id, 'leaveSite'); if (t) confirmLeave(t.id); });
   at(on(ds, '12:35'), () => { as(tl); checkOut(job.id); });

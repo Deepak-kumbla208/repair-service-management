@@ -38,7 +38,7 @@ export function renderClosure(el, id) {
   const ev = estimatedVsActual(j);
   const inv = docInvoice(j);
   const canMark = j.status === 'Work done' && auth.can('closure', 'edit');
-  el.innerHTML = String(html`<div class="page" style="max-width:1200px">
+  el.innerHTML = String(html`<div class="page">
     ${pageHead({ crumb: html`<a href="#/closure">Job Closure</a> › ${j.no}`, title: html`${j.no} · ${j.customer} ${pill(j.status)}`,
       sub: j.status === 'Closed' ? `Closed ${fmtDateTime(j.closedAt)}: all work completed, paid and filed.` : j.status === 'Completed & documented' ? `Documented ${fmtDateTime(j.documentedAt)}. It closes by itself when ${inv?.no || 'the invoice'} is fully paid.` : 'Check the documents, then mark the job completed and documented.',
       actions: html`<div class="row"><a class="btn" href="#/jobs/${j.id}">Open the job</a>${canMark ? html`<button class="btn primary" id="mark">✓ Completed &amp; documented</button>` : ''}</div>` })}

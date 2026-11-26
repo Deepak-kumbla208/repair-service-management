@@ -48,3 +48,11 @@
   .sheet { margin: 0; box-shadow: none; page-break-after: always; }
   .sheet:last-child { page-break-after: auto; }
 }
+
+/* The UI / UX audit changed the screen text sizes and greys; printed forms keep the sizes they always had. */
+.sheet { line-height: 1.45; }
+.sheet .small { font-size: 11px; }
+.sheet .muted { color: #888780; }
+.sheet h2 { font-size: 15px; }
+.sheet h3 { font-size: 13px; }
+.sheet .pill { font-size: 11px; }

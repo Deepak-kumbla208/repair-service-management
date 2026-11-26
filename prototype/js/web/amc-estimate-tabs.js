@@ -1,10 +1,13 @@
 // The AMC estimate's Excel tabs (team lead's AMC estimator) as tables: Summary, Labour_Matrix, Products to service (the Shutters sheet), Transport,
 // Equipment, Materials (optional) and Overhead & Margin. Same columns and formulas as the Excel; every pre-filled value
 // stays editable. Cells carry data-p, the path of the value they edit (e.g. "sites.0.visits").
+// This is the Excel view: the column names are the workbook's own. Every input carries a label for screen readers
+// (its column and row), and the material of a Materials row is picked in a type-to-search box.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, fmtNum, placeholderTag } from '../core/ui.js';
-import { items, vsOptions } from '../core/lookups.js';
+import { vsOptions } from '../core/lookups.js';
+import { pickerHtml } from './picker.js';
 import { amcSiteRow, matrixCost, materialRow, hourlyRate } from '../core/costing.js';
 import { amcDefaults } from '../core/amc-estimates.js';
 
@@ -15,13 +18,28 @@ const rid = () => store.uid('r_');
 
 export const AMC_TABS = [['summary', 'Summary'], ['matrix', 'Labour_Matrix'], ['shutters', 'Products to service'], ['transport', 'Transport'], ['equipment', 'Equipment'], ['materials', 'Materials'], ['overhead', 'Overhead & Margin']];
 
-function inp(ctx, path, v, { type = 'number', w = 64, step = 'any' } = {}) {
+// The column an input sits under, read out with its row: "Travel Hrs per Visit, row 2", "Monthly Cost, Standard Team".
+const COLS = {
+  matrix: { monthly: 'Monthly Cost', days: 'Days per Month', hours: 'Hrs per Day', teamHrs: 'Std Team Hrs per Product', extraWorkers: 'Additional Workers', extraHrs: 'Addl. Worker Hrs (each)' },
+  sites: { visits: 'Visits per Year', counts: 'Number of products' }, transport: { hrs: 'Travel Hrs per Visit', rate: 'Rate per Hr' },
+  equipment: { equipmentId: 'Equipment', siteKey: 'For site', qty: 'Qty', duration: 'Duration per Visit', rate: 'Rate per Unit' },
+  materials: { itemId: 'Product', siteKey: 'For site', qty: 'Qty per Visit', wastage: 'Wastage %', rate: 'Rate per Unit' },
+  overheads: { name: 'Overhead Item', basis: 'Basis', value: 'Value (% or amount)' }, header: { description: 'Description' },
+};
+export function cellLabel(path) {
+  const [k, a, b, c] = path.split('.');
+  if (k === 'matrix') return a === 'sizes' ? `${COLS.matrix[c] || c}, row ${Number(b) + 1}` : `${COLS.matrix[b] || b}, ${a === 'team' ? 'Standard Team' : 'Additional Worker'}`;
+  if (k === 'sites' && b === 'counts') return `${COLS.sites.counts}, ${c}, site ${Number(a) + 1}`;
+  if (k === 'header') return COLS.header[a] || a;
+  return `${COLS[k]?.[b] || b}, row ${Number(a) + 1}`;
+}
+function inp(ctx, path, v, { type = 'number', w = 64, step = 'any', label = '' } = {}) {
   if (!ctx.editable) return type === 'number' ? fmtNum(v, 2) : v;
-  return html`<input type="${type}" ${type === 'number' ? html`step="${step}"` : ''} data-p="${path}" value="${v ?? ''}" style="width:${w}px">`;
+  return html`<input type="${type}" ${type === 'number' ? html`step="${step}"` : ''} data-p="${path}" value="${v ?? ''}" aria-label="${label || cellLabel(path)}" style="width:${w}px">`;
 }
 function sel(ctx, path, v, options) {
   if (!ctx.editable) return options.find(o => String(o.value) === String(v))?.label ?? '';
-  return html`<select data-p="${path}">${options.map(o => html`<option value="${o.value}" ${String(o.value) === String(v) ? 'selected' : ''}>${o.label}</option>`)}</select>`;
+  return html`<select data-p="${path}" aria-label="${cellLabel(path)}">${options.map(o => html`<option value="${o.value}" ${String(o.value) === String(v) ? 'selected' : ''}>${o.label}</option>`)}</select>`;
 }
 const del = (ctx, kind, i) => (ctx.editable ? html`<td><button type="button" class="btn link small" data-del="${kind}|${i}" title="Remove this row">✕</button></td>` : '');
 const delHead = ctx => (ctx.editable ? html`<th></th>` : '');
@@ -34,7 +52,7 @@ function summaryTab(est, ctx, s) {
   // Without the "See markup" right: overhead is one line, and margin and the percentages are not shown.
   const sees = auth.seesMarkup();
   const head = (label, v, p, cls = '') => html`<tr class="${cls}"><td>${label}</td><td class="num">${m2(v)}</td>${sees ? html`<td class="num">${p == null ? '' : pc(p)}</td>` : ''}</tr>`;
-  const desc = ctx.editable ? html`<textarea data-p="header.description" rows="2" style="width:100%;border:0;border-bottom:1px solid #C9C7BE;border-radius:0;min-height:40px">${est.header.description}</textarea>` : est.header.description;
+  const desc = ctx.editable ? html`<textarea data-p="header.description" rows="2" aria-label="Description" style="width:100%;border:0;border-bottom:1px solid #C9C7BE;border-radius:0;min-height:40px">${est.header.description}</textarea>` : est.header.description;
   const lines = est.costingLevel === 'LINE'
     ? html`<table class="tbl"><thead><tr><th style="width:30px">#</th><th>Line (one per site)</th><th class="num">Direct cost</th><th class="num">Price</th></tr></thead><tbody>
         ${s.lines.map((l, i) => html`<tr><td>${i + 1}</td><td class="wrap">${l.isShared ? html`<b>${l.description}</b>` : l.description}</td><td class="num">${m2(l.direct + (l.shared || 0))}</td><td class="num"><b>${m2(l.rounded)}</b></td></tr>`)}
@@ -73,7 +91,7 @@ function summaryTab(est, ctx, s) {
 }
 
 // A Labour_Matrix row's label: the size and its size set, or the product with no size.
-const rowLabel = z => (z.key?.startsWith('P:') ? z.name : `${z.code} – ${z.name}${z.setName ? ` · ${z.setName}` : ''}`);
+export const rowLabel = z => (z.key?.startsWith('P:') ? z.name : `${z.code} – ${z.name}${z.setName ? ` · ${z.setName}` : ''}`);
 
 function matrixTab(est, ctx) {
   const m = est.matrix;
@@ -104,7 +122,7 @@ function shuttersTab(est, ctx, s, more) {
   return html`<table class="tbl edit"><thead><tr><th>Sl</th><th>Site / Location</th><th>Zone</th><th class="num">Visits ${gs ? '' : 'per Year'}</th>
       <th class="num">Total Products</th><th class="num">Std Team Hrs per Visit</th><th class="num">Days on site</th><th class="num">Labour Cost per Visit</th><th class="num">${gs ? 'Labour Cost' : 'Annual Labour Cost'}</th>${multi ? html`<th></th>` : ''}</tr></thead><tbody>
     ${est.sites.map((x, i) => { const r = amcSiteRow(x, est.matrix); return html`<tr><td>${i + 1}</td>
-      <td>${x.name}${x.typed ? html` ${placeholderTag('typed from BOQ')}` : html`<br><button type="button" class="btn link small" data-cover="${x.key}" style="padding:0">${x.shutterIds.length} covered ▾</button>`}</td>
+      <td>${x.name}${x.typed ? html` ${placeholderTag('Counts typed from the customer\'s list (BOQ)')}` : html`<br><button type="button" class="btn link small" data-cover="${x.key}" style="padding:0">${x.shutterIds.length} covered ▾</button>`}</td>
       <td><span class="zone-chip">${store.get('zones', x.zoneId)?.code || '—'}</span></td>
       <td class="num">${gs ? 1 : inp(ctx, `sites.${i}.visits`, x.visits, { w: 46, step: 1 })}</td>
       <td class="num"><b>${r.shutters}</b></td><td class="num">${fmtNum(r.hrsVisit)}</td><td class="num">${r.days}</td><td class="num">${m2(r.perVisit)}</td><td class="num">${m2(r.annual)}</td>
@@ -115,7 +133,7 @@ function shuttersTab(est, ctx, s, more) {
   <h3 style="margin:12px 0 6px">Counts by size or product</h3>
   ${shown.length ? html`<table class="tbl edit"><thead><tr><th>Size / Product</th><th class="num">Hrs each</th>${est.sites.map(x => html`<th class="num">${x.name}</th>`)}${est.sites.length > 1 ? html`<th class="num">Total</th>` : ''}</tr></thead><tbody>
     ${shown.map(z => html`<tr><td>${rowLabel(z)}</td><td class="num">${fmtNum(z.teamHrs)}</td>
-      ${est.sites.map((x, i) => html`<td class="num">${x.typed ? inp(ctx, `sites.${i}.counts.${key(z)}`, x.counts?.[key(z)] || 0, { w: 46, step: 1 }) : num(x.counts?.[key(z)]) || html`<span class="muted">–</span>`}</td>`)}
+      ${est.sites.map((x, i) => html`<td class="num">${x.typed ? inp(ctx, `sites.${i}.counts.${key(z)}`, x.counts?.[key(z)] || 0, { w: 46, step: 1, label: `Number of ${rowLabel(z)}, ${x.name}` }) : num(x.counts?.[key(z)]) || html`<span class="muted">–</span>`}</td>`)}
       ${est.sites.length > 1 ? html`<td class="num">${tot(z)}</td>` : ''}</tr>`)}</tbody></table>` : html`<div class="muted">Nothing covered yet.</div>`}
   ${ctx.editable && !gs && more ? html`<button type="button" class="add-dashed" data-addsite="1" style="margin-top:6px">+ Add a site of this customer (${more} more)</button>` : ''}
   ${s.sites.filter(x => x.days > 1).map(x => html`<div class="note warn small" style="margin-top:8px">${est.sites.find(y => y.key === x.key).name}: ${fmtNum(x.hrsVisit)} team-hours = ${x.days} days on site per visit. The price counts one trip per visit, as the Excel does; the calendar books ${x.days} days.</div>`)}
@@ -145,10 +163,13 @@ function equipmentTab(est, ctx) {
 }
 
 function materialsTab(est, ctx) {
-  const opts = [{ value: '', label: '— pick from the master —' }, ...items().map(it => ({ value: it.id, label: it.name }))];
+  // The material is picked in a type-to-search box (the page gives it the parts and materials of the master).
+  const part = (r, i) => (ctx.editable
+    ? pickerHtml({ attrs: `data-p="materials.${i}.itemId"`, value: r.itemId, label: r.name, placeholder: 'Type to search materials', ariaLabel: cellLabel(`materials.${i}.itemId`) })
+    : r.name);
   const row = r => materialRow({ ...r, qty: num(r.qty) * visitsOf(est, r.siteKey) });
   return html`${est.materials.length ? html`<table class="tbl edit"><thead><tr><th>Sl</th><th>Product</th><th>For site</th><th>Unit</th><th class="num">Qty per Visit</th><th class="num">Wastage %</th><th class="num">Visits</th><th class="num">Total Qty</th><th class="num">Rate per Unit</th><th class="num">Amount</th>${delHead(ctx)}</tr></thead><tbody>
-      ${est.materials.map((r, i) => html`<tr><td>${i + 1}</td><td>${sel(ctx, `materials.${i}.itemId`, r.itemId, opts)}</td><td>${sel(ctx, `materials.${i}.siteKey`, r.siteKey, siteOptions(est))}</td><td>${r.unit}</td>
+      ${est.materials.map((r, i) => html`<tr><td>${i + 1}</td><td>${part(r, i)}</td><td>${sel(ctx, `materials.${i}.siteKey`, r.siteKey, siteOptions(est))}</td><td>${r.unit}</td>
         <td class="num">${inp(ctx, `materials.${i}.qty`, r.qty, { w: 50 })}</td><td class="num">${inp(ctx, `materials.${i}.wastage`, r.wastage, { w: 46 })}</td><td class="num">${visitsOf(est, r.siteKey)}</td>
         <td class="num">${fmtNum(row(r).totalQty)}</td><td class="num">${inp(ctx, `materials.${i}.rate`, r.rate, { w: 64 })}</td><td class="num">${m2(row(r).amount)}</td>${del(ctx, 'materials', i)}</tr>`)}
       <tr class="sum"><td></td><td><b>TOTAL</b></td><td colspan="7"></td><td class="num"><b>${m2(est.materials.reduce((t, r) => t + row(r).amount, 0))}</b></td>${delHead(ctx)}</tr></tbody></table>`
@@ -160,7 +181,7 @@ function overheadTab(est, ctx, s) {
   const basis = vsOptions('OVERHEAD_BASIS');
   return html`<table class="tbl"><tbody><tr class="sum"><td>Total Direct Cost (Labour + Transport + Equipment${s.heads.materials ? ' + Materials' : ''})</td><td class="num" style="width:140px">${m2(s.direct)}</td></tr></tbody></table>
     <table class="tbl edit" style="margin-top:10px"><thead><tr><th>Overhead Item</th><th>Basis</th><th class="num">Value (% or amount)</th><th class="num">Amount</th>${delHead(ctx)}</tr></thead><tbody>
-      ${est.overheads.map((o, i) => html`<tr><td>${ctx.editable ? html`<input type="text" data-p="overheads.${i}.name" value="${o.name}" style="width:180px">` : o.name}</td><td>${sel(ctx, `overheads.${i}.basis`, o.basis, basis)}</td>
+      ${est.overheads.map((o, i) => html`<tr><td>${ctx.editable ? html`<input type="text" data-p="overheads.${i}.name" value="${o.name}" aria-label="${cellLabel(`overheads.${i}.name`)}" style="width:180px">` : o.name}</td><td>${sel(ctx, `overheads.${i}.basis`, o.basis, basis)}</td>
         <td class="num">${inp(ctx, `overheads.${i}.value`, o.value, { w: 70 })}</td><td class="num">${m2(o.basis === 'FIXED' ? num(o.value) : (s.direct * num(o.value)) / 100)}</td>${del(ctx, 'overheads', i)}</tr>`)}
       <tr class="sum"><td><b>TOTAL OVERHEAD</b></td><td></td><td></td><td class="num"><b>${m2(s.overhead)}</b></td>${delHead(ctx)}</tr></tbody></table>${addBtn(ctx, 'overheads', 'Add overhead item')}
     <table class="tbl" style="margin-top:10px"><tbody>

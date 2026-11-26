@@ -33,7 +33,7 @@ function renderEditor(el, rep, insp) {
   let open = Number(sessionStorage.getItem(OPEN_KEY)) || 0;
   if (open > 6) open = 0;
 
-  el.innerHTML = String(html`<div class="page" style="max-width:1500px">
+  el.innerHTML = String(html`<div class="page">
     <div class="page-head"><div class="grow">
       <div class="crumb"><a href="#/assessments">Job Assessment</a> › <a href="#/enquiries/${e.id}">${e.no}</a> › Site viewing report</div>
       <h1>${rep.no} · Site viewing report ${pill(rep.status)}</h1>
@@ -105,7 +105,7 @@ function renderEditor(el, rep, insp) {
 // locked; section 1 folded to its summary line. Print shows the form as it prints.
 function renderReadOnly(el, rep, insp) {
   const e = store.get('enquiries', rep.enquiryId);
-  el.innerHTML = String(html`<div class="page stack" style="max-width:1400px">
+  el.innerHTML = String(html`<div class="page stack">
     ${pageHead({
       crumb: html`<a href="#/assessments">Job Assessment</a> › <a href="#/assessments/${insp.id}">${e.no}</a> › ${rep.no}`,
       title: html`${rep.no} · Site viewing report ${pill(rep.status)}`,

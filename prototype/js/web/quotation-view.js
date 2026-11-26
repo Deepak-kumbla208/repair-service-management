@@ -5,12 +5,12 @@
 // (each line Now, Later or Not wanted; core/later-work.js); an AMC accepted for fewer sites makes the next revision.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, go, debounce, fmtDate, fmtDateTime, fmtNum, pill, toast, openModal, chipGroup, readForm, markInvalid, confirmBox, foldHeader } from '../core/ui.js';
+import { html, $, go, debounce, fmtDate, fmtDateTime, fmtNum, pill, toast, openModal, chipGroup, readForm, markInvalid, fieldError, dateProblem, popMenu, confirmBox, foldHeader, icon } from '../core/ui.js';
 import { vsOptions, vsLabel } from '../core/lookups.js';
 import { saveBlob } from '../core/media.js';
 import { canEdit, saveWording, submitForCheck, canSend, markSent, accept, reject, reviseWording, refreshExpiry, quotationsOf, todayIso } from '../core/quotations.js';
 import { reviseEstimate } from '../core/estimates.js';
-import { openTaskFor } from '../core/workflow.js';
+import { openTaskFor, approvalNeeds } from '../core/workflow.js';
 import { lineInfo, splitOf, followUpFor, notWantedReasons } from '../core/later-work.js';
 import { priorityLabel } from '../core/inspections.js';
 import { rowText } from '../core/enquiries.js';
@@ -40,17 +40,19 @@ export function renderQuotation(el, id) {
   const est = store.get('estimates', q.estimateId);
   const estOpen = est && est.status === 'Quoted' && !store.list('estimates', e => e.no === est.no && e.rev > est.rev).length;
   const newestEst = est ? store.list('estimates', e => e.no === est.no).sort((a, b) => b.rev - a.rev)[0] : null;
+  const needs = approvalNeeds('quotation', saved);
 
-  el.innerHTML = String(html`<div class="page" style="max-width:1500px">
+  el.innerHTML = String(html`<div class="page">
     <div class="page-head"><div class="grow">
       <div class="crumb"><a href="#/quotations">Sales Quotation</a> › <a href="#/enquiries/${enq.id}">${enq.no}</a></div>
-      <h1>${q.no} · Rev ${q.rev} · ${q.customer} ${q.split ? pill('Partly accepted', 'green') : pill(q.status === 'Submitted' ? 'In counter-check' : q.status)}</h1>
+      <h1>${q.no} · Rev ${q.rev} · ${q.customer} ${q.split ? pill('Partly accepted', 'green') : pill(q.status === 'Submitted' ? 'Waiting for approval' : q.status)}</h1>
       <div class="page-meta">from <a href="#/estimates/${q.estimateId}">${q.estimateNo}</a> · prices are changed in the estimate${q.validUntil ? ` · valid until ${fmtDate(q.validUntil)}` : ''}${q.partialFrom ? ` · partial acceptance of ${q.partialFrom}` : ''}</div></div>
-      <div class="row" id="actions"><button class="btn soft" id="wf">⇶ Workflow</button>
-        ${auth.can('quotation', 'print') || mayEdit ? html`<a class="btn" href="#/quotations/${q.id}/print">⎙ ${['Draft', 'Returned', 'Submitted'].includes(q.status) ? 'Print draft' : 'Print'}</a>` : ''}
-        ${mayEdit && editable ? html`<button class="btn" disabled title="Locked until the counter-check">Send</button><button class="btn primary" id="submit">Submit for check</button>` : ''}
-        ${mayEdit && q.status === 'Approved' ? html`<button class="btn" id="rev">Revise wording</button><button class="btn primary" id="send">Send to customer</button>` : ''}
-        ${mayEdit && q.status === 'Sent' ? html`<button class="btn" id="rev">Revise wording</button><button class="btn danger" id="reject">Customer rejected</button><button class="btn" id="send">Send again</button><button class="btn primary" id="accept">Record acceptance</button>` : ''}
+      <div class="row" id="actions">
+        ${auth.can('quotation', 'print') || mayEdit ? html`<a class="btn" href="#/quotations/${q.id}/print">${icon('print', 15)} ${['Draft', 'Returned', 'Submitted'].includes(q.status) ? 'Print draft' : 'Print'}</a>` : ''}
+        <button class="btn" id="more" aria-haspopup="menu">More ▾</button>
+        ${mayEdit && editable ? html`<button class="btn primary" id="submit" title="${needs.needed ? `Goes to the Approver: ${needs.rules.join(' + ')}` : 'No approval rule applies: Send unlocks at once'}">${needs.needed ? 'Submit for approval' : 'Ready to send'}</button>` : ''}
+        ${mayEdit && q.status === 'Approved' ? html`<button class="btn primary" id="send">Send to customer</button>` : ''}
+        ${mayEdit && q.status === 'Sent' ? html`<button class="btn primary" id="accept">Record acceptance</button>` : ''}
         ${mayEdit && q.status === 'Expired' ? html`<button class="btn primary" id="rev">Renew (new revision)</button>` : ''}
         ${q.jobId ? html`<a class="btn primary" href="#/jobs/${q.jobId}">Open the job</a>` : ''}${q.contractId ? html`<a class="btn primary" href="#/contracts/${q.contractId}">Open the contract</a>` : ''}</div>
     </div>
@@ -60,6 +62,7 @@ export function renderQuotation(el, id) {
       <br><span class="small">A price change: revise the estimate (this makes Rev ${q.rev + 1}). Wording only: change it here and submit again.</span></span>
       ${estOpen && auth.can('estimation', 'edit') ? html`<button class="btn small" id="revEst">Revise estimate</button>` : ''}</div>` : ''}
     ${q.status === 'Submitted' && task ? html`<div class="note" style="margin-bottom:10px">Waiting for the ${task.roleName} (level ${task.level}): ${task.rules.map(r => r.name).join(' + ')}. Send unlocks after approval.</div>` : ''}
+    ${mayEdit && editable && needs.byRule ? html`<div class="note small" style="margin-bottom:10px">${needs.needed ? html`This quotation needs approval before it is sent: <b>${needs.rules.join(' + ')}</b>.` : html`No approval needed: the total is ${m2(needs.limit)} or less and the payment term is Immediate. "Ready to send" unlocks Send at once.`}</div>` : ''}
     ${trailHtml(enq.id, q.id)}
     <form class="stack" id="f" onsubmit="return false">
       ${foldHeader({ id: `q-${q.id}`, title: 'Customer & quotation details', open: editable,
@@ -74,10 +77,10 @@ export function renderQuotation(el, id) {
           ${q.amc && q.amc.jobType === 'AMC' ? row('Contract', `${q.amc.periodMonths} months · ${vsLabel('BILLING', q.amc.billing)} billing · ${q.amc.sites.reduce((t, x) => t + x.visits, 0)} visits a year`) : ''}
           ${row('Prepared by', auth.userName(q.preparedBy))}</div>
         </div>` })}
-      <div class="card"><div class="card-head"><h2>Lines</h2><span class="muted small">${q.costingLevel === 'LINE' ? 'Line costing: a price per line' : 'Job costing: one price for the whole job'} · prices from ${q.estimateNo}</span></div>
-        <table class="tbl"><thead><tr><th style="width:30px">#</th><th>Description</th><th class="num" style="width:60px">Qty</th><th style="width:60px">Unit</th><th class="num" style="width:110px">Rate (${company.currency})</th><th class="num" style="width:120px">Amount (${company.currency})</th>${q.split ? html`<th style="width:150px">Customer's answer</th>` : ''}</tr></thead><tbody>
+      <div class="card"><div class="card-head"><h2>Lines</h2><span class="muted small">${q.costingLevel === 'LINE' ? 'A price per line' : 'One price for the whole job'} · prices from ${q.estimateNo}</span></div>
+        <table class="tbl"><thead><tr><th style="width:44px">No.</th><th>Description</th><th class="num" style="width:60px">Qty</th><th style="width:60px">Unit</th><th class="num" style="width:110px">Rate (${company.currency})</th><th class="num" style="width:120px">Amount (${company.currency})</th>${q.split ? html`<th style="width:150px">Customer's answer</th>` : ''}</tr></thead><tbody>
           ${q.rows.map((r, i) => html`<tr><td>${i + 1}</td><td class="wrap">${!editable ? r.description : q.costingLevel === 'JOB'
-            ? html`<textarea name="description" rows="2" style="width:100%">${q.description}</textarea>` : html`<input type="text" name="row_${i}" value="${r.description}" style="width:100%">`}</td>
+            ? html`<textarea name="description" rows="2" style="width:100%" aria-label="Description of the work, as the customer will read it">${q.description}</textarea>` : html`<input type="text" name="row_${i}" value="${r.description}" style="width:100%" aria-label="Description, line ${i + 1}">`}</td>
             <td class="num">${fmtNum(r.qty)}</td><td>${r.unit}</td><td class="num">${m2(r.rate)}</td><td class="num">${m2(r.amount)}</td>${q.split ? html`<td>${answerPill(q, r)}</td>` : ''}</tr>`)}
           ${q.taxRate || q.tax ? html`<tr class="sum"><td colspan="5" class="num">Total</td><td class="num">${m2(q.subtotal)}</td>${q.split ? html`<td></td>` : ''}</tr>
             <tr><td colspan="5" class="num">${q.taxLabel} ${fmtNum(q.taxRate)} %</td><td class="num">${m2(q.tax)}</td>${q.split ? html`<td></td>` : ''}</tr>` : ''}
@@ -88,8 +91,8 @@ export function renderQuotation(el, id) {
         ${editable ? html`<div class="field"><label>Findings</label><input type="text" name="findings" value="${q.findings}"></div>` : row('Findings', q.findings)}
         <div class="field"><label>Terms</label><div class="ro">${q.terms.length} terms from the Terms master ${editable ? html`<a href="#" id="editTerms">edit</a>` : ''}</div></div>
         <div id="terms" hidden>${q.terms.map((t, i) => html`<div class="field"><label>Term ${i + 1}</label><textarea name="term_${i}" rows="2">${t}</textarea></div>`)}</div></div>
-      ${q.approvals?.length ? html`<div class="card form-lines"><div class="card-head"><h2>Counter-check</h2></div>${q.approvals.map(a => row(`Level ${a.level}`, `${a.decision === 'return' ? 'Returned' : 'Approved'} by ${auth.userName(a.by)} · ${fmtDateTime(a.at)}${a.comment ? ` · ${a.comment}` : ''}`))}
-        ${(q.repriced || []).map(r => row('Price changed', `${m2(r.from)} → ${m2(r.to)} at the counter-check by ${auth.userName(r.by)}${auth.seesMarkup() ? ` · ${r.changes}` : ''}`))}</div>` : ''}
+      ${q.approvals?.length ? html`<div class="card form-lines"><div class="card-head"><h2>Approval</h2></div>${q.approvals.map(a => row(`Level ${a.level}`, `${a.decision === 'return' ? 'Returned' : 'Approved'} by ${auth.userName(a.by)} · ${fmtDateTime(a.at)}${a.comment ? ` · ${a.comment}` : ''}`))}
+        ${(q.repriced || []).map(r => row('Price changed', `${m2(r.from)} → ${m2(r.to)} at the approval by ${auth.userName(r.by)}${auth.seesMarkup() ? ` · ${r.changes}` : ''}`))}</div>` : ''}
       ${q.sentAt || q.acceptance ? html`<div class="card form-lines"><div class="card-head"><h2>${q.acceptance ? 'Sent and accepted' : 'Sent'}</h2></div>
         ${q.sentAt ? row('Sent', `${fmtDateTime(q.sentAt)} by ${q.sentVia}`) : ''}
         ${q.acceptance ? html`${row('Method', vsLabel('ACCEPT_METHOD', q.acceptance.method))}${row('PO number', q.acceptance.poNo)}${row('Accepted by', `${q.acceptance.contact} · ${fmtDateTime(q.acceptance.at)}`)}` : ''}
@@ -114,27 +117,37 @@ export function renderQuotation(el, id) {
     $('#f', el).addEventListener('change', save);
     $('#editTerms', el)?.addEventListener('click', e => { e.preventDefault(); $('#terms', el).hidden = !$('#terms', el).hidden; });
   }
-  $('#wf', el).onclick = () => openWorkflow(enq);
+  // One main button on the page; everything else is under "More" (UX audit, finding 13).
+  $('#more', el).onclick = e => popMenu(e.currentTarget, [
+    { label: 'Workflow (map of the job)', onClick: () => openWorkflow(enq) },
+    ...(mayEdit && ['Approved', 'Sent'].includes(q.status) ? [{ label: 'Revise wording (new revision)', onClick: reviseNow }] : []),
+    ...(mayEdit && q.status === 'Sent' ? [{ label: 'Send again', onClick: () => sendDialog(el, q) }, { sep: true }, { label: 'Customer rejected…', onClick: rejectNow }] : []),
+  ]);
   $('#submit', el)?.addEventListener('click', () => {
     if (editable) saveWording(q.id, readWording());
+    if (!String((q.costingLevel === 'JOB' ? readWording().description : 'x') || '').trim()) return fieldError($('[name="description"]', el), 'Write what will be done: this is what the customer reads.');
     const r = submitForCheck(q.id);
-    toast(r.status === 'Approved' ? `${q.no} Rev ${q.rev} approved (no approval rule applies)` : `${q.no} Rev ${q.rev} sent to the Approver for the counter-check`);
+    toast(r.status === 'Approved' ? `${q.no} Rev ${q.rev} is ready to send (no approval rule applies)` : `${q.no} Rev ${q.rev} sent to the Approver for approval`);
     renderQuotation(el, q.id);
   });
   $('#revEst', el)?.addEventListener('click', () => { const next = reviseEstimate(q.estimateId, { note: 'returned by the Approver' }); if (!next) return toast('The quotation is already closed', 'bad'); toast(`${next.no} Rev ${next.rev} created`); go(`estimates/${next.id}`); });
-  $('#rev', el)?.addEventListener('click', async () => {
-    if (!await confirmBox('Revise the wording', `Rev ${q.rev + 1} is created with the same prices. It goes to the counter-check again before it can be sent.`, `Create Rev ${q.rev + 1}`)) return;
+  async function reviseNow() {
+    if (!await confirmBox('Revise the wording', `Rev ${q.rev + 1} is created with the same prices. It is checked again before it can be sent.`, `Create Rev ${q.rev + 1}`)) return;
     const n = reviseWording(q.id); go(`quotations/${n.id}`);
-  });
+  }
+  function rejectNow() {
+    openModal({
+      title: `Customer rejected ${q.no}`, body: html`<div class="form-lines"><div class="field"><label for="rejWhy">Reason</label><input type="text" id="rejWhy" name="reason" placeholder="e.g. price too high, chose another vendor"></div></div>`,
+      actions: [{ label: 'Cancel' }, { label: 'Mark rejected', kind: 'danger', onClick: b => { reject(q.id, readForm(b).reason || 'Rejected by the customer'); renderQuotation(el, q.id); } }],
+    });
+  }
+  $('#rev', el)?.addEventListener('click', reviseNow);
   $('#send', el)?.addEventListener('click', () => sendDialog(el, q));
   $('#accept', el)?.addEventListener('click', () => acceptDialog(el, q));
-  $('#reject', el)?.addEventListener('click', () => openModal({
-    title: `Customer rejected ${q.no}`, body: html`<div class="form-lines"><div class="field"><label>Reason</label><input type="text" name="reason" placeholder="e.g. price too high, chose another vendor"></div></div>`,
-    actions: [{ label: 'Cancel' }, { label: 'Mark rejected', kind: 'danger', onClick: b => { reject(q.id, readForm(b).reason || 'Rejected by the customer'); renderQuotation(el, q.id); } }],
-  }));
 }
 
-function sendDialog(el, q) {
+// Also opened from the dashboard's "Send" button (done: what to redraw there).
+export function sendDialog(el, q, done = null) {
   const enq = store.get('enquiries', q.enquiryId);
   openModal({
     title: `Send ${q.no} Rev ${q.rev}`,
@@ -142,7 +155,7 @@ function sendDialog(el, q) {
       <div class="field"><label>Send by</label>${chipGroup('via', ['Email', 'WhatsApp', 'By hand'], enq.email ? 'Email' : 'WhatsApp')}</div>
       ${enq.email ? html`<div class="field"><label>Email</label><div class="ro">${enq.email}</div></div>` : ''}${enq.mobile ? html`<div class="field"><label>WhatsApp</label><div class="ro">${enq.mobile}</div></div>` : ''}
       <p class="small muted" style="margin-top:8px">Nothing is sent from the prototype: this records the date and the method, and the register shows "Quoted".</p></div>`,
-    actions: [{ label: 'Cancel' }, { label: 'Mark as sent', kind: 'primary', onClick: b => { markSent(q.id, readForm(b).via); toast(`${q.no} Rev ${q.rev} marked as sent`); renderQuotation(el, q.id); } }],
+    actions: [{ label: 'Cancel' }, { label: 'Mark as sent', kind: 'primary', onClick: b => { markSent(q.id, readForm(b).via); toast(`${q.no} Rev ${q.rev} marked as sent`); if (done) done(); else renderQuotation(el, q.id); } }],
   });
 }
 
@@ -200,20 +213,20 @@ function acceptDialog(el, q) {
     title: `Customer accepts ${q.no} Rev ${q.rev}`, wide: true,
     body: html`<form class="form-lines" onsubmit="return false">
       <div class="field"><label>Method</label>${chipGroup('method', vsOptions('ACCEPT_METHOD'), pre.method || 'PO')}</div>
-      <div class="field"><label>PO number</label><input type="text" name="poNo" value="${pre.poNo || ''}" placeholder="Customer's purchase order no."></div>
-      <div class="field"><label>PO date</label><input type="date" name="poDate" value="${pre.poDate || todayIso()}"></div>
-      <div class="field"><label>Accepted by</label><input type="text" name="contact" value="${pre.contact || enq.contactName}"></div>
+      <div class="field"><label for="acPo">PO number</label><input type="text" id="acPo" name="poNo" value="${pre.poNo || ''}" placeholder="Customer's purchase order no."></div>
+      <div class="field"><label for="acDate">PO date</label><input type="date" id="acDate" name="poDate" value="${pre.poDate || todayIso()}"></div>
+      <div class="field"><label for="acBy">Accepted by</label><input type="text" id="acBy" name="contact" value="${pre.contact || enq.contactName}"></div>
       ${(pre.attachments || []).length ? html`<div class="field"><label>Kept from ${q.partialFrom}</label><div class="ro">${pre.attachments.map(a => a.name).join(', ')}</div></div>` : ''}
-      ${q.type === 'AMC' ? html`<div class="field"><label>Payment Term</label><div class="ro">${vsLabel('PAYMENT_TERMS', q.paymentTerm)} (approved at the counter-check)</div></div>`
+      ${q.type === 'AMC' ? html`<div class="field"><label>Payment Term</label><div class="ro">${vsLabel('PAYMENT_TERMS', q.paymentTerm)} (approved with the quotation)</div></div>`
         : html`<div class="field"><label>Payment Term</label>${chipGroup('paymentTerm', vsOptions('PAYMENT_TERMS'), q.paymentTerm)}<div class="sub">A change to a non-immediate term needs the Approver before scheduling.</div></div>`}
-      <div class="field"><label>Attachment</label><input type="file" id="po" multiple></div>
-      ${split ? splitBlock(q, priced) : oneJob ? html`<div class="sub" style="margin-top:6px">One price for the whole job (Job costing). To do only some items now, revise the estimate to Line costing and send it again.</div>`
+      <div class="field"><label for="po">Attachment</label><div><label class="btn small attach">${icon('clip', 14)} Attach the PO<input type="file" id="po" multiple></label> <span class="small muted" id="poNames"></span></div></div>
+      ${split ? splitBlock(q, priced) : oneJob ? html`<div class="sub" style="margin-top:6px">One price for the whole job. To do only some items now, revise the estimate, set its Costing Level to "Line" (a price per line) and send it again.</div>`
         : priced.length > 1 ? html`<div class="form-sec">Accepted lines</div>${priced.map(r => html`<label class="check" style="display:flex;margin:4px 0"><input type="checkbox" name="line_${r.lineKey}" checked> ${r.description} · ${m2(r.amount)}</label>`)}
-        <div class="sub">Untick a line the customer does not want: the estimate is revised without it, shared costs are re-spread, and the next revision goes for the counter-check.</div>` : ''}
+        <div class="sub">Untick a line the customer does not want: the estimate is revised without it, shared costs are re-spread, and the next revision goes for approval.</div>` : ''}
       ${canAssign(q) ? techBlock() : ''}
     </form>`,
     onOpen: b => {
-      $('#po', b).addEventListener('change', e => { files = [...e.target.files]; });
+      $('#po', b).addEventListener('change', e => { files = [...e.target.files]; $('#poNames', b).textContent = files.map(f => f.name).join(', '); });
       if (split) bindSplit(b, q, priced);
       if (canAssign(q)) techOf = bindTech(b, q, () => { const d = readForm(b); return { decisions: split ? decisionsOf(d) : null, paymentTerm: d.paymentTerm,
         linesCut: !split && priced.length > 1 && priced.some(r => !d[`line_${r.lineKey}`]) }; });
@@ -221,12 +234,15 @@ function acceptDialog(el, q) {
     actions: [{ label: 'Cancel' }, { label: 'Accept', kind: 'primary', onClick: async b => {
       const d = readForm(b);
       if (d.method === 'PO' && !markInvalid(b, d.poNo ? [] : ['poNo'], 'Enter the PO number')) return false;
+      // A date far from today is a slip (a PO number typed into the date gave the year 0081): refuse it.
+      const badDate = dateProblem(d.poDate, { label: 'The PO date' });
+      if (badDate) return fieldError($('[name="poDate"]', b), badDate);
       const tech = techOf?.();
-      if (tech?.problems.length) { toast(tech.problems[0], 'bad'); return false; }
+      if (tech?.problems.length) return fieldError($('#techBox select, #techBox input', b) || $('[name="poNo"]', b), tech.problems[0]);
       const attachments = [...(pre.attachments || [])];
       for (const f of files) attachments.push(await saveBlob(f, { name: f.name, kind: 'po' }));
       const lineKeys = !split && priced.length > 1 ? priced.filter(r => d[`line_${r.lineKey}`]).map(r => r.lineKey) : null;
-      if (lineKeys && !lineKeys.length) { toast('Tick at least one line, or use "Customer rejected".', 'bad'); return false; }
+      if (lineKeys && !lineKeys.length) return fieldError($('[name^="line_"]', b), 'Tick at least one line, or use "Customer rejected" under More.');
       const decisions = split ? decisionsOf(d) : null;
       const reasons = split ? Object.fromEntries(priced.filter(r => decisions[r.lineKey] === 'NO').map(r => [r.lineKey, d[`why_${r.lineKey}`]])) : null;
       const r = accept(q.id, { method: d.method, poNo: d.poNo, poDate: d.poDate, contact: d.contact, attachments, paymentTerm: d.paymentTerm, lineKeys, decisions, reasons, followUp: d.followUp, schedule: tech?.slot || null });

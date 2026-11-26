@@ -7,7 +7,7 @@ export function approvalRules(t) {
   const rule = (code, docType, name, when, level, roleCode, condition = null) =>
     ({ id: `rul_${t}_${code}`, tenantId: t, code, name, docType, when, level, roleCode, condition, mode: 'any', active: true });
   return [
-    rule('QT_CHECK', 'quotation', 'Quotation counter-check', 'Every quotation', 1, 'APR'),
+    rule('QT_CHECK', 'quotation', 'Quotation approval', 'Every quotation', 1, 'APR'),
     rule('PAY_TERM', 'quotation', 'Payment term not immediate', 'Payment term is not Immediate', 1, 'APR', { field: 'paymentTerm', op: 'neq', value: 'IMMEDIATE' }),
     rule('QT_HIGH', 'quotation', 'Quotation over 10,000', 'Total with tax over 10,000', 2, 'MGT', { field: 'total', op: 'gt', value: 10000 }),
     // A payment term changed when the customer accepts (not Immediate) is approved before the job is scheduled.

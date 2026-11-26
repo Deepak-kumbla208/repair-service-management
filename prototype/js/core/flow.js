@@ -61,7 +61,7 @@ export function stagesFor(enq) {
   if (est.status === 'Draft' && !q) return steps;
   if (!q) return now('quotation');
   const qDone = q.status === 'Accepted';
-  set('quotation', { doc: `${q.no} Rev ${q.rev}`, route: `quotations/${q.id}`, status: q.status === 'Submitted' ? 'Counter-check' : q.status, state: qDone ? 'done' : ['Rejected'].includes(q.status) ? 'skip' : 'now' });
+  set('quotation', { doc: `${q.no} Rev ${q.rev}`, route: `quotations/${q.id}`, status: q.status === 'Submitted' ? 'Approval' : q.status, state: qDone ? 'done' : ['Rejected'].includes(q.status) ? 'skip' : 'now' });
   if (q.status === 'Rejected') { steps.slice(steps.indexOf(by('quotation')) + 1).forEach(s => { s.state = 'skip'; }); return steps; }
   if (est.status === 'Draft') set('estimation', { state: 'now', status: 'Revision being prepared' });
   if (!qDone) return steps;
@@ -112,3 +112,8 @@ function amcStages(enq, steps, set, now) {
 }
 
 export const currentStage = enq => stagesFor(enq).find(s => s.state === 'now') || null;
+// Plain names for the step bar and the lists (the Workflow popup keeps the names of the flow chart).
+const PLAIN = { estimation: 'Estimate', amcContract: 'Maintenance contract', amcVisits: 'Maintenance visits', closure: 'Job closed', contractClosure: 'Contract closed' };
+const PLAIN_STATUS = { 'BOQ study': 'Reviewing the customer\'s list', 'Counter-check': 'Waiting for approval', Approval: 'Waiting for approval', Submitted: 'Waiting for approval', 'Waiting for estimate': 'To make', 'To schedule': 'To schedule' };
+export const stageLabel = s => PLAIN[s.key] || s.name;
+export const stageStatus = s => PLAIN_STATUS[s.status] || s.status;

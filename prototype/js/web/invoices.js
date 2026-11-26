@@ -77,7 +77,7 @@ export function renderInvoice(el, id) {
   const pays = paymentsFor(inv.id);
   const fus = followUpsFor(inv.id);
   const canPay = inv.status === 'Posted' && balanceOf(inv) > 0 && auth.can('payment', 'create');
-  el.innerHTML = String(html`<div class="page" style="max-width:1500px">
+  el.innerHTML = String(html`<div class="page">
     <div class="page-head"><div class="grow">
       <div class="crumb"><a href="#/invoices">Invoice</a> › ${inv.contractId ? html`<a href="#/contracts/${inv.contractId}">${inv.contractNo}</a>` : html`<a href="#/jobs/${inv.jobId}">${inv.jobNo}</a>`}</div>
       <h1>${inv.no || 'Draft invoice'} · ${inv.customer} ${pill(inv.status, inv.status === 'Posted' ? 'green' : '')} ${payPill(inv)}</h1>

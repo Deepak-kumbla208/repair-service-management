@@ -42,7 +42,7 @@ export function renderMenuAccess(el) {
   const terms = state.q.toLowerCase();
   const shown = MENUS.filter(m => !terms || m.label.toLowerCase().includes(terms));
 
-  el.innerHTML = String(html`<div class="page" style="max-width:1500px">
+  el.innerHTML = String(html`<div class="page">
     ${pageHead({ crumb: 'Admin Setup', title: 'Menu Access', sub: `${auth.company().name} · ${roles.length} roles · ${MENUS.length} menus`,
       actions: locked ? '' : html`<div class="row">${changes ? html`<button class="btn" id="discard">Discard</button>` : ''}<button class="btn primary" id="save" ${changes && !problems.length ? '' : 'disabled'}>${changes ? `Save ${changes} change${changes > 1 ? 's' : ''}` : 'Save'}</button></div>` })}
     <div class="row" style="margin-bottom:10px;gap:6px"><span class="chips">${roles.map(r => html`<label class="chip"><input type="radio" name="role" value="${r.id}" ${r.id === role.id ? 'checked' : ''}><span>${r.name}${isAdminRole(r) ? ' 🔒' : ''}</span></label>`)}</span>
@@ -50,7 +50,7 @@ export function renderMenuAccess(el) {
     <div class="split" style="grid-template-columns:minmax(0,1fr) 320px">
       <div class="tbl-wrap" style="max-height:none"><table class="tbl mx"><thead><tr><th>Menu</th><th>Shows on</th>${COLS.map(a => html`<th>${ACTION_LABELS[a]}</th>`)}<th>Data</th><th></th></tr></thead><tbody>
         ${GROUPS.map(g => { const ms = shown.filter(m => m.group === g); return ms.length ? html`<tr class="grp"><td colspan="${COLS.length + 4}">${g}</td></tr>${ms.map(m => row(m, draft[m.key], saved[m.key], locked))}` : ''; })}
-      </tbody></table><p class="mini-note">A dot: the menu does not use that right. Cancelling is part of Edit. "Own": the role sees only work assigned to its users. Estimation · "See markup" / "Change markup": overhead and markup (set in Transaction Setup); without them the estimate shows overhead as one line and no markup; "Change markup" lets an approver change them at the counter-check.</p></div>
+      </tbody></table><p class="mini-note">A dot: the menu does not use that right. Cancelling is part of Edit. "Own": the role sees only work assigned to its users. Estimation · "See markup" / "Change markup": overhead and markup (set in Transaction Setup); without them the estimate shows overhead as one line and no markup; "Change markup" lets an approver change them at the approval.</p></div>
       <div>
         ${isAdminRole(role) ? html`<div class="note">The Admin role is locked: it always has every menu, on the web and the phone.</div>` : ''}
         ${changes ? html`<div class="card" style="border-color:${problems.length ? '#F09595' : '#F0D9AE'}"><div class="card-head"><h2>Saving ${changes > 1 ? 'these changes' : 'this change'} will</h2></div>

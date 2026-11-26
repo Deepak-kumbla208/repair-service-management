@@ -1,9 +1,11 @@
 // Phone: a new or edited sales enquiry, for roles that may create / edit enquiries on the phone (Menu Access).
 // The same rules as the web form: customer search or quick-create, contact, mobile (required), site or a new site,
 // type, product lines (Product, Qty, Unit, Description), and the job assessment with a technician.
+import { pickerHtml, bindPickers } from '../web/picker.js';
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, $$, go, readForm, markInvalid, toast, confirmBox, dateInput, timeInput, joinDateTime, icon, MIC } from '../core/ui.js';
+import { html, $, $$, go, readForm, markInvalid, fieldError, toast, confirmBox, dateInput, timeInput, joinDateTime, icon, MIC } from '../core/ui.js';
+import { trackDirty, clearDirty, setDirty } from '../core/ux.js';
 import { vsOptions, zones, itemChoices, itemName, productInfo, unitOptions } from '../core/lookups.js';
 import { findDuplicates, primaryContact } from '../core/customers.js';
 import { saveNewEnquiry, saveEnquiryChanges, cleanLines } from '../core/enquiries.js';
@@ -62,7 +64,7 @@ export function mEnquiryForm(page, id) {
       return html`<div class="m-card"><b>${c.name}</b> <span class="muted small">${c.code}</span>${!enq ? html` <button type="button" class="btn link small" id="changeCust">Change</button>` : ''}</div>`;
     }
     if (st.newCustomer) return html`${fld('New customer', html`<input name="newName" value="${st.newName}" placeholder="Company or person">`, true)}<button type="button" class="btn link small" id="pickCust">Choose an existing customer</button>`;
-    return html`${fld('Customer', html`<input type="search" id="custQ" value="${st.q}" placeholder="Name, code, mobile or email" autocomplete="off">`, true)}
+    return html`${fld('Customer', html`<input type="search" id="custQ" data-nodirty value="${st.q}" placeholder="Name, code, mobile or email" autocomplete="off" aria-label="Search for the customer">`, true)}
       <div id="custRes">${custResults()}</div>
       <button type="button" class="btn link small" id="newCust">${icon('plus', 14)} New customer</button>`;
   }
@@ -84,11 +86,11 @@ export function mEnquiryForm(page, id) {
   function linesPart() {
     const choices = itemChoices(st.lines.map(l => l.itemRef));
     return html`${st.lines.map((l, i) => html`<div class="m-line" data-line="${i}">
-      <div class="row"><select data-c="item" class="grow" aria-label="Product"><option value="">No product</option>${choices.map(g => html`<optgroup label="${g.group}">${g.options.map(o => html`<option value="${o.value}" ${o.value === l.itemRef ? 'selected' : ''}>${o.label}</option>`)}</optgroup>`)}</select>
-        <button type="button" class="btn small" data-rm="${i}" aria-label="Remove this line">－</button></div>
-      ${l.itemRef ? html`<div class="row" style="margin-top:6px"><input type="number" min="0" step="any" data-c="qty" value="${l.qty || 1}" style="width:80px" aria-label="Quantity"><select data-c="unit" style="width:90px" aria-label="Unit">${(u => unitOptions(u).map(c => html`<option ${c === u ? 'selected' : ''}>${c}</option>`))(l.unit || productInfo(l.itemRef)?.unit || 'Nos')}</select><span class="small muted grow">${productInfo(l.itemRef)?.code || ''}</span></div>`
+      <div class="row">${pickerHtml({ attrs: 'data-c="item"', value: l.itemRef, label: l.itemRef ? itemName(l.itemRef) : '', placeholder: 'Type a product or part (optional)', ariaLabel: `Product, line ${i + 1}`, cls: 'grow' })}
+        <button type="button" class="btn small" data-rm="${i}" aria-label="Remove line ${i + 1}" title="Remove this line">－</button></div>
+      ${l.itemRef ? html`<div class="row" style="margin-top:8px"><input type="number" min="0" step="any" data-c="qty" value="${l.qty || 1}" style="width:88px" aria-label="Quantity"><select data-c="unit" style="width:100px" aria-label="Unit">${(u => unitOptions(u).map(c => html`<option ${c === u ? 'selected' : ''}>${c}</option>`))(l.unit || productInfo(l.itemRef)?.unit || 'Nos')}</select><span class="small muted grow">${productInfo(l.itemRef)?.code || ''}</span></div>`
         : html`<input type="hidden" data-c="qty" value=""><input type="hidden" data-c="unit" value="">`}
-      <div class="with-mic" style="margin-top:6px"><input data-c="desc" name="line_desc_${i}" value="${l.description}" placeholder="${l.itemRef ? 'Where / what is wrong' : 'Describe what the customer needs'}"><button type="button" class="mic" data-mic="line_desc_${i}" title="Voice input">${MIC}</button></div>
+      <div class="field" style="margin:8px 0 0"><div class="with-mic"><input type="text" data-c="desc" name="line_desc_${i}" value="${l.description}" placeholder="${l.itemRef ? 'Where / what is wrong' : 'Describe what the customer needs'}" aria-label="Line ${i + 1}: ${l.itemRef ? 'where and what is wrong' : 'what the customer needs'}"><button type="button" class="mic" data-mic="line_desc_${i}" title="Voice input" aria-label="Voice input">${MIC}</button></div></div>
     </div>`)}<button type="button" class="add-dashed" id="addLine">${icon('plus', 14)} Add a line</button>`;
   }
   function nextPart() {
@@ -121,10 +123,12 @@ export function mEnquiryForm(page, id) {
     bindMics(page.body);
   }
   const redraw = () => { collect(); paint(); };
+  bindPickers(page.body, () => itemChoices(st.lines.map(l => l.itemRef)));
 
   page.body.addEventListener('click', e => {
     const t = e.target.closest('button');
     if (!t) return;
+    if (t.dataset.pick || t.dataset.rm || ['newCust', 'addLine'].includes(t.id)) setDirty(); // a choice made here is unsaved work too
     if (t.dataset.pick) { collect(); st.customerId = t.dataset.pick; st.q = ''; fillContact(store.get('customers', st.customerId)); paint(); return; }
     if (t.id === 'newCust') { collect(); Object.assign(st, { newCustomer: true, customerId: '', siteId: '', newSite: true }); paint(); return; }
     if (t.id === 'pickCust' || t.id === 'changeCust') { collect(); Object.assign(st, { newCustomer: false, customerId: '', q: '' }); paint(); return; }
@@ -152,14 +156,15 @@ export function mEnquiryForm(page, id) {
   async function saveNow() {
     collect();
     const f = $('#mf', page.body);
-    if (!enq && !st.customerId && !st.newCustomer) { toast('Choose the customer, or add a new one', 'bad'); return; }
+    // What is missing shows in red under its field, with the cursor in the first one (no corner message).
+    if (!enq && !st.customerId && !st.newCustomer) { fieldError($('#custQ', f), 'Choose the customer, or add a new one'); return; }
     const missing = ['contactName', 'mobile'].filter(k => !st[k]);
     if (st.newCustomer && !st.newName) missing.push('newName');
     if ((st.newCustomer || st.newSite) && !st.siteName) missing.push('siteName');
     if (st.channel === 'OTHER' && !st.channelOther) missing.push('channelOther');
-    if (!markInvalid(f, missing)) { toast('Fill in the required fields', 'bad'); return; }
+    if (!markInvalid(f, missing)) return;
     const lines = cleanLines(st.lines);
-    if (!lines.length) { toast('Add at least one line: a product or a description of what the customer needs', 'bad'); return; }
+    if (!lines.length) { fieldError($('[data-c="desc"]', f), 'Add at least one line: a product, or what the customer needs'); return; }
     if (st.newCustomer && findDuplicates({ name: st.newName, mobile: st.mobile, email: st.email }).length
       && !(await confirmBox('Possible duplicate', 'A customer with the same mobile, email or name already exists. Create a new customer anyway?', 'Create new'))) return;
     const c = st.customerId ? store.get('customers', st.customerId) : null;
@@ -176,11 +181,13 @@ export function mEnquiryForm(page, id) {
       ? { technicianId: st.technicianId, visitAt: st.visitDate ? joinDateTime(st.visitDate, st.visitTime) : null, confirmedBy: st.confirmedBy } : null;
     const saved = enq ? saveEnquiryChanges(enq.id, data, { newSite, assign }) : saveNewEnquiry(data, { newCustomer, newSite, assign });
     toast(`${saved.no} saved · ${saved.status}`);
+    clearDirty();
     go(`m/enquiry/${saved.id}`);
   }
 
   paint();
-  const foot = page.setFoot(html`<a class="btn" href="#/${enq ? `m/enquiry/${enq.id}` : 'm/enquiries'}">Cancel</a><button class="btn primary" id="saveEnq">${enq ? 'Save changes' : 'Save enquiry'}</button>`);
+  trackDirty(page.body); // leaving with something typed asks first; Save and Cancel do not
+  const foot = page.setFoot(html`<a class="btn" data-discard href="#/${enq ? `m/enquiry/${enq.id}` : 'm/enquiries'}">Cancel</a><button class="btn primary" id="saveEnq">${enq ? 'Save changes' : 'Save enquiry'}</button>`);
   $('#saveEnq', foot).onclick = save;
 }
 

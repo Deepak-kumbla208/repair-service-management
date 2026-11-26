@@ -10,6 +10,7 @@ import { isOverdue, visitDate, DONE_VISIT } from './visits.js';
 import { estimateSummary } from './estimates.js';
 import { myTasks } from './workflow.js';
 import { fmtDate } from './ui.js';
+import { sinceOf } from './notify.js';
 
 const ym = ds => String(ds || '').slice(0, 7);
 const zoneOf = enquiryId => store.get('enquiries', enquiryId)?.zoneId || '';
@@ -98,20 +99,25 @@ export function byZone(period) {
 // rank: 0 overdue, 1 someone waits now, 2 today's work, 3 the rest. Each item opens its document or list.
 export function nextActions() {
   const t = todayStr(), out = [];
-  const add = (menu, rank, what, doc, customer, when, route, button, at = '') => { if (auth.can(menu)) out.push({ rank, what, doc, customer, when, route, button, at }); };
+  // x: { since: when the item reached this state (for the "New" mark), act + id: the button does the step itself
+  // (UX audit, finding 3); without act the button only opens the page and is called "Open". }
+  const add = (menu, rank, what, doc, customer, when, route, button, at = '', x = {}) => { if (auth.can(menu)) out.push({ rank, what, doc, customer, when, route, button, at, since: x.since || at || '', act: x.act || '', id: x.id || '' }); };
   openInvoices().filter(o => o.dueIn < 0).forEach(o => add('payment', 0, 'Invoice not paid', o.inv.no, o.inv.customer, `${-o.dueIn} days late · ${o.balance.toFixed(2)}`, `invoices/${o.inv.id}`, 'Log follow-up', o.inv.dueDate));
-  store.list('amcVisits', isOverdue).forEach(v => add('amcScheduling', 0, 'AMC visit not done', `${v.contractNo} · ${v.n} of ${v.of}`, v.customer, `since ${fmtDate(visitDate(v))}`, 'amc-scheduling', 'Assign', visitDate(v)));
-  myTasks().filter(x => x.kind === 'leaveSite').forEach(x => add('job', 1, 'Technician asks to leave', x.docNo, x.customer, 'waiting', `tasks/${x.id}`, 'OK to leave', x.createdAt));
+  store.list('amcVisits', isOverdue).forEach(v => add('amcScheduling', 0, 'Maintenance visit not done', `${v.contractNo} · ${v.n} of ${v.of}`, v.customer, `since ${fmtDate(visitDate(v))}`, 'amc-scheduling', 'Assign', visitDate(v)));
+  myTasks().filter(x => x.kind === 'leaveSite').forEach(x => add('job', 1, 'Technician asks to leave', x.docNo, x.customer, x.failed?.length ? `check: ${x.failed[0]}` : 'every check passed', `tasks/${x.id}`, 'OK to leave', x.createdAt,
+    { since: x.createdAt, act: x.failed?.length ? '' : 'okLeave', id: x.id }));
   myTasks().filter(x => x.kind === 'renewal').forEach(x => add('amcContract', 2, 'Renew contract', x.docNo, x.customer, x.title.replace(/^.*\((.*)\)$/, '$1'), `tasks/${x.id}`, 'Renew', x.createdAt));
   store.list('quotations', q => q.status === 'Sent' && q.validUntil && q.validUntil <= addDays(t, 2)).forEach(q => add('quotation', 1, 'Quotation expires soon', q.no, q.customer, `valid until ${fmtDate(q.validUntil)}`, `quotations/${q.id}`, 'Chase', q.validUntil));
-  store.list('quotations', q => q.status === 'Approved').forEach(q => add('quotation', 2, 'Quotation to send', `${q.no} Rev ${q.rev}`, q.customer, `total ${Number(q.total).toFixed(2)}`, `quotations/${q.id}`, 'Send', q.approvedAt || q.updatedAt));
-  store.list('quotations', q => q.status === 'Returned').forEach(q => add('quotation', 2, 'Quotation returned', `${q.no} Rev ${q.rev}`, q.customer, q.returnNote?.comment || 'by the Approver', `quotations/${q.id}`, 'Revise', q.updatedAt));
+  store.list('quotations', q => q.status === 'Approved').forEach(q => add('quotation', 2, 'Quotation to send', `${q.no} Rev ${q.rev}`, q.customer, `total ${Number(q.total).toFixed(2)}`, `quotations/${q.id}`, 'Send', q.approvedAt || q.updatedAt,
+    { since: sinceOf(q), act: auth.can('quotation', 'edit') ? 'send' : '', id: q.id }));
+  store.list('quotations', q => q.status === 'Returned').forEach(q => add('quotation', 2, 'Quotation returned', `${q.no} Rev ${q.rev}`, q.customer, q.returnNote?.comment || 'by the Approver', `quotations/${q.id}`, 'Revise', q.updatedAt, { since: sinceOf(q) }));
   store.list('jobs', j => j.status === 'To schedule').forEach(j => add('job', 2, 'Job to schedule', j.no, j.customer, j.termApproved || j.paymentTerm === 'IMMEDIATE' ? 'PO received' : 'waiting for the term approval', 'jobs', 'Schedule', j.createdAt));
   store.list('contracts', c => c.status === 'Draft').forEach(c => add('amcContract', 2, 'Contract to activate', c.no, c.customer, 'PO received', `contracts/${c.id}`, 'Activate', c.createdAt));
-  store.list('enquiries', e => ['Assessed', 'BOQ study', 'Waiting for estimate'].includes(e.status)).forEach(e => add('estimation', 3, 'Estimate to make', e.no, e.customerName, e.status === 'Assessed' ? 'report received' : e.status.toLowerCase(), `enquiries/${e.id}`, 'Create estimate', e.receivedAt));
+  store.list('enquiries', e => ['Assessed', 'BOQ study', 'Waiting for estimate'].includes(e.status)).forEach(e => add('estimation', 3, 'Estimate to make', e.no, e.customerName, e.status === 'Assessed' ? 'site report received' : e.status === 'BOQ study' ? 'the customer\'s list is in' : 'no job assessment needed', `enquiries/${e.id}`, 'Create estimate', e.receivedAt,
+    { since: sinceOf(e), act: auth.can('estimation', 'create') ? 'estimate' : '', id: e.id }));
   store.list('inspections', i => i.status === 'To assign').forEach(i => { const e = store.get('enquiries', i.enquiryId); add('inspection', 1, 'Assessment to assign', e?.no || '', e?.customerName || '', 'no technician yet', `assessments/${i.id}`, 'Assign', i.createdAt); });
   const drafts = store.list('invoices', i => i.status === 'Draft');
-  if (drafts.length) add('invoice', 3, 'Invoices to post', `${drafts.length} draft${drafts.length > 1 ? 's' : ''}`, [...new Set(drafts.map(i => i.customer))].slice(0, 2).join(', '), `${drafts.filter(i => i.contractId).length} AMC instalment(s)`, 'invoices', 'Post', '');
+  if (drafts.length) add('invoice', 3, 'Invoices to post', `${drafts.length} draft${drafts.length > 1 ? 's' : ''}`, [...new Set(drafts.map(i => i.customer))].slice(0, 2).join(', '), `${drafts.filter(i => i.contractId).length} maintenance instalment(s)`, 'invoices', 'Post', '');
   store.list('amcVisits', v => v.status === 'Done').forEach(v => add('amcExecution', 3, 'Service report to file', `${v.contractNo} · ${v.n} of ${v.of}`, v.customer, 'signed by the customer', `amc-visits/${v.id}`, 'Check & file', v.updatedAt));
   return out.sort((a, b) => a.rank - b.rank || String(a.at).localeCompare(String(b.at)));
 }

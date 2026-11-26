@@ -1,51 +1,25 @@
-// Repair estimate page, stacked: customer and estimate details in a header that folds to one line, then Costing
-// (Costing Level, Shared Costs, margin), the cost sheet in the team lead's tabs, and the revisions. Pre-filled from
-// the site report and the masters; changes save as you type. "Create quotation" makes the quotation (or its next revision) from this revision. AMC and General
-// Servicing estimates open the AMC page (amc-estimate.js).
+// Repair estimate page, stacked: customer and estimate details in a header that folds to one line, then the Costing
+// settings and the cost sheet in the team lead's Excel tabs (estimate-tabs.js), then the revisions. The Excel tabs
+// are the only view of an estimate (user, 26 Nov 2026; the simple view built for the UX audit's finding 6 is gone).
+// Pre-filled from the site report and the masters; changes save as you type. "Create quotation" makes the quotation
+// (or its next revision) from this revision. AMC and General Servicing estimates open the AMC page (amc-estimate.js).
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, $$, go, on, debounce, fmtNum, pill, toast, openModal, chipGroup, foldHeader } from '../core/ui.js';
+import { html, $, $$, go, on, debounce, fmtNum, pill, toast, openModal, foldHeader } from '../core/ui.js';
 import { vsOptions, zoneLabel } from '../core/lookups.js';
 import { estimateSummary, canEdit, saveEstimate, reviseEstimate, estimateProblems, revisions, canRevise as mayRevise } from '../core/estimates.js';
 import { createFromEstimate } from '../core/quotations.js';
-import { TABS, tabHtml, newRow, applyChange } from './estimate-tabs.js';
+import { TABS, tabHtml, tabLabel, newRow, applyChange } from './estimate-tabs.js';
+import { m2, partGroups, redraw, segGroup, costFacts, openMarkupBox } from './estimate-view.js';
+import { bindPickers } from './picker.js';
 import { openWorkflow } from './enquiry-view.js';
 import { renderAmcEstimate } from './amc-estimate.js';
 import { trailHtml } from './doc-trail.js';
 
-const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const pc = v => `${(v * 100).toFixed(1)} %`;
 const TAB_KEY = 'rsmEstTab';
 const row = (label, value) => html`<div class="field"><div class="field-label">${label}</div><div class="ro">${value || html`<span class="muted">—</span>`}</div></div>`;
-
-function summaryTab(est, ctx, s, sees) {
-  const desc = ctx.editable
-    ? html`<textarea data-h="description" rows="2" style="border:0;border-bottom:1px solid #C9C7BE;border-radius:0;min-height:40px">${est.header.description}</textarea>`
-    : est.header.description;
-  const lines = est.costingLevel === 'LINE' ? html`<table class="tbl"><thead><tr><th style="width:30px">#</th><th>Line</th><th class="num">${est.sharedCosts === 'SPREAD' ? 'Direct cost incl. shared' : 'Direct cost'}</th><th class="num">Price</th></tr></thead><tbody>
-      ${s.lines.map((l, i) => html`<tr><td>${i + 1}</td><td class="wrap">${l.isShared ? html`<b>${est.sharedLabel}</b>` : ctx.editable ? html`<input type="text" data-t="lines" data-i="${est.lines.findIndex(x => x.key === l.key)}" data-f="description" value="${l.description}" style="width:100%">` : l.description}</td>
-        <td class="num">${m2(l.direct + (l.shared || 0))}</td><td class="num"><b>${m2(l.rounded)}</b></td></tr>`)}
-      <tr class="sum"><td></td><td>${est.sharedCosts === 'SPREAD' ? html`<span class="muted">Shared costs spread by each line's direct cost</span>` : ''}</td><td class="num">${m2(s.direct)}</td><td class="num"><b>${m2(s.subtotal)}</b></td></tr>
-    </tbody></table><p class="mini-note">Line costing: one priced row per line on the quotation. Any rounding cent sits on the biggest line, so the total equals Job costing.</p>`
-    : html`<table class="tbl"><thead><tr><th style="width:30px">S#</th><th>Description</th><th class="num" style="width:50px">Qty</th></tr></thead><tbody><tr><td>1</td><td class="wrap">${desc}</td><td class="num">1</td></tr></tbody></table>
-      <p class="mini-note">Job costing: the quotation shows one price for the whole job.</p>`;
-  // Without the "See markup" right: overhead is one line, and margin and the percentages are not shown.
-  const head = (label, v, p, cls = '') => html`<tr class="${cls}"><td>${label}</td><td class="num">${m2(v)}</td>${sees ? html`<td class="num">${p == null ? '' : pc(p)}</td>` : ''}</tr>`;
-  return html`${lines}
-    <div class="split" style="margin-top:12px">
-      <table class="tbl cost-tbl"><thead><tr><th>Cost Head</th><th class="num">Amount (${auth.company().currency})</th>${sees ? html`<th class="num" style="white-space:normal">% of Selling Price</th>` : ''}</tr></thead><tbody>
-        ${head('Labour', s.heads.labour, s.pct.labour)}${head('Transport', s.heads.transport, s.pct.transport)}${head('Materials', s.heads.materials, s.pct.materials)}${head('Equipment', s.heads.equipment, s.pct.equipment)}
-        ${head('DIRECT COST', s.direct, s.pct.direct, 'sum')}${head('Overhead', s.overhead, s.pct.overhead)}${sees ? head('COST BEFORE MARGIN', s.cbm, s.pct.cbm, 'sum') : ''}
-        ${sees ? head('Margin', s.margin, s.pct.margin) : ''}${s.fixed ? head('Fixed-price products (as priced)', s.fixed, s.sell ? s.fixed / s.sell : 0) : ''}${head('SELLING PRICE', s.subtotal, s.sell ? 1 : 0, 'sum')}${head(`${est.taxLabel || 'Tax'} ${fmtNum(est.taxRate)} %`, s.tax, null)}${head('TOTAL QUOTE', s.total, null, 'grand')}
-      </tbody></table>
-      <div><h3 style="margin:0 0 6px">Transport – zone wise</h3>
-        <table class="tbl"><thead><tr><th>Zone</th><th class="num">Cost</th><th class="num">% of Transport</th></tr></thead><tbody>
-          ${s.transportByZone.map(z => html`<tr><td>${z.label}</td><td class="num">${m2(z.cost)}</td><td class="num">${s.heads.transport ? pc(z.cost / s.heads.transport) : '0.0 %'}</td></tr>`)}
-          <tr><td>Other / unassigned</td><td class="num">${m2(s.transportOther)}</td><td class="num">${s.heads.transport ? pc(s.transportOther / s.heads.transport) : '0.0 %'}</td></tr>
-          <tr class="sum"><td><b>TOTAL TRANSPORT</b></td><td class="num"><b>${m2(s.heads.transport)}</b></td><td class="num"><b>${s.heads.transport ? '100.0 %' : '0.0 %'}</b></td></tr>
-        </tbody></table></div>
-    </div>`;
-}
+const cell = (t, i, f) => `[data-t="${t}"][data-i="${i}"][data-f="${f}"]`;
+const FIRST = { labour: 'labourId', transport: 'zoneId', materials: 'itemId', equipment: 'equipmentId', overheads: 'name' };
 
 const kpiHtml = (s, cur, sees) => html`<div class="kpi"><div><b>${m2(s.total)}</b><span>Total quote (${cur})</span></div>${sees ? html`<div><b>${fmtNum(s.markupPct, 1)} %</b><span>Markup on cost</span></div><div><b>${fmtNum(s.marginOnPricePct, 1)} %</b><span>Margin on price</span></div>`
   : html`<div><b>${m2(s.subtotal)}</b><span>Selling price before tax</span></div>`}</div>`;
@@ -62,16 +36,14 @@ export function renderEstimate(el, id) {
   // Overhead and markup are set by the Admin; the Overhead & Margin tab and the margin fields follow the role's rights.
   const sees = auth.seesMarkup(), mayPrice = ctx.editable && auth.changesMarkup();
   const tabs = TABS.filter(([k]) => k !== 'overheads' || sees);
-  const kpi = s => kpiHtml(s, cur, sees);
   const revs = revisions(est.no);
   const newer = revs.find(r => r.rev > est.rev);
-  const tabLabel = (k, label) => (k === 'shutters' ? `${label} (${est.shutters.length + (est.fixed || []).length})` : k === 'materials' ? `${label} (${est.materials.length})` : label);
   let tab = sessionStorage.getItem(TAB_KEY) || 'summary';
   if (!tabs.some(([k]) => k === tab)) tab = 'summary';
   const canRevise = !newer && mayRevise(est);
   const rep = est.reportId ? store.get('siteReports', est.reportId) : null;
 
-  el.innerHTML = String(html`<div class="page" style="max-width:1500px">
+  el.innerHTML = String(html`<div class="page">
     <div class="page-head"><div class="grow">
       <div class="crumb"><a href="#/estimates">Estimation</a> › <a href="#/enquiries/${enq.id}">${enq.no}</a></div>
       <h1>${est.no} · Rev ${est.rev} · ${est.header.customer} ${pill(est.status)}</h1>
@@ -87,21 +59,21 @@ export function renderEstimate(el, id) {
       ${canRevise ? html`<button class="btn small" id="revise2">Revise estimate</button>` : est.status === 'Draft' ? html`<span class="small">Change the prices below, then create the quotation revision.</span>` : ''}</div>` : ''}
     ${trailHtml(enq.id, est.id)}
     <div class="stack">
-      ${foldHeader({ id: `est-${est.id}`, title: 'Customer & estimate details', open: ctx.editable,
+      ${foldHeader({ id: `est-${est.id}`, title: 'Customer & estimate details', open: false,
         summary: [est.header.customer, est.header.contact, est.header.phone, est.header.site, `${est.no} Rev ${est.rev}`, est.header.date].filter(Boolean).join(' · '),
         body: html`<div class="fold-cols form-lines">
           <div><div class="form-sec">Customer</div>
           ${row('Customer Name', est.header.customer)}${row('Contact Person', est.header.contact)}${row('Phone No', est.header.phone)}
           ${row('Site Location', html`${est.header.site}${enq.zoneId ? html` · <span class="zone-chip">${zoneLabel(enq.zoneId).split(' ')[0]}</span>` : ''}`)}</div>
           <div><div class="form-sec">Estimate</div>
-          ${row('Quotation Ref No', `${est.no} · Rev ${est.rev}`)}
-          ${ctx.editable ? html`<div class="field"><label>Date</label><input type="date" data-h="date" value="${est.header.date}"></div>
-            <div class="field"><label>Findings</label><input type="text" data-h="findings" value="${est.header.findings}"></div>` : html`${row('Date', est.header.date)}${row('Findings', est.header.findings)}`}</div>
+          ${row('Estimate No', `${est.no} · Rev ${est.rev}`)}
+          ${ctx.editable ? html`<div class="field"><label for="est-date">Date</label><input type="date" id="est-date" data-h="date" value="${est.header.date}"></div>
+            <div class="field"><label for="est-findings">Findings</label><textarea id="est-findings" data-h="findings" rows="2">${est.header.findings}</textarea></div>` : html`${row('Date', est.header.date)}${row('Findings', est.header.findings)}`}</div>
         </div>` })}
-      <div class="card"><div class="card-head"><h2>Costing</h2></div><div class="form-lines fcols" id="props"></div></div>
+      <div class="card est-costing" role="group" aria-labelledby="costH-${est.id}"><h2 id="costH-${est.id}">Costing</h2><div class="est-props" id="props"></div></div>
       <div class="card"><div class="card-head"><h2>Cost sheet</h2></div>
         <div id="kpi"></div>
-        <div class="etabs" id="tabs">${tabs.map(([k, label]) => html`<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${tabLabel(k, label)}</button>`)}</div>
+        <div class="etabs" id="tabs">${tabs.map(([k, label]) => html`<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${tabLabel(k, label, est)}</button>`)}</div>
         <div id="tab"></div>
       </div>
       <div class="card"><div class="card-head"><h2>Revisions</h2></div><div class="form-lines fcols">
@@ -109,42 +81,105 @@ export function renderEstimate(el, id) {
     </div>
   </div>`);
 
-  // Costing: repainted when Costing Level changes (Shared Costs shows only for Line costing).
+  // Costing on one row (user's choice A, 26 Nov 2026): the two switches, then the figures set by the Admin. Shared Costs
+  // shows only for Line costing; overheads and the markup only with "See markup"; Change only with "Change markup".
+  let mkClose = null;
   const paintProps = () => {
-    $('#props', el).innerHTML = String(html`
-      <div class="field"><label>Costing Level</label>${chipGroup('costingLevel', vsOptions('COSTING_LEVEL'), est.costingLevel, !ctx.editable)}</div>
-      ${est.costingLevel === 'LINE' ? html`<div class="field"><label>Shared Costs</label>${chipGroup('sharedCosts', vsOptions('SHARED_COSTS'), est.sharedCosts, !ctx.editable)}</div>` : ''}
-      ${sees ? html`${row('Overheads', est.overheads.map(o => (o.basis === 'FIXED' ? `${m2(o.value)} fixed` : `${fmtNum(o.value)} % of direct cost`)).join(' + '))}
-      <div class="field"><label>Margin basis</label>${chipGroup('marginBasis', vsOptions('MARGIN_BASIS'), est.marginBasis, !mayPrice)}</div>
-      ${mayPrice ? html`<div class="field"><label>Margin %</label><input type="number" step="any" data-h="marginPct" value="${est.marginPct}"></div>` : row('Margin %', `${fmtNum(est.marginPct)} %`)}` : ''}
-      ${row('Tax', est.taxCode ? `${est.taxCode} · ${est.taxLabel} ${fmtNum(est.taxRate)} %` : 'No tax charged')}`);
+    const box = $('#props', el);
+    if (!box) return;
+    box.innerHTML = String(html`
+      <span class="cs-item"><span class="cs-l">Costing Level</span>${segGroup('costingLevel', vsOptions('COSTING_LEVEL'), est.costingLevel, !ctx.editable, 'Costing Level')}</span>
+      ${est.costingLevel === 'LINE' ? html`<span class="cs-item"><span class="cs-l">Shared Costs</span>${segGroup('sharedCosts', vsOptions('SHARED_COSTS'), est.sharedCosts, !ctx.editable, 'Shared Costs')}</span>` : ''}
+      ${costFacts(est, { sees, change: mayPrice, open: !!mkClose })}`);
   };
+  const openMarkup = btn => {
+    mkClose = openMarkupBox(el, est, btn, back => { mkClose = null; paintProps(); if (back) $('#mkChange', el)?.focus(); });
+    paintProps();
+  };
+  on(el, 'click', '#mkChange', (e, b) => { if (mkClose) mkClose(true); else openMarkup(b); });
 
+  // ---------- Drawing ----------
   const paint = () => {
     const s = estimateSummary(est);
-    $('#kpi', el).innerHTML = String(kpi(s));
-    $$('#tabs [data-tab]', el).forEach(b => { b.textContent = tabLabel(b.dataset.tab, tabs.find(([k]) => k === b.dataset.tab)[1]); });   // the counts follow added and removed rows
-    $('#tab', el).innerHTML = String(tab === 'summary' ? summaryTab(est, ctx, s, sees) : html`<div class="tab-scroll">${tabHtml(tab, est, tab === 'overheads' ? { ...ctx, editable: mayPrice } : ctx, s)}</div>`);
+    $('#kpi', el).innerHTML = String(kpiHtml(s, cur, sees));
+    $$('[data-tab]', el).forEach(b => { b.textContent = tabLabel(b.dataset.tab, tabs.find(([k]) => k === b.dataset.tab)[1], est); });
+    $('#tab', el).innerHTML = String(html`<div class="tab-scroll">${tabHtml(tab, est, tab === 'overheads' ? { ...ctx, editable: mayPrice } : ctx, s)}</div>`);
   };
+  // Redraw without the page jumping or the cursor getting lost; after a change the cursor first reaches where it is going.
+  const refresh = (opts = {}) => redraw(el, paint, { box: () => $('#tab', el), ...opts });
+  let due = 0;
+  const later = () => { clearTimeout(due); due = setTimeout(() => refresh(), 0); };
   const persist = debounce(() => saveEstimate(est.id, est), 250);
-  const save = () => { persist(); };
+  const live = () => { $('#kpi', el).innerHTML = String(kpiHtml(estimateSummary(est), cur, sees)); };
 
-  // Edits: header fields (data-h), table cells (data-t / data-i / data-f), chips (costing, shared costs, margin basis).
+  // "(parts: 2 × Tension spring)" at the end of a line's text follows the line's parts while the text still ends the
+  // way the estimate wrote it (a text rewritten by hand is left alone), so nothing is typed twice.
+  const partsText = key => { const m = est.materials.filter(x => x.lineKey === key && x.name); return m.length ? ` (parts: ${m.map(x => `${x.qty} × ${x.name}`).join(', ')})` : ''; };
+  const withParts = fn => {
+    const was = new Map(est.lines.filter(l => !l.partKey).map(l => [l.key, partsText(l.key)]));
+    fn();
+    est.lines.forEach(l => {
+      const old = was.get(l.key), now = was.has(l.key) ? partsText(l.key) : old;
+      if (old === now) return;
+      const text = String(l.description || '');
+      if (old && text.endsWith(old)) l.description = text.slice(0, -old.length) + now;
+      else if (!old && text && !text.includes('(parts:')) l.description = text + now;
+    });
+  };
+
+  // ---------- Rows: add (the cursor goes to the new row), remove (with Undo) ----------
+  const addRow = t => {
+    est[t].push(newRow(t, est)); persist();
+    refresh({ focus: { sel: cell(t, est[t].length - 1, FIRST[t]), scroll: true } });
+  };
+  const removeRow = (t, i) => {
+    let gone;
+    withParts(() => { [gone] = est[t].splice(i, 1); });
+    persist(); refresh();
+    toast(`${gone.name || gone.trade || gone.zoneLabel || 'The row'} removed from the estimate`, '', { undo: () => { withParts(() => est[t].splice(Math.min(i, est[t].length), 0, gone)); persist(); refresh(); } });
+  };
+
+  // ---------- Edits: header fields (data-h), cells (data-t / data-i / data-f), chips (costing, shared costs, margin basis) ----------
   const read = t => (t.type === 'number' ? (t.value === '' ? 0 : Number(t.value)) : t.value);
   el.addEventListener('input', e => {
     const t = e.target;
-    if (t.dataset.h) { if (t.dataset.h === 'marginPct') est.marginPct = read(t); else est.header[t.dataset.h] = read(t); save(); $('#kpi', el).innerHTML = String(kpi(estimateSummary(est))); }
-    else if (t.dataset.t && t.tagName !== 'SELECT') { est[t.dataset.t][+t.dataset.i][t.dataset.f] = read(t); save(); $('#kpi', el).innerHTML = String(kpi(estimateSummary(est))); }
+    if (t.dataset.h) { if (t.dataset.h === 'marginPct') { est.marginPct = read(t); paintProps(); } else est.header[t.dataset.h] = read(t); persist(); live(); }
+    else if (t.dataset.t && t.tagName !== 'SELECT' && t.type !== 'hidden') {
+      const set = () => { est[t.dataset.t][+t.dataset.i][t.dataset.f] = read(t); };
+      if (t.dataset.t === 'materials') withParts(set); else set();
+      persist(); live();
+    }
   });
   el.addEventListener('change', e => {
-    const t = e.target;
-    if (t.dataset.t) { est[t.dataset.t][+t.dataset.i][t.dataset.f] = read(t); applyChange(est, t.dataset.t, +t.dataset.i, t.dataset.f); save(); paint(); }
-    else if (t.dataset.h === 'marginPct') paint();
-    else if (['costingLevel', 'sharedCosts', 'marginBasis'].includes(t.name)) { est[t.name] = t.value; save(); paintProps(); paint(); }
+    const t = e.target, d = t.dataset;
+    if (!t.isConnected) return;
+    if (d.t) {
+      const i = +d.i, part = d.t === 'materials' && d.f === 'itemId';
+      // An emptied part box changes nothing (the row is removed with its ✕); a picked part sends the cursor to its quantity.
+      if (part && !t.value) { refresh(); return; }
+      const set = () => { est[d.t][i][d.f] = read(t); applyChange(est, d.t, i, d.f); };
+      if (d.t === 'materials') withParts(set); else set();
+      persist();
+      if (part) refresh({ focus: { sel: cell('materials', i, 'qty') } }); else later();
+    }
+    else if (d.h === 'marginPct') later();
+    else if (['costingLevel', 'sharedCosts', 'marginBasis'].includes(t.name)) { est[t.name] = t.value; persist(); paintProps(); refresh(); }
   });
-  on(el, 'click', '[data-tab]', (e, b) => { tab = b.dataset.tab; sessionStorage.setItem(TAB_KEY, tab); $$('[data-tab]', el).forEach(x => x.classList.toggle('on', x === b)); paint(); });
-  on(el, 'click', '[data-add]', (e, b) => { est[b.dataset.add].push(newRow(b.dataset.add, est)); save(); paint(); });
-  on(el, 'click', '[data-del]', (e, b) => { est[b.dataset.del].splice(+b.dataset.i, 1); save(); paint(); });
+  // Enter in the last quantity box of the Materials tab: a new row, with the cursor in its type-to-search box.
+  el.addEventListener('keydown', e => {
+    const t = e.target;
+    if (e.key !== 'Enter' || !ctx.editable || !t.matches?.('input[data-t="materials"][data-f="qty"]')) return;
+    const all = $$('input[data-t="materials"][data-f="qty"]', t.closest('table'));
+    if (all[all.length - 1] !== t) return;
+    e.preventDefault();
+    withParts(() => { est.materials[+t.dataset.i].qty = read(t); applyChange(est, 'materials', +t.dataset.i, 'qty'); });
+    persist();
+    addRow('materials');
+  });
+  on(el, 'click', '[data-tab]', (e, b) => { tab = b.dataset.tab; sessionStorage.setItem(TAB_KEY, tab); $$('[data-tab]', el).forEach(x => x.classList.toggle('on', x === b)); refresh(); });
+  on(el, 'click', '[data-add]', (e, b) => addRow(b.dataset.add));
+  on(el, 'click', '[data-del]', (e, b) => removeRow(b.dataset.del, +b.dataset.i));
+  bindPickers(el, () => partGroups(est.materials.map(m => m.itemId)));
 
   $('#wf', el).onclick = () => openWorkflow(enq);
   $('#mkq', el)?.addEventListener('click', () => {

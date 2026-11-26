@@ -2,6 +2,7 @@
 // details, working week, data protection, the logo, "Setup to finish", the letterhead of new documents (a setup
 // sample that updates as you type, not a document preview) and the changes from the audit log.
 // Sent quotations, posted invoices and activated contracts keep the letterhead they were issued with (core/setup.js).
+import { styleCard, bindStyle } from './admin-style.js';
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, $$, toast, placeholderTag, fmtDateTime, foldHeader } from '../core/ui.js';
@@ -61,6 +62,7 @@ export function renderCompanySetup(el) {
         </div><div><div class="form-sec">Contact</div>
         ${line('address', 'Address')}${line('tel', 'Tel')}${line('mobile', 'Mobile')}${line('email', 'Email')}</div>
       </div>` })}
+      ${styleCard(edit)}
       <div class="card"><div class="card-head"><h2>Payment details (on invoices)</h2></div><div class="form-lines fcols">
         ${line('bank', 'Bank', { tag: ph('bank') })}${line('payNow', 'PayNow', { tag: ph('payNow') })}</div></div>
       <div class="card"><div class="card-head"><h2>Working week</h2></div><div class="form-lines fcols">
@@ -83,6 +85,7 @@ export function renderCompanySetup(el) {
     </form></div>`);
 
   const form = $('#cf', el);
+  bindStyle(el, render);
   const read = () => {
     const out = {};
     $$('input[type=text][name], select[name]', form).forEach(i => { if (!i.readOnly) out[i.name] = i.value.trim(); });

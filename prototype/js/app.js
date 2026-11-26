@@ -37,6 +37,9 @@ import { isOffline } from './core/offline.js';
 import { upgradeMarkupRights } from './core/setup.js';
 import { upgradeProducts } from './core/upgrade-products.js';
 import { drawGuideBar } from './web/guide.js';
+import { isDirty, dirtyAt, clearDirty, ux, buildingSamples } from './core/ux.js';
+import { renderJobPage, jobPageRoute } from './web/job-page.js';
+import { openModal, html, fieldError } from './core/ui.js';
 import { mRepairJob, mRepairStep } from './mobile/repair-job.js';
 import { mService, mServiceStep, mShutter } from './mobile/service.js';
 import { mTasks, mTask } from './mobile/tasks.js';
@@ -55,7 +58,8 @@ const WEB = [
   [/^enquiries$/, 'enquiry', renderEnquiryList],
   [/^enquiries\/new$/, 'enquiry', el => renderEnquiryForm(el, null)],
   [/^enquiries\/([^/]+)\/edit$/, 'enquiry', renderEnquiryForm],
-  [/^enquiries\/([^/]+)$/, 'enquiry', renderEnquiryView],
+  // Working style "One page per job" (Company Setup): the enquiry page holds every document of the job as a section.
+  [/^enquiries\/([^/]+)(?:\/at\/(\w+))?$/, 'enquiry', (el, id, at) => (ux().jobPage ? renderJobPage(el, id, at) : renderEnquiryView(el, id))],
   [/^assessments$/, 'inspection', renderInspectionList],
   [/^assessments\/([^/]+)$/, 'inspection', renderInspection],
   [/^reports\/([^/]+)$/, 'inspection', renderReport],
@@ -123,6 +127,7 @@ function activeMenu(route) {
 export function routeForView(route, view) {
   let m;
   if (view === 'mobile') {
+    if ((m = route.match(/^enquiries\/([^/]+)\/at\/(job|invoice|closure)$/))) { const j = store.list('jobs', x => x.enquiryId === m[1] && x.status !== 'Cancelled')[0]; if (j) return j.type === 'GS' ? `m/gjob/${j.id}` : `m/rjob/${j.id}`; }
     if ((m = route.match(/^enquiries\/([^/]+)/)) && m[1] !== 'new') return `m/enquiry/${m[1]}`;
     if ((m = route.match(/^assessments\/([^/]+)/)) && auth.scope('inspection') === 'own') return `m/job/${m[1]}`;
     if ((m = route.match(/^jobs\/([^/]+)$/)) && m[1] !== 'list') return store.get('jobs', m[1])?.type === 'GS' ? `m/gjob/${m[1]}` : `m/rjob/${m[1]}`;
@@ -143,11 +148,13 @@ export function routeForView(route, view) {
 const replaceRoute = r => location.replace(`#/${r}`);
 
 export function render() {
+  clearDirty(); // a new page starts with nothing unsaved
   drawGuideBar(); // the guided demo's step bar, outside the app area
   const route = location.hash.replace(/^#\/?/, '');
   document.querySelectorAll('.menu-pop, .modal-back, .palette-back').forEach(x => x.remove());
   if (!auth.session()) {
     if (route !== 'login') return replaceRoute('login');
+    document.querySelectorAll('.toast').forEach(x => x.remove());
     return renderLogin(app);
   }
   const view = auth.view();
@@ -175,6 +182,9 @@ export function render() {
     return auth.can(menu, 'view', 'web') ? renderPrintDoc(app, kind, doc[2]) : renderWebShell(app, route, '', el => renderNoAccess(el));
   }
 
+  // One page per job: a document's own address opens the job page at that document.
+  if (ux().jobPage && auth.can('enquiry', 'view', 'web')) { const to = jobPageRoute(route); if (to) return replaceRoute(to); }
+  else if (/^enquiries\/[^/]+\/at\//.test(route)) return replaceRoute(route.replace(/\/at\/.*$/, ''));
   const hit = WEB.find(([re]) => re.test(route));
   if (!hit) return replaceRoute('home');
   const params = route.match(hit[0]).slice(1);
@@ -189,8 +199,11 @@ export function render() {
 async function seedAll() {
   app.innerHTML = '<div class="empty" style="padding-top:30vh">Preparing the sample data… about 10 seconds, only on the first visit and after "Reset demo data".</div>';
   await clearAllMedia().catch(() => {});
-  store.writeSeed(buildSeed());
-  await buildDemoFlow().catch(e => console.error('Stage samples could not be built', e));
+  buildingSamples(true);
+  try {
+    store.writeSeed(buildSeed());
+    await buildDemoFlow().catch(e => console.error('Stage samples could not be built', e));
+  } finally { buildingSamples(false); }
 }
 
 export async function resetDemo() {
@@ -208,11 +221,47 @@ export function switchView(view) {
   if (next === route) render(); else location.hash = `#/${next}`;
 }
 
+// A date far from today is a slip of the hand (UX audit, finding 17: a PO number typed into a date gave the year
+// 0081 and was accepted). On leaving any date field, a year more than 5 years back or 10 years ahead is refused: the
+// field is emptied and says why. Checked on leaving the field, because the year passes through 0002, 0020 … while typed.
+document.addEventListener('focusout', e => {
+  const el = e.target;
+  if (!el.matches?.('input[type=date]') || !el.value || el.readOnly || el.disabled) return;
+  const y = Number(el.value.slice(0, 4)), now = new Date().getFullYear();
+  if (y >= now - 5 && y <= now + 10) return;
+  el.value = '';
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  fieldError(el, `The year ${y} is not a likely date, so it was cleared. Enter the date again.`, { focus: false });
+});
+
 // ---------- Start ----------
 store.dropOldVersions();
 if (!store.isSeeded()) await seedAll();
 auth.restore();
-window.addEventListener('hashchange', render);
+// Leaving a page with unsaved work asks first (UX audit, finding 15). The address is put back while the question
+// is open, so the form and what was typed stay on screen.
+let asking = false;
+window.addEventListener('hashchange', async () => {
+  if (isDirty() && location.hash !== dirtyAt()) {
+    if (asking) return;
+    const target = location.hash;
+    history.replaceState(null, '', dirtyAt());
+    asking = true;
+    const leave = await new Promise(resolve => {
+      let answer = false;
+      const m = openModal({ title: 'Leave without saving?', body: html`<p>What you typed on this page has not been saved. If you leave, it is lost.</p>`,
+        actions: [{ label: 'Leave without saving', onClick: () => { answer = true; } }, { label: 'Keep editing', kind: 'primary' }] });
+      const wait = setInterval(() => { if (!m.el.isConnected) { clearInterval(wait); resolve(answer); } }, 60);
+    });
+    asking = false;
+    if (!leave) return;
+    clearDirty();
+    if (location.hash === target) render(); else location.hash = target;
+    return;
+  }
+  render();
+});
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && auth.session()) {
     e.preventDefault();

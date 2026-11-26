@@ -121,7 +121,7 @@ export function renderMasterForm(el, key, id) {
     return field({ ...f, label, options: opts, value: draft[f.name], readonly: !editable || locked(f), tag });
   };
 
-  el.innerHTML = String(html`<div class="page" style="max-width:1100px">
+  el.innerHTML = String(html`<div class="page">
     ${pageHead({
       crumb: html`Master › <a href="#/master/${key}">${def.title}</a>${rec ? ` › ${rec.code}` : ''}`,
       title: rec ? html`${rec.code} · ${nameOf(def, rec)} ${pill(rec.status || 'Active')}` : `New ${def.title}`,

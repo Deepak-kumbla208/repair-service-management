@@ -16,7 +16,7 @@ const VALUE_SETS = [
   ['PRIORITY', 'Priority', 'User', ['High', 'Medium', 'Low']],
   ['ENQ_STATUS', 'Enquiry Status', 'User', ['Hot', 'Warm', 'Cold']],
   ['ENQ_CHANNEL', 'Enquiry Channel', 'User', ['Call', 'Email', 'WhatsApp', 'Other']],
-  ['ENQ_TYPE', 'Enquiry Type', 'System', [['REPAIR', 'Adhoc (Repair)'], ['AMC', 'AMC'], ['GS', 'General Servicing']]],
+  ['ENQ_TYPE', 'Enquiry Type', 'System', [['REPAIR', 'Repair'], ['AMC', 'AMC'], ['GS', 'General Servicing']]],
   ['JOB_STATUS', 'Job Status', 'Extensible', ['Confirmed', 'Pending', 'Cancelled']],
   ['QUOT_STATUS', 'Quotation Status', 'Extensible', ['Quoted', 'Not Quoted']],
   ['YES_NO', 'Yes / No', 'System', ['Yes', 'No']],

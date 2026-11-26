@@ -5,7 +5,7 @@
 import * as store from './store.js';
 import * as auth from './auth.js';
 import { technicians, valueSet } from './lookups.js';
-import { freeStart, nextWorkday, isWorkday, defaultHelper, bookings, fmtHour, toIso, dayStart, dayEnd, onMyWay, checkIn, workingDays } from './jobs.js';
+import { freeStart, nextWorkday, isWorkday, defaultHelper, bookings, fmtHour, toIso, dayStart, dayEnd, onMyWay, checkIn, undoOnMyWay, undoCheckIn, workingDays } from './jobs.js';
 import { createInvoice, invoiceForJob } from './billing.js';
 import { saveNewEnquiry } from './enquiries.js';
 import { todayStr, maybeCloseContract, BOOKABLE } from './contracts.js';
@@ -114,6 +114,27 @@ export function startTravel(coll, id) {
   store.update(coll, id, { steps: { ...v.steps, onMyWayAt: nowIso() } }, 'Technician on the way');
   store.setStatus(coll, id, 'On the way');
 }
+// Undo of "On my way" / "Check in" tapped a moment ago on the phone (UX audit, findings 3 and 17).
+export function undoTravel(coll, id) {
+  if (coll === 'jobs') return undoOnMyWay(id);
+  const v = store.get(coll, id);
+  if (v?.status !== 'On the way') return false;
+  const steps = { ...v.steps };
+  delete steps.onMyWayAt;
+  store.update(coll, id, { steps }, 'Undo: not on the way yet');
+  store.setStatus(coll, id, 'Scheduled', 'Undo');
+  return true;
+}
+export function undoArrive(coll, id) {
+  if (coll === 'jobs') return undoCheckIn(id);
+  const v = store.get(coll, id);
+  if (v?.status !== 'On site' || v.signoff?.signedAt) return false;
+  const steps = { ...v.steps };
+  delete steps.checkInAt;
+  store.update(coll, id, { steps, signoff: v.signoff ? { ...v.signoff, timeIn: '' } : null }, 'Undo: not checked in yet');
+  store.setStatus(coll, id, 'On the way', 'Undo');
+  return true;
+}
 export function arrive(coll, id) {
   if (coll === 'jobs') return checkIn(id);
   const v = store.get(coll, id);
@@ -168,19 +189,22 @@ export function failuresOf(d) {
   });
 }
 
-export function signoffProblems(coll, d) {
+// What is missing before the check list can be signed, each with the phone step (and product, item) that holds it:
+// [{ key, step, shutterId, code, text }].
+export function signoffIssues(coll, d) {
   const p = [];
   const s = signOf(coll, d);
-  if (!d.steps?.checkInAt) p.push('Check in first.');
-  if (!(d.shutters || []).length) p.push('No products to check: add them to the site\'s customer products first.');
-  if (!d.safeIsolation) p.push('Tick "Safe isolation done" before the checklist.');
-  (d.shutters || []).forEach(sh => { const st = shutterState(d, sh); if (st.answered < st.total) p.push(`${sh.tag}: ${st.total - st.answered} item(s) not checked yet.`); });
-  failuresOf(d).forEach(f => { if (!f.note.trim() || !f.photoId) p.push(`${f.tag} ${f.label}: a failed item needs a photo and a note.`); });
-  if (!s || Object.values(s.ratings).some(v => !v)) p.push('The customer has not rated all 4 categories.');
-  if (!s?.tech?.signatureId) p.push('The technician must sign (checked by).');
-  if (!s?.cust?.signatureId) p.push('The customer must sign the checklist.');
+  if (!d.steps?.checkInAt) p.push({ key: 'checkin', step: '', text: 'Check in first.' });
+  if (!(d.shutters || []).length) p.push({ key: 'none', step: 'list', text: 'No products to check: add them to the site\'s customer products first.' });
+  if (!d.safeIsolation) p.push({ key: 'safe', step: 'start', text: 'Tick "Safe isolation done" before the checklist.' });
+  (d.shutters || []).forEach(sh => { const st = shutterState(d, sh); if (st.answered < st.total) p.push({ key: 'items', step: 'list', shutterId: sh.shutterId, code: st.items.find(i => i.on && !i.r)?.code || '', text: `${sh.tag}: ${st.total - st.answered} item(s) not checked yet.` }); });
+  failuresOf(d).forEach(f => { if (!f.note.trim() || !f.photoId) p.push({ key: 'fail', step: 'list', shutterId: f.shutterId, code: f.code, text: `${f.tag} ${f.label}: a failed item needs a photo and a note.` }); });
+  if (!s || Object.values(s.ratings).some(v => !v)) p.push({ key: 'ratings', step: 'signoff', text: 'The customer has not rated all 4 categories.' });
+  if (!s?.tech?.signatureId) p.push({ key: 'techSign', step: 'signoff', text: 'The technician must sign (checked by).' });
+  if (!s?.cust?.signatureId) p.push({ key: 'custSign', step: 'signoff', text: 'The customer must sign the checklist.' });
   return p;
 }
+export const signoffProblems = (coll, d) => signoffIssues(coll, d).map(i => i.text);
 
 // Finish: the customer has signed the checklist. A GS job then follows the repair rules (draft invoice when not raised
 // yet); an AMC visit raises nothing (it is billed by the plan). Failed items become a repair enquiry.

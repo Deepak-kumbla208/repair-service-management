@@ -9,6 +9,7 @@ import { productOf, repairLabour, isFixed, isPhysical, unitOfProduct, setOfProdu
 import { cancelTasksFor } from './workflow.js';
 import { amcPrefill, amcProblems, describe } from './amc-estimates.js';
 import { cleanLines, lineText as enquiryLineText } from './enquiries.js';
+import { findingRows } from './inspections.js';
 
 const rid = () => store.uid('r_');
 const pad = n => String(n).padStart(2, '0');
@@ -89,6 +90,15 @@ function productsFromLines(enqLines, site) {
     }
     return out;
   });
+}
+
+// What the customer is quoted for (UX audit, finding 7). The technician's own "Job Scope / Description of Work" when
+// it is filled in; else the action written for each product on site ("BP-1 Pump room: Replace the overload relay");
+// the customer's own words only when the technician wrote neither. Nothing is typed twice.
+export function scopeFromActions(rep) {
+  if (!rep) return '';
+  return findingRows(rep).filter(f => String(f.action || '').trim())
+    .map(f => `${[f.tag, f.location].filter(Boolean).join(' ') || f.product || f.complaint}: ${String(f.action).trim()}`).join('; ');
 }
 
 // Everything an estimate needs, pre-filled. rep may be null (repair without assessment).
@@ -177,7 +187,7 @@ export function prefill(enq, rep) {
   return {
     enquiryId: enq.id, reportId: rep?.id || '', customerId: enq.customerId, siteId: enq.siteId,
     header: { customer: enq.customerName, contact: enq.contactName, phone: enq.mobile || contactNo, site: enq.siteName, address: [site?.address, site?.blockUnit].filter(Boolean).join(', '),
-      date: today(), preparedBy: store.currentActor(), findings: oneLine(String(rep?.s2?.findings || '').replace(/^\s*\d+\.\s+/gm, '')) || enq.description, description: oneLine(rep?.s2?.description) || enq.description },
+      date: today(), preparedBy: store.currentActor(), findings: oneLine(String(rep?.s2?.findings || '').replace(/^\s*\d+\.\s+/gm, '')) || enq.description, description: oneLine(rep?.s2?.description) || scopeFromActions(rep) || enq.description },
     costingLevel: d.costingLevel, sharedCosts: d.sharedCosts, sharedLabel: zone ? `Transport & mobilisation (Zone ${zone.code})` : 'Transport & mobilisation',
     overheads: [{ key: rid(), name: 'Overheads', basis: 'PCT', value: d.overheadPct }], marginBasis: d.marginBasis, marginPct: d.marginPct,
     ...companyTax(), shutters, lines, labour, transport, materials, equipment, fixed, afterHours: ot,

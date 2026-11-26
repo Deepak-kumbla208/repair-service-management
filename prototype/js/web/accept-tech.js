@@ -86,7 +86,7 @@ export function bindTech(b, q, ctx) {
   function paint() {
     const c = ctx();
     st.draft = draftNow();
-    const why = c.linesCut ? 'With fewer lines, the next revision goes for the counter-check first: assign the technician when it is accepted.'
+    const why = c.linesCut ? 'With fewer lines, the next revision goes for approval first: assign the technician when it is accepted.'
       : st.draft.noVisit ? 'Only fixed-price products: there is no site visit to schedule. Mark the job done on its page when the work is finished.'
       : termBlocks(st.draft) ? 'The new payment term needs the Approver before scheduling: assign the technician on the scheduling board after approval.' : '';
     tick.disabled = !!why;

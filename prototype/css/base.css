@@ -10,20 +10,23 @@
 
   --ink: #2C2C2A;
   --ink-2: #444441;
-  --muted: #5F5E5A;
-  --faint: #888780;
+  --muted: #55544F;
+  --faint: #63625C;   /* was #888780 (3.6 to 1); now 6.1 to 1 on white (UX audit, finding 11) */
   --line: #D3D1C7;
   --line-soft: #EEEDE8;
   --zebra: #F7F6F2;
   --page: #F1EFE8;
   --white: #FFFFFF;
 
-  --amber-bg: #FAEEDA;  --amber-ink: #633806;  --amber: #BA7517;
+  --amber-bg: #FAEEDA;  --amber-ink: #633806;  --amber: #8F5A0A;
   --green-bg: #EAF3DE;  --green-ink: #27500A;  --green: #3B6D11;
   --red-bg: #FCEBEB;    --red-ink: #791F1F;    --red: #A32D2D;
   --purple-bg: #EEEDFE; --purple-ink: #3C3489;
   --gray-bg: #F1EFE8;   --gray-ink: #444441;
 
+  /* Text sizes (UX audit, finding 10): web 15 px body / 13 px labels; the phone sets 16 / 14 (css/ux-phone.css). */
+  --fs-xs: 12px; --fs-s: 13px; --fs: 15px; --fs-m: 16px; --fs-l: 17px; --fs-xl: 20px; --fs-2xl: 22px; --fs-3xl: 24px;
+  --field-h: 38px;
   --radius: 5px;
   --radius-lg: 8px;
   --shadow-pop: 0 12px 32px rgba(4, 44, 83, .22);
@@ -34,15 +37,15 @@
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
-  font: 13px/1.45 var(--font);
+  font: var(--fs)/1.5 var(--font);
   color: var(--ink);
   background: var(--page);
   -webkit-font-smoothing: antialiased;
 }
 h1, h2, h3, h4 { margin: 0; font-weight: 600; color: var(--ink); }
-h1 { font-size: 18px; }
-h2 { font-size: 15px; }
-h3 { font-size: 13px; }
+h1 { font-size: var(--fs-xl); }
+h2 { font-size: var(--fs-l); }
+h3 { font-size: var(--fs); }
 p { margin: 0 0 8px; }
 a { color: var(--blue-600); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -52,7 +55,7 @@ table { border-collapse: collapse; }
 [hidden] { display: none !important; }
 
 .muted { color: var(--faint); }
-.small { font-size: 11px; }
+.small { font-size: var(--fs-s); }
 .strong { font-weight: 600; }
 .mono { font-family: var(--mono); }
 .nowrap { white-space: nowrap; }

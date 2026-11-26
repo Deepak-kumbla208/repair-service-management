@@ -61,16 +61,16 @@ export function renderEnquiryView(el, id) {
       : q ? html`<a class="btn primary" href="#/quotations/${q.id}">Open ${q.no} Rev ${q.rev}</a>`
         : est ? html`<a class="btn primary" href="#/estimates/${est.id}">Open ${est.no} Rev ${est.rev}</a>` : '';
 
-  el.innerHTML = String(html`<div class="page" style="max-width:1400px">
+  el.innerHTML = String(html`<div class="page">
     <div class="page-head"><div class="grow">
       <div class="crumb"><a href="#/enquiries">Enquiry register</a> › ${e.no}</div>
       <h1>${e.no} · ${e.customerName} ${pill(e.status)}${openLater(e) ? html` ${pill(`${e.laterWork.items.length} item${e.laterWork.items.length > 1 ? 's' : ''} later`, 'amber')}` : ''}</h1>
-      <div class="page-meta">${vsLabel('ENQ_TYPE', e.type)} · received ${fmtDateTime(e.receivedAt)} by ${channelText(e)} · recorded by <b>${auth.userName(e.recordedBy)}</b>${stage ? html` · <b style="color:var(--blue-600)">now at: ${stage.name}</b>` : ''}</div></div>
+      <div class="page-meta">${vsLabel('ENQ_TYPE', e.type)} · received ${fmtDateTime(e.receivedAt)} by ${channelText(e)} · recorded by <b>${auth.userName(e.recordedBy)}</b></div></div>
       <div class="row">
-        <button class="btn soft" id="wfBtn">⇶ Workflow</button>
-        ${auth.can('enquiry', 'edit') && e.status !== 'Cancelled' ? html`<a class="btn" href="#/enquiries/${e.id}/edit">✎ Edit</a>` : ''}
+        <button class="btn" id="wfBtn" title="The map of the whole job as a pop-up">Workflow</button>
+        ${auth.can('enquiry', 'edit') && e.status !== 'Cancelled' ? html`<a class="btn" href="#/enquiries/${e.id}/edit">Edit</a>` : ''}
         ${report && auth.can('inspection', 'view') ? html`<a class="btn" href="#/reports/${report.id}">Site viewing report</a>` : ''}
-        ${canAssign ? html`<a class="btn primary" href="#/assessments/${insp.id}">${insp.technicianId ? 'Change technician' : 'Assign technician'}</a>` : ''}
+        ${canAssign ? html`<a class="btn ${insp.technicianId ? '' : 'primary'}" href="#/assessments/${insp.id}">${insp.technicianId ? 'Change technician' : 'Assign technician'}</a>` : ''}
         ${next}
       </div>
     </div>
@@ -96,7 +96,7 @@ export function renderEnquiryView(el, id) {
         ${row('Priority', vsLabel('PRIORITY', e.priority))}</div>
       </div>` })}
         ${laterCard(e)}
-        <div class="card"><div class="card-head"><h2>What the customer needs</h2></div>${linesTable(e.lines)}
+        <div class="card"><div class="card-head"><h2>What the customer needs</h2></div>${linesTable(e.lines, site)}
           ${e.remarks ? html`<div class="form-lines" style="margin-top:8px;max-width:720px">${row('Remarks', e.remarks)}</div>` : ''}</div>
         <div class="card"><div class="card-head"><h2>Attachments</h2></div>${(e.attachments || []).length
           ? html`<div class="files">${e.attachments.map(a => html`<div class="file-row">📎 <a href="#" data-open="${a.id}">${a.name}</a><span class="muted small">${fmtSize(a.size)}</span></div>`)}</div>`
@@ -106,7 +106,7 @@ export function renderEnquiryView(el, id) {
           <div class="form-lines fcols">${row('Job Assessment', vsLabel('YES_NO', e.siteInspection))}
           ${openInsp ? html`${row('Technician', insp.technicianId ? empName(insp.technicianId) : 'No technician yet')}${row('Visit', fmtDateTime(insp.visitAt))}${row('Confirmed by', insp.confirmedBy)}
             ${row(`Target (${company.inspectionTargetHours || 2} h)`, clockHtml(inspectionClock(e, company)))}` : ''}</div></div>
-        <div class="card"><div class="card-head"><h2>Register columns filled automatically</h2><span class="muted small">from the quotation, job, invoice and payment</span></div>
+        <div class="card"><div class="card-head"><h2>Quotation, job, invoice and payment</h2><span class="muted small">filled in by the app as the job moves on</span></div>
           <div class="kv six">${[['Quotation Date', l.quotationDate], ['Quotation Status', l.quotationStatus], ['Quotation Value', l.quotationValue], ['Job Status', l.jobStatus],
             ['Work Completion Status', l.workCompletion], ['Work Completion Date', l.workCompletionDate], ['Invoice Date', l.invoiceDate], ['Invoice No', l.invoiceNo],
             ['Invoice Value', l.invoiceValue], ['Payment Received', l.paymentReceived]].map(([k, v]) => html`<div><div class="k">${k}</div><div class="v">${v || html`<span class="muted">—</span>`}</div></div>`)}</div></div>
@@ -126,7 +126,7 @@ export function openWorkflow(e) {
     title: `Workflow · ${e.no} · ${vsLabel('ENQ_TYPE', e.type)}`, cls: 'wf-modal',
     body: html`<p class="muted" style="margin:0 0 10px">One box per transaction. The current one is highlighted; click a finished box to open its document.</p>
       ${workflowHtml(e)}
-      <div class="muted small" style="margin-top:14px;line-height:1.8"><b>The three enquiry types</b><br>
+      <div class="muted small" style="margin-top:14px;line-height:1.8"><b>The three kinds of job</b><br>
         Repair: Enquiry → Job assessment → Estimation → Quotation → Job → Invoice → Payment → Job closure<br>
         AMC: Enquiry → Job assessment (optional) → Estimation → Quotation → AMC contract → AMC visits → Invoice → Payment → Contract closure<br>
         General Servicing: Enquiry → Job assessment (optional) → Estimation → Quotation → Job → Invoice → Payment → Job closure</div>`,

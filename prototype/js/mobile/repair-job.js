@@ -1,180 +1,103 @@
-// Phone: a repair job for the technician (flow step 8). The job page has "On my way" and "Check in"; then six
-// steps: before photos, works done (Work Done form sections 1–2), customer feedback (section 3), sign-off with both
-// signatures and the company stamp photo (section 4), payment (immediate term), and the office's OK to leave.
+// Phone: a repair job for the technician. The job page has "On my way" and "Check in" (each with Undo, and the
+// button rests a moment after a tap so a double tap cannot fire the next step); then the steps in repair-steps.js
+// and repair-leave.js: before photos, works done, customer feedback, sign-off, payment (immediate term only), leave site.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, $$, go, toast, openModal, fmtDate, fmtTime, chipGroup, readForm, MIC, icon } from '../core/ui.js';
-import { zoneLabel, vsLabel, vsOptions } from '../core/lookups.js';
+import { html, $, $$, go, toast, confirmBox, fmtDate, fmtTime, readForm } from '../core/ui.js';
+import { zoneLabel, vsLabel } from '../core/lookups.js';
+import { isToday } from '../core/enquiries.js';
 import { hydrateImages, removeBlob } from '../core/media.js';
 import { savePhotos, signaturePad, bindMics } from '../core/capture.js';
-import { seesJob, onMyWay, checkIn, workDoneFor, saveJob, completeWorkDone, requestLeave, checkOut } from '../core/jobs.js';
-import { invoiceForJob, balanceOf, recordPayment, paymentsFor } from '../core/billing.js';
-import { RATINGS } from '../web/print-docs.js';
-import { isOffline } from '../core/offline.js';
+import { seesJob, onMyWay, undoOnMyWay, checkIn, undoCheckIn, workDoneFor, workDoneIssues, saveJob, completeWorkDone } from '../core/jobs.js';
+import { invoiceForJob, balanceOf, recordPayment } from '../core/billing.js';
 import { workDoneSheet } from '../web/print-docs.js';
-import { openDocSheet } from './shell.js';
+import { openDocSheet, holdNext, show, undoToast } from './shell.js';
+import { markSeen, whenText, callBtn, directionsBtn, stepBar, showAt, setJump, takeJump } from './parts.js';
+import { stepsOf, stepDone, stepState, checking, setChecking, bindPhotos, RENDER } from './repair-steps.js';
+import { leaveBody, leaveFoot, bindLeave } from './repair-leave.js';
 
-export const STEPS = [['before', 'Before photos'], ['works', 'Works done'], ['feedback', 'Feedback'], ['signoff', 'Sign-off'], ['payment', 'Payment'], ['leave', 'Leave site']];
 const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const DONE_ST = ['Work done', 'Completed & documented', 'Closed'];
+const titleOf = j => [j.customer, j.site].filter(Boolean).join(' · ');
+const STEP_NAME = { works: 'Works done', feedback: 'Feedback', signoff: 'Sign-off' };
 
-function stepDone(j, key) {
-  const w = j.workDone, inv = invoiceForJob(j.id);
-  return {
-    before: (j.photosBefore || []).length > 0 || !!w?.worksAt, works: !!w?.worksAt, feedback: !!w && Object.values(w.ratings).every(Boolean),
-    signoff: !!w?.signedAt, payment: !!w?.signedAt && (j.paymentTerm !== 'IMMEDIATE' || (inv && inv.status === 'Posted' && balanceOf(inv) <= 0)), leave: !!j.steps?.checkOutAt,
-  }[key];
-}
-const progress = (j, cur) => html`<div class="prog">${STEPS.map(([k, label]) => html`<a href="#/m/rjob/${j.id}/${k}" class="${k === cur ? 'n' : stepDone(j, k) ? 'd' : ''}" style="text-decoration:none">${stepDone(j, k) && k !== cur ? '✓ ' : ''}${label}</a>`)}</div>`;
-const sec = (n, t) => html`<div class="wd-sec">${n} &nbsp; ${t}</div>`;
-// The whole visit as a list on the job page: done steps green, the current one blue.
+// The whole visit as a list on the job page: done steps green, the current one blue, a step passed with nothing in it dashed.
 function jobSteps(j) {
   const s = j.steps || {};
-  const list = [['On my way', 'The office sees you are travelling', !!s.onMyWayAt], ['Check in', 'Sets Time In', !!s.checkInAt],
-    ...STEPS.map(([k, label]) => [k === 'signoff' ? 'Customer signs' : label, k === 'signoff' ? 'After seeing the Work Done form' : k === 'leave' ? 'The office says OK' : '', stepDone(j, k)]),
-    ['Check out', 'Sets Time Out', !!s.checkOutAt]];
-  const now = list.findIndex(x => !x[2]);
-  return html`<ol class="m-steps">${list.map(([t, sub, done], n) => html`<li class="${done ? 'done' : n === now ? 'now' : ''}"><span class="n">${done ? '✓' : n + 1}</span><div><b>${t}</b>${sub ? html`<span class="s">${sub}</span>` : ''}</div></li>`)}</ol>`;
+  const list = [['On my way', 'The office sees you are travelling', s.onMyWayAt ? 'done' : ''], ['Check in', s.checkInAt ? `Time In ${fmtTime(s.checkInAt)}` : 'Sets Time In', s.checkInAt ? 'done' : ''],
+    ...stepsOf(j).map(([k, label]) => [k === 'signoff' ? 'Customer signs' : label, k === 'signoff' ? 'After seeing the Work Done form' : k === 'leave' ? 'When the checks pass, or the office says OK'
+      : k === 'before' && stepState(j, k) === 'skip' ? 'No photo taken' : '', stepState(j, k)]),
+    ['Check out', s.checkOutAt ? `Time Out ${fmtTime(s.checkOutAt)}` : 'Sets Time Out', s.checkOutAt ? 'done' : '']];
+  const now = list.findIndex(x => x[2] !== 'done' && x[2] !== 'skip');
+  return html`<ol class="m-steps">${list.map(([t, sub, st], n) => html`<li class="${st || (n === now ? 'now' : '')}"><span class="n">${st === 'done' ? '✓' : st === 'skip' ? '–' : st === 'bad' ? '!' : n + 1}</span><div><b>${t}</b>${sub ? html`<span class="s">${sub}</span>` : ''}</div></li>`)}</ol>`;
 }
 
-export function repairCard(j) {
-  const done = DONE_ST.includes(j.status) && j.steps?.checkOutAt;
-  const action = j.status === 'Scheduled' ? 'On my way' : j.status === 'On the way' ? 'Check in' : done ? 'View' : 'Continue';
-  return html`<div class="job-card" style="${done ? 'opacity:.65;box-shadow:none' : ''}">
-    <div class="row"><span class="pill blue">Repair job</span><span class="grow"></span><b>${j.start ? `${fmtDate(j.start)} ${fmtTime(j.start)}` : 'Not scheduled'}</b></div>
-    <div class="strong" style="margin-top:6px">${j.customer}</div>
-    <div class="muted">${j.site} · Zone ${zoneLabel(j.zoneId)}</div>
-    <div class="muted">${j.no} · ${j.tags.join(', ')} · ${j.contact}</div>
-    <div class="row" style="margin-top:4px"><span class="pill">${j.status}</span></div>
-    <div class="actions">${j.phone ? html`<a class="btn" href="tel:${j.phone.replace(/\s/g, '')}">${icon('call', 15)} Call</a>` : ''}<a class="btn primary" href="#/m/rjob/${j.id}" style="flex:2">${action}</a></div>
-  </div>`;
-}
-
-export function mRepairJob(page, id) {
+// just: the status set a moment ago, shown on the resting button before the next step's name takes its place.
+export function mRepairJob(page, id, { just = '' } = {}) {
   const j = store.get('jobs', id);
   if (j?.type === 'GS') { go(`m/gjob/${id}`); return; }
-  page.setTitle(j ? j.no : 'Job', 'm/jobs');
+  page.setTitle(j ? titleOf(j) : 'Job', 'm/jobs', j ? `${j.no} · Repair job` : '');
   if (!j || !seesJob(j)) { page.body.innerHTML = '<div class="empty">Job not found.</div>'; return; }
   const inv = invoiceForJob(j.id);
   const canWork = auth.can('job', 'edit', 'mobile') && j.technicianId === auth.user()?.employeeId;
+  if (canWork) markSeen(j.id, j.start);
+  const address = j.address || j.site;
   page.body.innerHTML = String(html`
-    <div class="row"><span class="pill blue">Repair job</span><span class="pill">${j.status}</span><span class="grow"></span><b>${j.start ? fmtTime(j.start) : ''}</b></div>
-    <h2 style="margin:8px 0 2px">${j.customer}</h2><div class="muted">${j.no} · ${j.start ? fmtDate(j.start) : ''}</div>
-    <div class="m-card" style="margin-top:10px"><div class="k muted small">Address</div>${j.address || j.site}<br><span class="pill blue" style="margin-top:4px">Zone ${zoneLabel(j.zoneId)}</span></div>
-    <div class="m-card"><div class="k muted small">Contact</div>${j.contact}${j.phone ? html`<div class="m-acts"><a class="btn" href="tel:${j.phone.replace(/\s/g, '')}">${icon('call', 15)} ${j.phone}</a></div>` : ''}</div>
+    <div class="m-card">
+      <div class="row top"><span class="row wrap grow"><span class="pill blue">Repair job</span><span class="pill">${j.status}</span></span><b>${whenText(j.start, 'Not scheduled')}</b></div>
+      <div style="margin-top:8px">${address}</div>
+      <div class="muted small">Zone ${zoneLabel(j.zoneId)} · ${[j.contact, j.phone].filter(Boolean).join(' ')}</div>
+      <div class="m-acts">${callBtn(j.phone)}${directionsBtn(address)}</div>
+    </div>
     <div class="m-section">Steps</div><div class="m-card">${jobSteps(j)}</div>
-    <div class="m-section">Work to do</div>${j.lines.map((l, i) => html`<div class="m-card small"><b>${i + 1}.</b> ${l.description}</div>`)}
-    ${j.parts.length ? html`<div class="m-section">Parts to bring</div>${j.parts.map(p => html`<div class="m-card small">${p.qty} ${p.unit} × ${p.name}</div>`)}` : ''}
-    <div class="m-section">Payment</div><div class="m-card small">${vsLabel('PAYMENT_TERMS', j.paymentTerm)}${inv?.status === 'Posted' ? html` · ${inv.no} · ${j.paymentTerm === 'IMMEDIATE' ? html`<b>collect ${auth.company().currency} ${m2(balanceOf(inv))}</b>` : 'invoice from the office'}` : ' · invoice from the office'}</div>
+    <div class="m-section">Work to do</div>${j.lines.map((l, i) => html`<div class="m-card"><b>${i + 1}.</b> ${l.description}</div>`)}
+    ${j.parts.length ? html`<div class="m-section">Parts to bring</div>${j.parts.map(p => html`<div class="m-card">${p.qty} ${p.unit} × ${p.name}</div>`)}` : ''}
+    <div class="m-section">Payment</div><div class="m-card">${vsLabel('PAYMENT_TERMS', j.paymentTerm)}${inv?.status === 'Posted' ? html` · ${inv.no} · ${j.paymentTerm === 'IMMEDIATE' ? html`<b>collect ${auth.company().currency} ${m2(balanceOf(inv))}</b>` : 'invoice from the office'}` : ' · invoice from the office'}</div>
     `);
   if (!canWork) return;
-  const foot = j.status === 'Scheduled' ? html`<button class="btn primary" id="go">On my way</button>`
-    : j.status === 'On the way' ? html`<button class="btn primary" id="go">Check in · Time In now</button>`
-      : html`<button class="btn primary" id="go">${j.steps?.checkOutAt ? 'View the steps' : 'Continue'}</button>`;
-  page.setFoot(foot).querySelector('#go').onclick = () => {
-    if (j.status === 'Scheduled') { onMyWay(j.id); toast('The office sees you are on the way'); return mRepairJob(page, id); }
-    if (j.status === 'On the way') { checkIn(j.id); toast('Checked in'); return go(`m/rjob/${j.id}/before`); }
-    const next = STEPS.find(([k]) => !stepDone(store.get('jobs', j.id), k))?.[0] || 'leave';
-    go(`m/rjob/${j.id}/${next}`);
+  const label = j.status === 'Scheduled' ? 'On my way' : j.status === 'On the way' ? 'Check in · Time In now' : j.steps?.checkOutAt ? 'View the steps' : 'Continue';
+  const btn = page.setFoot(html`<button class="btn primary" id="go">${just ? `✓ ${just}` : label}</button>`).querySelector('#go');
+  if (just) setTimeout(() => { if (btn.isConnected) btn.textContent = label; }, 1300);
+  btn.onclick = async () => {
+    if (btn.dataset.held) return;
+    if (j.status === 'Scheduled') {
+      if (!isToday(j.start) && !(await confirmBox('Not planned for today', `This job is planned for ${fmtDate(j.start)} ${fmtTime(j.start)}. Start travelling now?`, 'On my way'))) return;
+      onMyWay(j.id); holdNext();
+      mRepairJob(page, id, { just: 'On the way' });
+      undoToast('On the way · the office can see it', () => { undoOnMyWay(j.id); show(`m/rjob/${j.id}`); });
+      return;
+    }
+    if (j.status === 'On the way') {
+      checkIn(j.id, { unanswered: true }); holdNext();
+      undoToast(`Checked in · Time In ${fmtTime(new Date().toISOString())}`, () => { undoCheckIn(j.id); show(`m/rjob/${j.id}`); });
+      go(`m/rjob/${j.id}/before`);
+      return;
+    }
+    const cur = store.get('jobs', j.id);
+    go(`m/rjob/${j.id}/${stepsOf(cur).find(([k]) => !stepDone(cur, k) && stepState(cur, k) !== 'skip')?.[0] || 'leave'}`);
   };
 }
-
-// ---------- The six steps ----------
-function photosBlock(j, field, label) {
-  return html`<div class="m-section">${label}</div><div class="photos">${(j[field] || []).map(p => html`<div class="photo"><img data-media="${p}" alt="${label}"><button type="button" class="del" data-del="${field}|${p}" aria-label="Remove photo">×</button></div>`)}</div>
-    <label class="add-dashed" style="display:block;margin-top:8px">📷 Take or add photos<input type="file" accept="image/*" capture="environment" multiple hidden data-add="${field}"></label>`;
-}
-
-function bindPhotos(body, j, repaint) {
-  $$('[data-add]', body).forEach(inp => inp.addEventListener('change', async e => {
-    const ids = await savePhotos(e.target.files);
-    const f = inp.dataset.add;
-    if (ids.length) { saveJob(j.id, { [f]: [...(store.get('jobs', j.id)[f] || []), ...ids] }); toast(`${ids.length} photo(s) added`); }
-    repaint();
-  }));
-  $$('[data-del]', body).forEach(b => b.addEventListener('click', () => {
-    const [f, id] = b.dataset.del.split('|');
-    saveJob(j.id, { [f]: store.get('jobs', j.id)[f].filter(p => p !== id) });
-    removeBlob(id);
-    repaint();
-  }));
-}
-
-const RENDER = {
-  before: j => html`<p class="small muted" style="margin:0 0 6px">Take photos of each product before you start.</p>${photosBlock(j, 'photosBefore', 'Before photos')}`,
-  works: j => {
-    const w = j.workDone, s1 = w.s1;
-    return html`${sec(1, 'PROJECT & WORK DETAILS')}
-      <div class="wd-kv"><span class="k">Project</span><span>${s1.project}</span><span class="k">Reference No.</span><span>${s1.refNo}</span><span class="k">Customer</span><span>${s1.customer}</span>
-        <span class="k">Date</span><span>${s1.date.split('-').reverse().join(' / ')}</span><span class="k">Time In / Out</span><span>${s1.timeIn || '—'} / ${s1.timeOut || html`<span class="muted">at check-out</span>`}</span><span class="k">Subject</span><span>${s1.subject}</span></div>
-      ${sec(2, 'DESCRIPTION OF WORKS DONE')}
-      ${w.rows.map((r, i) => html`<div class="wl"><div><b>${i + 1}.</b> ${r.description}</div><div style="margin-top:5px">${chipGroup(`st_${i}`, vsOptions('WORK_DONE'), r.status)}</div>
-        <div class="with-mic" style="margin-top:5px"><input type="text" name="rm_${i}" value="${r.remark}" placeholder="Remark (optional)"><button type="button" class="mic" data-mic="rm_${i}">${MIC}</button></div></div>`)}
-      ${w.partsUsed.length ? html`<div class="m-section">Parts used <span class="muted small">(from the estimate; change if different)</span></div>
-        ${w.partsUsed.map((p, i) => html`<div class="row" style="margin:3px 0"><label class="check grow"><input type="checkbox" name="pu_${i}" ${p.used ? 'checked' : ''}> ${p.name}</label><input type="number" name="pq_${i}" value="${p.qty}" style="width:64px"> <span class="small">${p.unit}</span></div>`)}` : ''}
-      ${photosBlock(j, 'photosAfter', 'After photos')}`;
-  },
-  feedback: j => {
-    const w = j.workDone;
-    return html`${sec(3, 'CUSTOMER FEEDBACK RATING')}<div class="small muted">Hand the phone to the customer. 5 Excellent · 4 Good · 3 Satisfactory · 2 Poor · 1 Very poor</div>
-      ${RATINGS.map(([k, label]) => html`<div class="rate"><span>${label}</span>${[5, 4, 3, 2, 1].map(n => html`<button type="button" class="dot ${w.ratings[k] === n ? 'on' : ''}" data-rate="${k}|${n}" aria-label="${label}: ${n}">${n}</button>`)}</div>`)}
-      <div class="with-mic" style="margin-top:8px"><textarea name="comments" placeholder="Customer comments / recommendations" style="min-height:52px">${w.comments}</textarea><button type="button" class="mic" data-mic="comments">${MIC}</button></div>`;
-  },
-  signoff: j => {
-    const w = j.workDone;
-    const pad = (who, id) => (id ? html`<img class="sig-img" data-media="${id}" alt="Signature"><button type="button" class="btn link small" data-resign="${who}">Sign again</button>`
-      : html`<canvas class="sig-pad" id="sig_${who}" style="height:110px"></canvas><div class="hint small muted">Sign with a finger or the mouse.</div>`);
-    return html`${sec(4, 'SIGN-OFF & VERIFICATION')}
-      <div class="small strong">Checked by · Company Representative</div>
-      <div class="grid g2" style="margin:4px 0"><div class="field"><label>Name</label><input name="t_name" value="${w.tech.name}"></div><div class="field"><label>Designation</label><input name="t_designation" value="${w.tech.designation}"></div></div>
-      ${pad('tech', w.tech.signatureId)}
-      <div class="small strong" style="margin-top:12px">Acknowledged &amp; accepted by · Customer</div>
-      <button type="button" class="btn block" id="previewDoc" style="margin:6px 0">${icon('eye', 15)} Preview the Work Done form for the customer</button>
-      <div class="grid g2" style="margin:4px 0"><div class="field"><label>Name</label><input name="c_name" value="${w.cust.name}"></div><div class="field"><label>Designation</label><input name="c_designation" value="${w.cust.designation}"></div></div>
-      ${j.paymentTerm !== 'IMMEDIATE' ? html`<div class="note small" style="margin:4px 0">Payment due: ${vsLabel('PAYMENT_TERMS', j.paymentTerm)} from the invoice date.</div>` : ''}
-      ${pad('cust', w.cust.signatureId)}
-      <div class="m-section">Company stamp</div>
-      ${w.cust.stampId ? html`<div class="row"><img class="sig-img" data-media="${w.cust.stampId}" alt="Company stamp" style="max-height:80px"><button type="button" class="btn link small" data-stampdel="1">Retake</button></div>`
-        : html`<label class="add-dashed" style="display:block">📷 Photo of the company stamp<input type="file" accept="image/*" capture="environment" hidden id="stampIn"></label>`}`;
-  },
-  payment: j => {
-    const inv = invoiceForJob(j.id);
-    if (j.paymentTerm !== 'IMMEDIATE') return html`<div class="m-card">Payment term <b>${vsLabel('PAYMENT_TERMS', j.paymentTerm)}</b>. The office sends the invoice; nothing to collect today.</div>`;
-    if (!inv || inv.status !== 'Posted') return html`<div class="m-card">The invoice is not posted yet. Ask the office.</div>`;
-    const bal = balanceOf(inv);
-    const pays = paymentsFor(inv.id);
-    return html`<div class="m-card"><div class="row"><b>${inv.no}</b><span class="grow"></span><span class="pill ${bal > 0 ? 'amber' : 'green'}">${bal > 0 ? 'Due now' : 'Paid'}</span></div>
-      <div class="muted small">Payment term Immediate · raised when the job was scheduled</div><div style="font-size:20px;font-weight:600;margin-top:4px">${auth.company().currency} ${m2(bal > 0 ? bal : inv.total)}</div></div>
-      ${pays.map(p => html`<div class="m-card small">✓ ${p.no} · ${vsLabel('PAYMENT_METHOD', p.method)} · ${m2(p.amount)}${p.reference ? ` · ${p.reference}` : ''}</div>`)}
-      ${bal > 0 && auth.can('payment', 'create', 'mobile') ? html`<div class="form-lines" style="margin-top:6px">
-        <div class="field"><label>Method</label>${chipGroup('method', vsOptions('PAYMENT_METHOD'), 'PAYNOW')}</div>
-        <div class="field"><label>Amount</label><input type="number" step="0.01" name="amount" value="${bal.toFixed(2)}"></div>
-        <div class="field"><label>Reference</label><input type="text" name="reference" placeholder="Cheque no. / transfer ref."></div>
-        <div class="field"><label>Proof photo</label><input type="file" accept="image/*" capture="environment" id="proofIn"></div></div>
-        <button type="button" class="btn primary block" id="recPay" style="margin-top:8px">Record payment</button>` : ''}`;
-  },
-  leave: j => {
-    const l = j.leaveSite;
-    if (j.steps?.checkOutAt) return html`<div class="okay"><b>✓ Checked out at ${fmtTime(j.steps.checkOutAt)}</b><br><span class="small">Job done. Thank you.</span></div>`;
-    if (l?.confirmedAt) return html`<div class="okay"><b>✓ Office confirmed at ${fmtTime(l.confirmedAt)}</b><br><span class="small">You can check out now</span></div>`;
-    if (l?.requestedAt) return html`<div class="wait"><b>Waiting for the office OK…</b><br><span class="small">${isOffline() ? `Asked at ${fmtTime(l.requestedAt)} while offline: the request reaches the office when the phone is back online` : `Request sent ${fmtTime(l.requestedAt)} to the Operations Executive`}</span></div><button type="button" class="btn block" id="refresh" style="margin-top:8px">Check again</button>`;
-    return html`<div class="m-card small">Ask the office before you leave the site (flow step 8). The Operations Executive confirms on the web or the phone.</div>`;
-  },
-};
 
 export function mRepairStep(page, id, key) {
   const j = store.get('jobs', id);
   if (!j || !seesJob(j)) { page.setTitle('Job', 'm/jobs'); page.body.innerHTML = '<div class="empty">Job not found.</div>'; return; }
-  if (!j.workDone) saveJob(j.id, { workDone: workDoneFor(j) });
+  if (!j.workDone) saveJob(j.id, { workDone: workDoneFor(j, { unanswered: true }) });
   const job = store.get('jobs', id);
-  const idx = Math.max(0, STEPS.findIndex(([k]) => k === key));
-  const [step, title] = STEPS[idx];
-  page.setTitle(`${job.no} · ${title}`, `m/rjob/${job.id}`);
-  const locked = !!job.workDone.signedAt && ['works', 'feedback', 'signoff'].includes(step);
+  const steps = stepsOf(job);
+  if (!steps.some(([k]) => k === key)) { go(`m/rjob/${id}/${key === 'payment' ? 'leave' : steps[0][0]}`); return; } // nothing to collect: no payment step
+  const idx = steps.findIndex(([k]) => k === key);
+  const [step, title] = steps[idx];
+  page.setTitle(titleOf(job), `m/rjob/${job.id}`, `${job.no} · ${title}`);
+  const signed = !!job.workDone.signedAt;
+  const locked = signed && ['works', 'feedback', 'signoff'].includes(step);
+  // What "Finish: customer signed" found missing; it stays on screen, with red steps, until it is put right.
+  const issues = checking(id) && !signed ? workDoneIssues(job).map(i => ({ ...i, tag: STEP_NAME[i.step] || '' })) : [];
+  if (checking(id) && (signed || !issues.length)) setChecking(id, false);
   const pads = {};
-  page.body.innerHTML = String(html`${progress(job, step)}<form id="f" onsubmit="return false">${RENDER[step](job)}</form>${locked ? html`<div class="note small" style="margin-top:8px">Signed by the customer; the form is locked.</div>` : ''}`);
+  const bar = stepBar(steps.map(([k, t, short], i) => ({ title: t, short, href: `m/rjob/${id}/${k}`, state: stepState(job, k, i < idx) })), idx);
+  page.body.innerHTML = String(html`${bar}<form id="f" onsubmit="return false">${step === 'leave' ? leaveBody(job) : RENDER[step](job, locked, issues)}</form>
+    ${locked ? html`<div class="note small" style="margin-top:8px">Signed by the customer; the form is locked.</div>` : ''}`);
   const body = $('#f', page.body);
-  if (locked) $$('input, textarea, button.dot', body).forEach(x => { x.disabled = true; });
+  if (locked) $$('input:not([data-add]), textarea, button.dot', body).forEach(x => { x.disabled = true; });
   hydrateImages(page.body);
   bindMics(body);
   const repaint = () => mRepairStep(page, id, step);
@@ -203,10 +126,10 @@ export function mRepairStep(page, id, key) {
   const savePads = async () => {
     const w = read();
     for (const who of Object.keys(pads)) if (!pads[who].isEmpty()) w[who].signatureId = (await pads[who].save()).id;
-    saveJob(id, { workDone: w });
+    if (!locked) saveJob(id, { workDone: w });
   };
   if (step === 'signoff' && !locked) {
-    ['tech', 'cust'].forEach(who => { const c = $(`#sig_${who}`, body); if (c) pads[who] = signaturePad(c); });
+    ['tech', 'cust'].forEach(who => { const c = $(`#sig_${who}`, body); if (c) { pads[who] = signaturePad(c); c.addEventListener('pointerdown', () => c.dispatchEvent(new Event('input', { bubbles: true }))); } });
     $$('[data-resign]', body).forEach(b => b.addEventListener('click', async () => { await savePads(); const w = read(); removeBlob(w[b.dataset.resign].signatureId); w[b.dataset.resign].signatureId = null; saveJob(id, { workDone: w }); repaint(); }));
     $('#stampIn', body)?.addEventListener('change', async e => { await savePads(); const [sid] = await savePhotos(e.target.files); if (sid) { const w = read(); w.cust.stampId = sid; saveJob(id, { workDone: w }); } repaint(); });
     $('[data-stampdel]', body)?.addEventListener('click', async () => { await savePads(); const w = read(); removeBlob(w.cust.stampId); w.cust.stampId = null; saveJob(id, { workDone: w }); repaint(); });
@@ -216,43 +139,68 @@ export function mRepairStep(page, id, key) {
     if (!locked) { await savePads(); repaint(); }
     openDocSheet('Preview · Work Done form', workDoneSheet(store.get('jobs', id), auth.company()));
   });
+  $('#proofIn', body)?.addEventListener('change', e => { $('#proofName', body).textContent = e.target.files?.[0]?.name || 'Take or add a photo'; });
   $('#recPay', body)?.addEventListener('click', async () => {
     const d = readForm(body);
     const f = $('#proofIn', body)?.files?.[0];
     const proofId = f ? (await savePhotos([f]))[0] || null : null;
     const r = recordPayment({ invoiceId: invoiceForJob(id).id, amount: d.amount, method: d.method, reference: d.reference, proofId, via: 'phone' });
-    if (r.problems.length) { toast(r.problems[0], 'bad'); return; }
+    if (r.problems.length) { showAt($('[name="amount"]', body), r.problems[0]); return; }
     toast(`${r.payment.no} recorded · the office sees it now`);
     repaint();
   });
-  $('#refresh', body)?.addEventListener('click', repaint);
+
+  // What is missing in this step, shown at its field; the one tapped in the list gets the cursor.
+  const marks = {
+    rows: () => $$('[data-row]', body).filter(row => !row.querySelector('input[type=radio]:checked')).map(row => [row.querySelector('.chips'), 'Choose one']),
+    ratings: () => $$('[data-rate-row]', body).filter(row => !row.querySelector('.dot.on')).map(row => [row.querySelector('.dot'), 'Tap a rating from 5 to 1']),
+    techSign: () => [[$('#sig_tech', body), 'Sign here']],
+    custSign: () => [[$('#sig_cust', body), 'The customer signs here']],
+  };
+  // focusKey: the problem whose first field gets the cursor (none: the fields are only marked).
+  const mark = (keys, focusKey = '') => {
+    let any = false, focused = false;
+    keys.forEach(k => (marks[k]?.() || []).forEach(([el, text]) => {
+      const focus = !focused && k === focusKey;
+      if (showAt(el, text, focus)) { any = true; focused = focused || focus; }
+    }));
+    return any;
+  };
+  const jump = takeJump();
+  if (issues.length && !locked) mark(issues.filter(i => i.step === step).map(i => i.key), jump?.key);
+  $$('[data-prob]', page.body).forEach(a => a.addEventListener('click', async e => {
+    e.preventDefault();
+    const p = issues[+a.dataset.prob];
+    await savePads();
+    setJump({ key: p.key });
+    if (p.step === step) repaint(); else go(p.step ? `m/rjob/${id}/${p.step}` : `m/rjob/${id}`);
+  }));
+  $$('[data-jump]', page.body).forEach(a => a.addEventListener('click', async e => { e.preventDefault(); await savePads(); go(a.getAttribute('href')); }));
 
   // Footer: back / next, or the step's own action.
-  const prev = idx > 0 ? `m/rjob/${id}/${STEPS[idx - 1][0]}` : `m/rjob/${id}`;
-  const nextRoute = idx < STEPS.length - 1 ? `m/rjob/${id}/${STEPS[idx + 1][0]}` : `m/rjob/${id}`;
-  const l = job.leaveSite;
-  const main = step === 'signoff' && !job.workDone.signedAt ? html`<button class="btn primary" id="next">Finish: customer signed</button>`
-    : step === 'leave' ? (job.steps?.checkOutAt ? html`<a class="btn primary" href="#/m/jobs">Back to My jobs</a>` : l?.confirmedAt ? html`<button class="btn primary" id="out">Check out · Time Out now</button>`
-      : l?.requestedAt ? '' : html`<button class="btn primary" id="ask">Ask the office to leave</button>`)
-      : html`<button class="btn primary" id="next">Next: ${STEPS[idx + 1]?.[1]}</button>`;
+  const prev = idx > 0 ? `m/rjob/${id}/${steps[idx - 1][0]}` : `m/rjob/${id}`;
+  const nextRoute = idx < steps.length - 1 ? `m/rjob/${id}/${steps[idx + 1][0]}` : `m/rjob/${id}`;
+  const main = step === 'signoff' && !signed ? html`<button class="btn primary" id="next">Finish: customer signed</button>`
+    : step === 'leave' ? leaveFoot(job)
+      : html`<button class="btn primary" id="next">${step === 'before' && !(job.photosBefore || []).length ? 'Next without photos' : `Next: ${steps[idx + 1]?.[1]}`}</button>`;
   const foot = page.setFoot(html`<button class="btn" id="back">← Back</button>${main}`);
   $('#back', foot).onclick = async () => { await savePads(); go(prev); };
-  $('#next', foot)?.addEventListener('click', async () => {
+  $('#next', foot)?.addEventListener('click', async e => {
+    if (e.currentTarget.dataset.held) return;
     await savePads();
-    if (step === 'works' && !locked) saveJob(id, { workDone: { ...read(), worksAt: new Date().toISOString() } });
-    if (step === 'feedback' && Object.values(store.get('jobs', id).workDone.ratings).some(v => !v)) { toast('The customer has not rated all 4 categories', 'bad'); return; }
-    if (step === 'signoff' && !store.get('jobs', id).workDone.signedAt) {
-      const problems = completeWorkDone(id);
-      if (problems.length) { openModal({ title: 'Not ready to finish', body: html`<ul>${problems.map(p => html`<li>${p}</li>`)}</ul>`, actions: [{ label: 'OK', kind: 'primary' }] }); return; }
+    if (step === 'works' && !locked) {
+      saveJob(id, { workDone: read() });
+      if (mark(['rows'], 'rows')) return;
+      saveJob(id, { workDone: { ...read(), worksAt: new Date().toISOString() } });
+    }
+    if (step === 'feedback' && !locked && mark(['ratings'], 'ratings')) return;
+    if (step === 'signoff' && !signed) {
+      if (workDoneIssues(store.get('jobs', id)).length) { setChecking(id, true); repaint(); page.body.scrollTop = 0; return; }
+      completeWorkDone(id);
+      setChecking(id, false);
       toast('Work Done form signed');
     }
     go(nextRoute);
   });
-  $('#ask', foot)?.addEventListener('click', () => {
-    const now = store.get('jobs', id);
-    const problems = now.workDone?.signedAt ? [] : ['Finish the sign-off first (step "Sign-off": Finish, customer signed).'];
-    if (problems.length) { toast(problems[0], 'bad'); return; }
-    requestLeave(id); toast('Request sent to the office'); repaint();
-  });
-  $('#out', foot)?.addEventListener('click', () => { checkOut(id); toast('Checked out'); repaint(); });
+  if (step === 'leave') bindLeave(page, foot, id, repaint);
 }

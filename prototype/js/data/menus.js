@@ -16,29 +16,34 @@ export const MENUS = [
   { key: 'item', label: 'Material/Item', group: 'Master', icon: '▣', route: 'master/item', stretch: 1 },
   { key: 'size', label: 'Product Size', group: 'Master', icon: '⬚', route: 'master/size', stretch: 1 },
   { key: 'uom', label: 'Unit of Measure', group: 'Master', icon: '⊿', route: 'master/uom', stretch: 1 },
-  { key: 'valueset', label: 'Value Set Master', group: 'Master', icon: '≡', route: 'master/valueset', stretch: 1 },
+  { key: 'valueset', label: 'Value Set Master', plain: 'Drop-down lists', group: 'Master', icon: '≡', route: 'master/valueset', stretch: 1 },
   { key: 'tax', label: 'Tax', group: 'Master', icon: '%', route: 'master/tax', stretch: 1 },
   { key: 'terms', label: 'Terms', group: 'Master', icon: '¶', route: 'master/terms', stretch: 1 },
 
-  { key: 'enquiry', label: 'Sales Enquiry', group: 'Transactions', icon: '✎', route: 'enquiries', stretch: 1 },
-  { key: 'inspection', label: 'Job Assessment', group: 'Transactions', icon: '⌖', route: 'assessments', stretch: 1 },
-  { key: 'estimation', label: 'Estimation', group: 'Transactions', icon: '∑', route: 'estimates', stretch: 2 },
-  { key: 'quotation', label: 'Sales Quotation', group: 'Transactions', icon: '▤', route: 'quotations', stretch: 2 },
-  { key: 'job', label: 'Job Execution', group: 'Transactions', icon: '⚑', route: 'jobs', stretch: 2 },
-  { key: 'amcContract', label: 'AMC Contract', group: 'Transactions', icon: '▦', route: 'contracts', stretch: 3 },
-  { key: 'amcScheduling', label: 'AMC Scheduling', group: 'Transactions', icon: '◷', route: 'amc-scheduling', stretch: 3 },
-  { key: 'amcExecution', label: 'AMC Execution', group: 'Transactions', icon: '✓', route: 'amc-visits', stretch: 3 },
-  { key: 'closure', label: 'Job Closure', group: 'Transactions', icon: '⊠', route: 'closure', stretch: 2 },
-  { key: 'invoice', label: 'Invoice', group: 'Transactions', icon: '▧', route: 'invoices', stretch: 2 },
-  { key: 'payment', label: 'Payment Collection', group: 'Transactions', icon: '$', route: 'payments', stretch: 2 },
+  { key: 'enquiry', label: 'Sales Enquiry', plain: 'Enquiries', also: ['Enquiry register'], group: 'Transactions', icon: '✎', route: 'enquiries', stretch: 1 },
+  { key: 'inspection', label: 'Job Assessment', plain: 'Job assessments', also: ['Job assessments'], group: 'Transactions', icon: '⌖', route: 'assessments', stretch: 1 },
+  { key: 'estimation', label: 'Estimation', plain: 'Estimates', also: ['Estimates'], group: 'Transactions', icon: '∑', route: 'estimates', stretch: 2 },
+  { key: 'quotation', label: 'Sales Quotation', plain: 'Quotations', also: ['Quotations'], group: 'Transactions', icon: '▤', route: 'quotations', stretch: 2 },
+  { key: 'job', label: 'Job Execution', plain: 'Jobs and schedule', also: ['Scheduling board'], group: 'Transactions', icon: '⚑', route: 'jobs', stretch: 2 },
+  { key: 'amcContract', label: 'AMC Contract', plain: 'Maintenance contracts (AMC)', also: ['AMC contracts'], group: 'Transactions', icon: '▦', route: 'contracts', stretch: 3 },
+  { key: 'amcScheduling', label: 'AMC Scheduling', plain: 'Maintenance schedule (AMC)', group: 'Transactions', icon: '◷', route: 'amc-scheduling', stretch: 3 },
+  { key: 'amcExecution', label: 'AMC Execution', plain: 'Maintenance visits (AMC)', also: ['AMC visits'], group: 'Transactions', icon: '✓', route: 'amc-visits', stretch: 3 },
+  { key: 'closure', label: 'Job Closure', plain: 'Job closure', also: ['Job closure'], group: 'Transactions', icon: '⊠', route: 'closure', stretch: 2 },
+  { key: 'invoice', label: 'Invoice', plain: 'Invoices', also: ['Invoices'], group: 'Transactions', icon: '▧', route: 'invoices', stretch: 2 },
+  { key: 'payment', label: 'Payment Collection', plain: 'Payments', also: ['Payment collection'], group: 'Transactions', icon: '$', route: 'payments', stretch: 2 },
 
   { key: 'companySetup', label: 'Company Setup', group: 'Admin Setup', icon: '⌂', route: 'admin/companySetup', stretch: 3.5 },
-  { key: 'transactionSetup', label: 'Transaction Setup', group: 'Admin Setup', icon: '#', route: 'admin/transactionSetup', stretch: 3.5 },
+  { key: 'transactionSetup', label: 'Transaction Setup', plain: 'Document settings', group: 'Admin Setup', icon: '#', route: 'admin/transactionSetup', stretch: 3.5 },
   { key: 'userRole', label: 'User Role', group: 'Admin Setup', icon: '☻', route: 'admin/userRole', stretch: 3.5 },
-  { key: 'menuAccess', label: 'Menu Access', group: 'Admin Setup', icon: '⊞', route: 'admin/menuAccess', stretch: 3.5 },
-  { key: 'authWorkflow', label: 'Authorization Workflow Master', group: 'Admin Setup', icon: '⇶', route: 'admin/authWorkflow', stretch: 3.5 },
+  { key: 'menuAccess', label: 'Menu Access', plain: 'Permissions', group: 'Admin Setup', icon: '⊞', route: 'admin/menuAccess', stretch: 3.5 },
+  { key: 'authWorkflow', label: 'Authorization Workflow Master', plain: 'Approval rules', group: 'Admin Setup', icon: '⇶', route: 'admin/authWorkflow', stretch: 3.5 },
 ];
 
+// UX audit (findings 8 and 9): each menu keeps the name in the team lead's menu file (tl) and may have a
+// plain one. `label` gives the one in use (Company Setup → Working style → "Menu names in plain words"); `also` lists
+// what pages used to call the same place, so every page shows one name (namesIn() in web/shell.js).
+import { ux } from '../core/ux.js';
+MENUS.forEach(m => { const tl = m.label; m.tl = tl; Object.defineProperty(m, 'label', { get: () => (m.plain && ux().plainMenus ? m.plain : tl), enumerable: true }); });
 export const MASTER_KEYS = MENUS.filter(m => m.group === 'Master').map(m => m.key);
 export const menuByKey = key => MENUS.find(m => m.key === key);
 export const routeOf = m => m.route || `soon/${m.key}`;

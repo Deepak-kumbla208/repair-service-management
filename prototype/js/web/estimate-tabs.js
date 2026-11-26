@@ -1,24 +1,39 @@
 // The estimate's Excel tabs as editable tables (same columns and formulas as the team lead's Repair estimator):
 // Products to repair, Labour, Transport, Materials, Equipment, Overhead & Margin. Every pre-filled value stays
 // editable. "For" (which line a row belongs to) shows only with Line costing; a row with no line is a shared cost.
+// This is the Excel view: the column names are the workbook's own. Every input carries a label for screen readers
+// (the column and the row), and the part of a Materials row is picked in a type-to-search box.
 import { syncPartLine, syncProductLabour, setLineQty } from '../core/estimates.js';
 import * as store from '../core/store.js';
+import * as auth from '../core/auth.js';
 import { html, fmtNum } from '../core/ui.js';
-import { zones, items, vsOptions } from '../core/lookups.js';
+import { pickerHtml } from './picker.js';
+import { zones, vsOptions } from '../core/lookups.js';
 import { labourRow, materialRow, transportRow, equipmentRow, fixedRow, hourlyRate, otRate, round2 } from '../core/costing.js';
 import { productOf, repairLabour, costingOf, sizeText, sizesOf } from '../core/products.js';
 
 const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const rid = () => store.uid('r_');
 
+// The column each input sits under, read out with its row ("Hrs, row 2").
+const COLS = {
+  shutters: { qty: 'Qty', sizeCode: 'Size', fault: 'Fault Reported' }, fixed: { qty: 'Qty', price: 'Price' }, lines: { description: 'Line' },
+  labour: { labourId: 'Trade / Role', lineKey: 'For', team: 'Team', hrs: 'Hrs', otHrs: 'OT Hours' },
+  transport: { zoneId: 'Zone', lineKey: 'For', trips: 'Trips', hrs: 'No. of Hrs', rate: 'Fixed Charge per Hr' },
+  materials: { itemId: 'Product', lineKey: 'For', qty: 'Quantity', wastage: 'Wastage %', rate: 'Rate per Unit' },
+  equipment: { equipmentId: 'Equipment', lineKey: 'For', qty: 'Qty', duration: 'Duration (days / hrs)', rate: 'Rate per Unit' },
+  overheads: { name: 'Overhead Item', basis: 'Basis', value: 'Value (% or amount)' },
+};
+export const cellLabel = (t, i, f) => `${COLS[t]?.[f] || f}, row ${i + 1}`;
+
 // One editable cell: data-t (tab), data-i (row), data-f (field).
 function inp(ctx, t, i, f, v, { type = 'number', step = 'any', w = 70, list } = {}) {
   if (!ctx.editable) return type === 'number' ? fmtNum(v, 2) : v;
-  return html`<input type="${type}" ${type === 'number' ? html`step="${step}"` : ''} data-t="${t}" data-i="${i}" data-f="${f}" value="${v ?? ''}" style="width:${w}px" ${list ? html`list="${list}"` : ''}>`;
+  return html`<input type="${type}" ${type === 'number' ? html`step="${step}"` : ''} data-t="${t}" data-i="${i}" data-f="${f}" value="${v ?? ''}" aria-label="${cellLabel(t, i, f)}" style="width:${w}px" ${list ? html`list="${list}"` : ''}>`;
 }
 function sel(ctx, t, i, f, v, options, label) {
   if (!ctx.editable) return label ?? options.find(o => String(o.value) === String(v))?.label ?? '';
-  return html`<select data-t="${t}" data-i="${i}" data-f="${f}">${options.map(o => html`<option value="${o.value}" ${String(o.value) === String(v) ? 'selected' : ''}>${o.label}</option>`)}</select>`;
+  return html`<select data-t="${t}" data-i="${i}" data-f="${f}" aria-label="${cellLabel(t, i, f)}">${options.map(o => html`<option value="${o.value}" ${String(o.value) === String(v) ? 'selected' : ''}>${o.label}</option>`)}</select>`;
 }
 const lineOptions = est => [{ value: '', label: 'Shared (whole job)' }, ...est.lines.map(l => ({ value: l.key, label: l.tag || l.description.slice(0, 18) }))];
 const forCell = (ctx, est, t, i, r) => (est.costingLevel === 'LINE' ? html`<td>${sel(ctx, t, i, 'lineKey', r.lineKey || '', lineOptions(est))}</td>` : '');
@@ -39,7 +54,7 @@ function shuttersTab(est, ctx) {
     if (costingOf(p) !== 'SIZE') return html`<span class="muted">no size</span>`;
     const measured = s.width || s.measure;
     if (measured || !ctx.editable) return sizeText(s, { none: '' }) || html`<span class="muted">not sized</span>`;
-    return html`<select data-t="shutters" data-i="${i}" data-f="sizeCode" class="${s.sizeCode ? '' : 'invalid'}" title="Pick the size: the hours follow it"><option value="">Pick size</option>${sizesOf(p).map(z => html`<option value="${z.code}" ${z.code === s.sizeCode ? 'selected' : ''}>${z.code} – ${z.name}</option>`)}</select>`;
+    return html`<select data-t="shutters" data-i="${i}" data-f="sizeCode" aria-label="${cellLabel('shutters', i, 'sizeCode')}" class="${s.sizeCode ? '' : 'invalid'}" title="Pick the size: the hours follow it"><option value="">Pick size</option>${sizesOf(p).map(z => html`<option value="${z.code}" ${z.code === s.sizeCode ? 'selected' : ''}>${z.code} – ${z.name}</option>`)}</select>`;
   };
   const products = est.shutters.length ? html`<table class="tbl"><thead><tr><th>Tag / Location</th><th>Product</th><th class="num">Qty</th><th>Unit</th><th>Size</th><th>Fault Reported</th><th class="num">Team hrs</th><th class="num">Extra workers × hrs</th><th class="num">Labour Amount</th></tr></thead><tbody>
     ${est.shutters.map((s, i) => html`<tr><td><b>${s.tag || ''}</b> ${s.location}</td><td>${s.typeName}</td>
@@ -58,7 +73,7 @@ function labourTab(est, ctx) {
   const sum = est.labour.reduce((t, r) => { const x = labourRow(r); return { hrs: t.hrs + (Number(r.hrs) || 0) + (Number(r.otHrs) || 0), basic: t.basic + x.basic, ot: t.ot + x.ot, total: t.total + x.total }; }, { hrs: 0, basic: 0, ot: 0, total: 0 });
   const teamHrs = est.labour.filter(r => r.team === 1 && !/additional/i.test(r.trade)).reduce((t, r) => t + (Number(r.hrs) || 0) + (Number(r.otHrs) || 0), 0);
   return html`<table class="tbl edit"><thead><tr><th>Sl</th><th>Trade / Role</th>${forHead(est)}<th>Skill Level</th><th class="num">Team</th><th class="num">Hrs</th><th class="num">Rate per Hr</th><th class="num">Basic Cost</th><th class="num">OT Hours</th><th class="num">OT Rate</th><th class="num">OT Cost</th><th class="num">Total Labour Cost</th>${delHead(ctx)}</tr></thead><tbody>
-    ${est.labour.map((r, i) => { const x = labourRow(r); return html`<tr><td>${i + 1}</td><td>${sel(ctx, 'labour', i, 'labourId', r.labourId, trades, r.trade)}${r.forTag && est.costingLevel !== 'LINE' ? html` <span class="muted small">${r.forTag}</span>` : ''}</td>${forCell(ctx, est, 'labour', i, r)}
+    ${est.labour.map((r, i) => { const x = labourRow(r); return html`<tr><td>${i + 1}</td><td><div class="cell-tag">${sel(ctx, 'labour', i, 'labourId', r.labourId, trades, r.trade)}${r.forTag && est.costingLevel !== 'LINE' ? html`<span class="muted small">${r.forTag}</span>` : ''}</div></td>${forCell(ctx, est, 'labour', i, r)}
       <td>${r.skill}</td><td class="num">${inp(ctx, 'labour', i, 'team', r.team, { w: 46, step: 1 })}</td><td class="num">${inp(ctx, 'labour', i, 'hrs', r.hrs, { w: 56 })}</td><td class="num">${m2(r.rate)}</td><td class="num">${m2(x.basic)}</td>
       <td class="num">${inp(ctx, 'labour', i, 'otHrs', r.otHrs, { w: 56 })}</td><td class="num">${m2(r.otRate)}</td><td class="num">${m2(x.ot)}</td><td class="num">${m2(x.total)}</td>${del(ctx, 'labour', i)}</tr>`; })}
     <tr class="sum"><td></td><td><b>TOTAL</b></td>${est.costingLevel === 'LINE' ? html`<td></td>` : ''}<td></td><td></td><td class="num">${fmtNum(sum.hrs)}</td><td></td><td class="num">${m2(sum.basic)}</td><td></td><td></td><td class="num">${m2(sum.ot)}</td><td class="num"><b>${m2(sum.total)}</b></td>${delHead(ctx)}</tr>
@@ -78,11 +93,14 @@ function transportTab(est, ctx) {
 }
 
 function materialsTab(est, ctx) {
-  const opts = [{ value: '', label: '— pick from the master —' }, ...items().map(it => ({ value: it.id, label: it.name }))];
+  // The part is picked in a type-to-search box (the page gives it the parts and materials of the master).
+  const part = (r, i) => (ctx.editable
+    ? pickerHtml({ attrs: `data-t="materials" data-i="${i}" data-f="itemId"`, value: r.itemId, label: r.name, placeholder: 'Type to search parts', ariaLabel: cellLabel('materials', i, 'itemId') })
+    : r.name);
   return html`<table class="tbl edit"><thead><tr><th>Sl</th><th>Product</th>${forHead(est)}<th>Specification / Grade</th><th>Unit</th><th class="num">Quantity</th><th class="num">Wastage %</th><th class="num">Total Qty</th><th class="num">Rate per Unit</th><th class="num">Amount</th><th>Lead Time Spares</th>${delHead(ctx)}</tr></thead><tbody>
-    ${est.materials.map((r, i) => { const x = materialRow(r); return html`<tr><td>${i + 1}</td><td>${sel(ctx, 'materials', i, 'itemId', r.itemId, opts, r.name)}${!r.itemId ? html` <span class="tag">${r.name || 'new item'}</span>` : ''}</td>${forCell(ctx, est, 'materials', i, r)}
+    ${est.materials.map((r, i) => { const x = materialRow(r); return html`<tr><td>${i + 1}</td><td><div class="cell-tag">${part(r, i)}${!r.itemId && r.name ? html`<span class="tag">Not in the price list</span>` : ''}</div></td>${forCell(ctx, est, 'materials', i, r)}
       <td>${r.spec}</td><td>${r.unit}</td><td class="num">${inp(ctx, 'materials', i, 'qty', r.qty, { w: 56 })}</td><td class="num">${inp(ctx, 'materials', i, 'wastage', r.wastage, { w: 50 })}</td><td class="num">${fmtNum(x.totalQty)}</td>
-      <td class="num">${inp(ctx, 'materials', i, 'rate', r.rate, { w: 76 })}${r.placeholder ? html` <span class="tag">placeholder</span>` : ''}</td><td class="num">${m2(x.amount)}</td><td>${r.leadDays ? `${r.leadDays} days` : 'in stock'}</td>${del(ctx, 'materials', i)}</tr>`; })}
+      <td class="num"><div class="cell-stack">${inp(ctx, 'materials', i, 'rate', r.rate, { w: 76 })}${r.placeholder ? html`<span class="tag">Rate to confirm</span>` : ''}</div></td><td class="num">${m2(x.amount)}</td><td>${r.leadDays ? `${r.leadDays} days` : 'in stock'}</td>${del(ctx, 'materials', i)}</tr>`; })}
     ${total(ctx.editable ? 2 : 1, html`<td class="num"><b>${m2(est.materials.reduce((t, r) => t + materialRow(r).amount, 0))}</b></td>`, est.costingLevel === 'LINE' ? 9 : 8)}
   </tbody></table>${addBtn(ctx, 'materials', 'Add material')}
   <p class="mini-note">From site report section 5, matched to the Material/Item master (spec, unit, rate, wastage, lead time).</p>`;
@@ -91,7 +109,7 @@ function materialsTab(est, ctx) {
 function equipmentTab(est, ctx) {
   const opts = [{ value: '', label: '—' }, ...store.list('equipment', e => e.status !== 'Inactive').map(e => ({ value: e.id, label: e.name }))];
   return html`<table class="tbl edit"><thead><tr><th>Sl</th><th>Equipment</th>${forHead(est)}<th>Ownership</th><th>Rate Basis</th><th class="num">Qty</th><th class="num">Duration (days / hrs)</th><th class="num">Rate per Unit</th><th class="num">Amount</th>${delHead(ctx)}</tr></thead><tbody>
-    ${est.equipment.length ? html`${est.equipment.map((r, i) => html`<tr><td>${i + 1}</td><td>${sel(ctx, 'equipment', i, 'equipmentId', r.equipmentId, opts, r.name)}${r.byCustomer ? html` <span class="muted small">provided by customer</span>` : ''}</td>${forCell(ctx, est, 'equipment', i, r)}
+    ${est.equipment.length ? html`${est.equipment.map((r, i) => html`<tr><td>${i + 1}</td><td><div class="cell-tag">${sel(ctx, 'equipment', i, 'equipmentId', r.equipmentId, opts, r.name)}${r.byCustomer ? html`<span class="muted small">provided by customer</span>` : ''}</div></td>${forCell(ctx, est, 'equipment', i, r)}
       <td>${r.ownership}</td><td>${r.basis}</td><td class="num">${inp(ctx, 'equipment', i, 'qty', r.qty, { w: 50, step: 1 })}</td><td class="num">${inp(ctx, 'equipment', i, 'duration', r.duration, { w: 56 })}</td><td class="num">${inp(ctx, 'equipment', i, 'rate', r.rate, { w: 70 })}</td><td class="num">${m2(equipmentRow(r))}</td>${del(ctx, 'equipment', i)}</tr>`)}`
       : html`<tr><td colspan="9" class="empty">No equipment ticked in the site report.</td></tr>`}
     ${total(ctx.editable ? 1 : 0, html`<td class="num"><b>${m2(est.equipment.reduce((t, r) => t + equipmentRow(r), 0))}</b></td>`, est.costingLevel === 'LINE' ? 8 : 7)}
@@ -115,12 +133,46 @@ function overheadTab(est, ctx, s) {
   <p class="mini-note">A % overhead is applied to each line's cost; a fixed amount is a shared cost (spread into the lines or shown in the shared line).</p>`;
 }
 
+// Summary: the description (Job costing) or the priced lines (Line costing), the cost heads and transport by zone.
+// Without the "See markup" right: overhead is one line, and margin and the percentages are not shown.
+function summaryTab(est, ctx, s) {
+  const sees = auth.seesMarkup();
+  const pc = v => `${(v * 100).toFixed(1)} %`;
+  const desc = ctx.editable
+    ? html`<textarea data-h="description" rows="2" aria-label="Description" style="border:0;border-bottom:1px solid #C9C7BE;border-radius:0;min-height:40px">${est.header.description}</textarea>`
+    : est.header.description;
+  const lines = est.costingLevel === 'LINE' ? html`<table class="tbl"><thead><tr><th style="width:30px">#</th><th>Line</th><th class="num">${est.sharedCosts === 'SPREAD' ? 'Direct cost incl. shared' : 'Direct cost'}</th><th class="num">Price</th></tr></thead><tbody>
+      ${s.lines.map((l, i) => { const at = est.lines.findIndex(x => x.key === l.key); return html`<tr><td>${i + 1}</td><td class="wrap">${l.isShared ? html`<b>${est.sharedLabel}</b>` : ctx.editable ? html`<input type="text" data-t="lines" data-i="${at}" data-f="description" value="${l.description}" aria-label="${cellLabel('lines', i, 'description')}" style="width:100%">` : l.description}</td>
+        <td class="num">${m2(l.direct + (l.shared || 0))}</td><td class="num"><b>${m2(l.rounded)}</b></td></tr>`; })}
+      <tr class="sum"><td></td><td>${est.sharedCosts === 'SPREAD' ? html`<span class="muted">Shared costs spread by each line's direct cost</span>` : ''}</td><td class="num">${m2(s.direct)}</td><td class="num"><b>${m2(s.subtotal)}</b></td></tr>
+    </tbody></table><p class="mini-note">Line costing: one priced row per line on the quotation. Any rounding cent sits on the biggest line, so the total equals Job costing.</p>`
+    : html`<table class="tbl"><thead><tr><th style="width:30px">S#</th><th>Description</th><th class="num" style="width:50px">Qty</th></tr></thead><tbody><tr><td>1</td><td class="wrap">${desc}</td><td class="num">1</td></tr></tbody></table>
+      <p class="mini-note">Job costing: the quotation shows one price for the whole job.</p>`;
+  const head = (label, v, p, cls = '') => html`<tr class="${cls}"><td>${label}</td><td class="num">${m2(v)}</td>${sees ? html`<td class="num">${p == null ? '' : pc(p)}</td>` : ''}</tr>`;
+  return html`${lines}
+    <div class="split" style="margin-top:12px">
+      <table class="tbl cost-tbl"><thead><tr><th>Cost Head</th><th class="num">Amount (${auth.company().currency})</th>${sees ? html`<th class="num" style="white-space:normal">% of Selling Price</th>` : ''}</tr></thead><tbody>
+        ${head('Labour', s.heads.labour, s.pct.labour)}${head('Transport', s.heads.transport, s.pct.transport)}${head('Materials', s.heads.materials, s.pct.materials)}${head('Equipment', s.heads.equipment, s.pct.equipment)}
+        ${head('DIRECT COST', s.direct, s.pct.direct, 'sum')}${head('Overhead', s.overhead, s.pct.overhead)}${sees ? head('COST BEFORE MARGIN', s.cbm, s.pct.cbm, 'sum') : ''}
+        ${sees ? head('Margin', s.margin, s.pct.margin) : ''}${s.fixed ? head('Fixed-price products (as priced)', s.fixed, s.sell ? s.fixed / s.sell : 0) : ''}${head('SELLING PRICE', s.subtotal, s.sell ? 1 : 0, 'sum')}${head(`${est.taxLabel || 'Tax'} ${fmtNum(est.taxRate)} %`, s.tax, null)}${head('TOTAL QUOTE', s.total, null, 'grand')}
+      </tbody></table>
+      <div><h3 style="margin:0 0 6px">Transport – zone wise</h3>
+        <table class="tbl"><thead><tr><th>Zone</th><th class="num">Cost</th><th class="num">% of Transport</th></tr></thead><tbody>
+          ${s.transportByZone.map(z => html`<tr><td>${z.label}</td><td class="num">${m2(z.cost)}</td><td class="num">${s.heads.transport ? pc(z.cost / s.heads.transport) : '0.0 %'}</td></tr>`)}
+          <tr><td>Other / unassigned</td><td class="num">${m2(s.transportOther)}</td><td class="num">${s.heads.transport ? pc(s.transportOther / s.heads.transport) : '0.0 %'}</td></tr>
+          <tr class="sum"><td><b>TOTAL TRANSPORT</b></td><td class="num"><b>${m2(s.heads.transport)}</b></td><td class="num"><b>${s.heads.transport ? '100.0 %' : '0.0 %'}</b></td></tr>
+        </tbody></table></div>
+    </div>`;
+}
+
 export const TABS = [
   ['summary', 'Summary'], ['shutters', 'Products to repair'], ['labour', 'Labour'], ['transport', 'Transport'],
   ['materials', 'Materials'], ['equipment', 'Equipment'], ['overheads', 'Overhead & Margin'],
 ];
+// A tab's title; the counts follow the rows as they are added and removed.
+export const tabLabel = (k, label, est) => (k === 'shutters' ? `${label} (${est.shutters.length + (est.fixed || []).length})` : k === 'materials' ? `${label} (${est.materials.length})` : label);
 export function tabHtml(key, est, ctx, s) {
-  return { shutters: shuttersTab, labour: labourTab, transport: transportTab, materials: materialsTab, equipment: equipmentTab, overheads: overheadTab }[key]?.(est, ctx, s) || '';
+  return { summary: summaryTab, shutters: shuttersTab, labour: labourTab, transport: transportTab, materials: materialsTab, equipment: equipmentTab, overheads: overheadTab }[key]?.(est, ctx, s) || '';
 }
 
 // Default rows for "+ Add …"

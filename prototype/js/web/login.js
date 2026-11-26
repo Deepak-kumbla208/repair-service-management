@@ -54,7 +54,10 @@ export function renderLogin(app) {
   $$('[data-view]', app).forEach(b => b.onclick = () => { sessionStorage.setItem('rsmLoginView', b.dataset.view); renderLogin(app); });
   $$('[data-user]', app).forEach(b => b.onclick = () => {
     auth.login(b.dataset.user, view);
-    location.hash = view === 'mobile' ? '#/m/home' : '#/home';
+    // A role that works only on the phone opens the phone view even if "Web" was chosen (no dead-end page).
+    const phoneOnly = view === 'web' && !auth.webMenus().length && auth.mobileTabs().length > 0;
+    if (phoneOnly) auth.setView('mobile');
+    location.hash = view === 'mobile' || phoneOnly ? '#/m/home' : '#/home';
   });
   $$('[data-guide]', app).forEach(b => b.onclick = () => { startGuide(b.dataset.guide); goStep(); });
   app.querySelector('#reset').onclick = async () => {

@@ -5,8 +5,9 @@
 // v6: Stretch 3 Part A: AMC and General Servicing data, check list, AMC terms, three more customers, AMC stage samples;
 // v7: Stretch 3 Part B: company settings, terms per document, role dashboards, the job approval rule, 12 months of history;
 // v8: product lines with units; a part not fitted to one shutter is its own estimate line;
-// v9: the visit before the estimate is called job assessment, so its statuses and stage have new names).
-const PREFIX = 'rsm.v9.';
+// v9: the visit before the estimate is called job assessment, so its statuses and stage have new names;
+// v10: the improved version (UI / UX audit fixes, Fusion glass look) replaces the old screens: fresh sample data).
+const PREFIX = 'rsm.v10.';
 const cache = new Map();
 let tenant = null;
 let actor = null;
@@ -14,6 +15,9 @@ let actor = null;
 export function setContext({ tenantId = null, userId = null } = {}) { tenant = tenantId; actor = userId; }
 export const currentTenant = () => tenant;
 export const currentActor = () => actor;
+// Read a collection again from the browser's storage: another window (the office answering a technician) may have
+// saved it since.
+export const reload = coll => { cache.delete(coll); };
 
 function load(coll) {
   if (!cache.has(coll)) {

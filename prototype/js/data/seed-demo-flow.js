@@ -132,7 +132,7 @@ export function makeQuote(enq, { line = false, term } = {}) {
   submitForCheck(q.id);
   return q;
 }
-const decide = (q, login = 'approver', how = 'approve', note = '') => { as(login); decideQuotation(openTaskFor('quotation', q.id).id, how, note); };
+const decide = (q, login = 'approver', how = 'approve', note = '') => { as(login); const t = openTaskFor('quotation', q.id); if (t) decideQuotation(t.id, how, note); };
 export const send = q => { as('ops'); markSent(q.id, 'Email'); };
 export function win(q, po, term) {
   as('ops');
@@ -178,9 +178,9 @@ async function visit(job, tech, days, { rows = {}, ratings = [5, 5, 5, 5], comme
     saveJob(job.id, { workDone: w, photosAfter: [media.after] });
     completeWorkDone(job.id);
     if (pay) { const inv = invoiceForJob(job.id); recordPayment({ invoiceId: inv.id, amount: inv.total, method: pay[0], reference: pay[1], via: 'phone' }); }
-    requestLeave(job.id);
+    requestLeave(job.id, { auto: false }); // the sample history shows the office's OK, as the flow chart has it
   });
-  if (confirm) phase(at('12:28', 0.2), () => { as('ops'); confirmLeave(openTaskFor('job', job.id, 'leaveSite').id); });
+  if (confirm) phase(at('12:28', 0.2), () => { as('ops'); const t = openTaskFor('job', job.id, 'leaveSite'); if (t) confirmLeave(t.id); });
   if (checkout) phase(at('12:32', 0.1), () => { as(tl); checkOut(job.id); });
   const j = store.get('jobs', job.id);
   setRaw('jobs', job.id, { workDone: { ...j.workDone, s1: { ...j.workDone.s1, timeIn: hhmm(j.steps.checkInAt), timeOut: j.steps.checkOutAt ? hhmm(j.steps.checkOutAt) : '' } } });

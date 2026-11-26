@@ -58,7 +58,7 @@ export function renderContract(el, id) {
   const left = draft ? 0 : daysLeft(c);
   const total = Math.round((new Date(`${c.end}T00:00`) - new Date(`${c.start}T00:00`)) / 86400000) + 1;
 
-  el.innerHTML = String(html`<div class="page" style="max-width:1500px">
+  el.innerHTML = String(html`<div class="page">
     <div class="page-head"><div class="grow">
       <div class="crumb"><a href="#/contracts">AMC Contract</a> › <a href="#/enquiries/${enq.id}">${enq.no}</a></div>
       <h1>${c.no} · ${c.customer} ${contractPill(c)}</h1>
@@ -69,7 +69,7 @@ export function renderContract(el, id) {
         ${mayEdit && ['Draft', 'Active'].includes(c.status) ? html`<button class="btn" id="more">⋯</button>` : ''}
         ${edit ? html`<button class="btn primary" id="activate">Activate</button>` : ''}</div>
     </div>
-    ${draft ? html`<div class="note" style="margin-bottom:10px">Draft from the accepted quotation. Check the start date; a signed copy is optional (flow step 6). "Activate" creates the ${c.sites.reduce((t, s) => t + s.visits, 0)} visits and the ${c.plan.length} billing line${c.plan.length > 1 ? 's' : ''} below.</div>` : ''}
+    ${draft ? html`<div class="note" style="margin-bottom:10px">Draft from the accepted quotation. Check the start date; a signed copy is optional. "Activate" creates the ${c.sites.reduce((t, s) => t + s.visits, 0)} visits and the ${c.plan.length} billing line${c.plan.length > 1 ? 's' : ''} below.</div>` : ''}
     ${trailHtml(c.enquiryId, c.id)}
     <div class="stack">
       ${foldHeader({ id: `ctr-${c.id}`, title: 'Contract, customer & money', open: edit,
@@ -88,7 +88,7 @@ export function renderContract(el, id) {
         </div><div><div class="form-sec">Money</div>
         ${row('Contract value', m2(c.value))}${row(`${c.taxLabel} ${c.taxRate} %`, m2(c.tax))}${row('Total', html`<b>${m2(c.total)}</b>`)}
         ${row('Billing', `${vsLabel('BILLING', c.billing)}, in advance · ${c.plan.length} invoice${c.plan.length > 1 ? 's' : ''}`)}
-        ${row('Payment Term', `${vsLabel('PAYMENT_TERMS', c.paymentTerm)}${c.paymentTerm !== 'IMMEDIATE' ? ' (approved at the counter-check)' : ''}`)}
+        ${row('Payment Term', `${vsLabel('PAYMENT_TERMS', c.paymentTerm)}${c.paymentTerm !== 'IMMEDIATE' ? ' (approved with the quotation)' : ''}`)}
       </div></div>` })}
       <div class="card"><div class="card-head"><h2>Progress</h2></div>
         <div class="kpi k4" style="margin-bottom:0">
@@ -157,7 +157,7 @@ export function renderContract(el, id) {
     });
   });
   $('#renew', el)?.addEventListener('click', async () => {
-    if (!await confirmBox(`Renew ${c.no}`, 'A renewal enquiry is created with an estimate pre-filled from this contract (same sites, products and visits, today’s rates). It then goes to the quotation and the counter-check as usual.', 'Renew')) return;
+    if (!await confirmBox(`Renew ${c.no}`, 'A renewal enquiry is created with an estimate pre-filled from this contract (same sites, products and visits, today’s rates). It then goes to the quotation and its approval as usual.', 'Renew')) return;
     const r = renewContract(c.id); toast(`${r.enquiry.no} and ${r.estimate.no} created`); go(`estimates/${r.estimate.id}`);
   });
   $('#more', el)?.addEventListener('click', e => popMenu(e.currentTarget, [{ label: draft ? 'Cancel the contract' : 'Terminate the contract', onClick: () => openModal({

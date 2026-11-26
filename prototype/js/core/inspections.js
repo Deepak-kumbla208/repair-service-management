@@ -239,25 +239,33 @@ export function startReport(inspId, { fromOffice = false } = {}) {
 export const saveReport = (id, patch) => store.update('siteReports', id, patch, false);
 
 // paper: the office marks a report filled in on paper as received, so no on-screen signature is needed.
-export function reportProblems(rep, { paper = false } = {}) {
+// What is missing before the report can be submitted: [{ key, step, text, short, rowKey?, field? }]. step is the
+// section (2 or 7), field the control to put right, short the same message in a few words for the phone's list.
+export function reportIssues(rep, { paper = false } = {}) {
   const p = [];
   // Each message names the section and the field to fill, the same words on the web and the phone.
-  if (!rep.shutters.length && !rep.s2.description) p.push('Add at least one product under “Products and findings” (section 2 Job scope, “+ Add product”), or write the “Job Scope / Description of Work” (section 2 Job scope).');
+  if (!rep.shutters.length && !rep.s2.description) p.push({ key: 'scope', step: 2, field: 's2_description', short: 'Add a product, or write the job scope',
+    text: 'Add at least one product under “Products and findings” (section 2 Job scope, “+ Add product”), or write the “Job Scope / Description of Work” (section 2 Job scope).' });
   // A new product needs its location, and its size when its product has a size set (a pump by its kW).
   (rep.asked || []).filter(r => isProductRow(r) && (Number(r.qty) || 1) > (r.linkIds || []).length).forEach(r => {
     const sized = !!setOfProduct(productOf(r.productId));
-    if (!r.location || (sized && !r.sizeCode)) p.push(`Enter the location${sized ? ' and the size' : ''} of line ${r.n} (${productName(r.productId) || 'product'}) under “Products and findings” (section 2 Job scope).`);
+    if (!r.location || (sized && !r.sizeCode)) p.push({ key: 'where', step: 2, rowKey: r.key, field: !r.location ? `pl_${r.key}` : `ps_${r.key}`,
+      short: `Line ${r.n} (${productName(r.productId) || 'product'}): ${[!r.location && 'location', sized && !r.sizeCode && 'size'].filter(Boolean).join(' and ')} missing`,
+      text: `Enter the location${sized ? ' and the size' : ''} of line ${r.n} (${productName(r.productId) || 'product'}) under “Products and findings” (section 2 Job scope).` });
   });
-  if (!rep.s7.name) p.push('Enter the name under “Viewed by” (section 7 Sign-off).');
-  if (!paper && !rep.s7.signatureId) p.push('Sign under “Viewed by” (section 7 Sign-off).');
+  if (!rep.s7.name) p.push({ key: 'name', step: 7, field: 's7_name', short: 'Your name under “Viewed by”', text: 'Enter the name under “Viewed by” (section 7 Sign-off).' });
+  if (!paper && !rep.s7.signatureId) p.push({ key: 'sign', step: 7, field: 'sig_tech', short: 'Your signature under “Viewed by”', text: 'Sign under “Viewed by” (section 7 Sign-off).' });
   const asks = (rep.asked || []).filter(a => !a.added); // rows added on site are not asked by the customer
-  const left = asks.filter(a => !a.done).length;
-  if (!paper && left) p.push(`Tick each line under “Products and findings” once you have checked it on site (section 2 Job scope): ${left} of ${asks.length} not ticked yet.`);
+  const left = asks.filter(a => !a.done);
+  if (!paper && left.length) p.push({ key: 'ticks', step: 2, rowKey: left[0].key, field: `ask_${left[0].key}`, short: `${left.length} of ${asks.length} lines not checked yet`,
+    text: `Tick each line under “Products and findings” once you have checked it on site (section 2 Job scope): ${left.length} of ${asks.length} not ticked yet.` });
   const s7 = rep.s7;
-  if (!paper && s7.custAbsent && !s7.custAbsentReason) p.push('Give the reason under “Customer not available to sign” (section 7 Sign-off).');
-  if (!paper && !s7.custAbsent && !(s7.custSignatureId && s7.custName)) p.push('Let the customer sign under “Acknowledged by” with their name (section 7 Sign-off), or tick “Customer not available to sign” and give the reason.');
+  if (!paper && s7.custAbsent && !s7.custAbsentReason) p.push({ key: 'reason', step: 7, field: 's7_custAbsentReason', short: 'The reason the customer cannot sign', text: 'Give the reason under “Customer not available to sign” (section 7 Sign-off).' });
+  if (!paper && !s7.custAbsent && !(s7.custSignatureId && s7.custName)) p.push({ key: 'cust', step: 7, field: !s7.custName ? 's7_custName' : 'sig_cust', short: 'The customer’s name and signature, or tick “not available”',
+    text: 'Let the customer sign under “Acknowledged by” with their name (section 7 Sign-off), or tick “Customer not available to sign” and give the reason.' });
   return p;
 }
+export const reportProblems = (rep, opts) => reportIssues(rep, opts).map(i => i.text);
 
 // Submit: new products are recorded as the customer's products at the site and their rows link them from now on (a
 // work-only product, not kept, is not recorded); the assessment and enquiry move on.

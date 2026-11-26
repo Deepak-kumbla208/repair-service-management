@@ -3,24 +3,24 @@
 // "New enquiry" for the customer.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, $$, go, debounce, pill, toast, readForm, icon } from '../core/ui.js';
+import { html, $, go, debounce, pill, toast, readForm, icon, fieldError } from '../core/ui.js';
+import { trackDirty, clearDirty, setDirty } from '../core/ux.js';
+import { callBtn } from './parts.js';
 import { zones, zoneLabel, productName } from '../core/lookups.js';
 import { sizeText } from '../core/products.js';
 import { nextCode, findDuplicates, primaryContact, shutterCount } from '../core/customers.js';
 import { newEnquiryFor } from './enquiry-form.js';
 
-const tel = m => String(m || '').replace(/\s/g, '');
-
 export function mCustomers(page) {
   page.setTitle('Customers', 'm/home');
   const state = { q: sessionStorage.getItem('rsmMobCustQ') || '' };
-  page.body.innerHTML = String(html`<input type="search" class="m-search" id="q" placeholder="Search: name, code, contact, mobile" value="${state.q}"><div id="list"></div>
-    ${auth.can('customer', 'create', 'mobile') ? html`<a class="m-fab" href="#/m/customer-new" aria-label="New customer" title="New customer">${icon('plus', 24)}</a>` : ''}`);
+  page.body.innerHTML = String(html`<input type="search" class="m-search" id="q" aria-label="Search customers" placeholder="Search: name, code, contact, mobile" value="${state.q}"><div id="list"></div>
+    ${auth.can('customer', 'create', 'mobile') ? html`<a class="m-fab" href="#/m/customer-new" aria-label="New customer" title="New customer">${icon('plus', 26)}</a>` : ''}`);
   const paint = () => {
     const terms = state.q.toLowerCase().split(/\s+/).filter(Boolean);
     const all = store.list('customers').sort((a, b) => a.name.localeCompare(b.name));
     const shown = all.filter(c => terms.every(t => [c.code, c.name, c.phone, c.email, ...(c.contacts || []).flatMap(p => [p.name, p.mobile, p.email]), ...(c.sites || []).map(s => s.name)].join(' ').toLowerCase().includes(t)));
-    $('#list', page.body).innerHTML = String(shown.length ? html`${shown.map(c => { const p = primaryContact(c); return html`<a class="m-card" style="display:block;color:inherit;text-decoration:none" href="#/m/customer/${c.id}">
+    $('#list', page.body).innerHTML = String(shown.length ? html`${shown.map(c => { const p = primaryContact(c); return html`<a class="m-card m-list-link" href="#/m/customer/${c.id}">
       <div class="row"><b class="grow">${c.name}</b>${c.status === 'Inactive' ? pill('Inactive') : ''}</div>
       <div class="small muted">${c.code} · ${p ? `${p.name} · ${p.mobile}` : ''} · ${(c.sites || []).length} site(s)</div></a>`; })}` : html`<div class="empty">No customers match.</div>`);
     sessionStorage.setItem('rsmMobCustQ', state.q);
@@ -31,22 +31,22 @@ export function mCustomers(page) {
 
 export function mCustomer(page, id) {
   const c = store.get('customers', id);
-  page.setTitle(c ? c.code : 'Customer', 'm/customers');
+  page.setTitle(c ? c.name : 'Customer', 'm/customers', c ? c.code : '');
   if (!c) { page.body.innerHTML = '<div class="empty">Customer not found.</div>'; return; }
   page.body.innerHTML = String(html`
-    <div class="m-card"><div class="row"><b class="grow" style="font-size:16px">${c.name}</b>${pill(c.status || 'Active')}</div>
+    <div class="m-card"><div class="row"><b class="grow">${c.name}</b>${pill(c.status || 'Active')}</div>
       <div class="small muted">${c.code}${c.uen ? ` · UEN ${c.uen}` : ''} · ${shutterCount(c)} customer product(s)</div></div>
     <div class="m-section">Contacts</div>
     ${(c.contacts || []).map(p => html`<div class="m-card"><div class="row"><b class="grow">${p.name}</b>${p.primary ? html`<span class="pill blue">Primary</span>` : ''}</div>
       <div class="small muted">${p.designation || ''}${p.email ? ` · ${p.email}` : ''}</div>
-      ${p.mobile ? html`<div class="m-acts"><a class="btn" href="tel:${tel(p.mobile)}">${icon('call', 15)} ${p.mobile}</a></div>` : ''}</div>`)}
+      ${p.mobile ? html`<div class="m-acts">${callBtn(p.mobile, p.mobile)}</div>` : ''}</div>`)}
     <div class="m-section">Sites</div>
     ${(c.sites || []).length ? html`${c.sites.map(s => html`<div class="m-card"><b>${s.name}</b> <span class="pill">Zone ${zoneLabel(s.zoneId) || 'not set'}</span>
       <div class="small muted">${[s.address, s.blockUnit].filter(Boolean).join(' ')}</div>
       ${(s.shutters || []).length ? html`<div class="small" style="margin-top:6px">${s.shutters.map(sh => html`<div>${sh.tag} ${sh.location} · ${productName(sh.productId)}${sh.sizeCode ? ` · ${sizeText(sh)}` : ''}</div>`)}</div>` : ''}</div>`)}` : html`<div class="muted small">No sites yet.</div>`}`);
   const acts = [
-    auth.can('enquiry', 'create', 'mobile') && c.status !== 'Inactive' ? html`<button class="btn" id="enq">${icon('plus', 15)} New enquiry</button>` : '',
-    auth.can('customer', 'edit', 'mobile') ? html`<a class="btn primary" href="#/m/customer/${c.id}/edit">${icon('edit', 15)} Edit</a>` : '',
+    auth.can('enquiry', 'create', 'mobile') && c.status !== 'Inactive' ? html`<button class="btn" id="enq">${icon('plus', 18)} New enquiry</button>` : '',
+    auth.can('customer', 'edit', 'mobile') ? html`<a class="btn primary" href="#/m/customer/${c.id}/edit">${icon('edit', 18)} Edit</a>` : '',
   ].filter(Boolean);
   if (acts.length) $('#enq', page.setFoot(html`${acts}`))?.addEventListener('click', () => newEnquiryFor(c.id));
 }
@@ -84,23 +84,29 @@ export function mCustomerForm(page, id) {
   page.body.addEventListener('click', e => {
     const b = e.target.closest('button');
     if (!b) return;
+    if (b.id === 'addC' || b.id === 'addS' || b.dataset.rmc) setDirty(); // a contact or site added or removed is unsaved work too
     if (b.id === 'addC') { collect(); d.contacts.push({ id: store.uid('con_'), name: '', designation: '', mobile: '', email: '', primary: false }); paint(); }
     if (b.id === 'addS') { collect(); d.sites.push({ id: store.uid('sit_'), code: `S${d.sites.length + 1}`, name: '', address: '', blockUnit: '', postal: '', zoneId: '', access: '', shutters: [] }); paint(); }
     if (b.dataset.rmc) { collect(); d.contacts.splice(+b.dataset.rmc, 1); if (!d.contacts.some(p => p.primary)) d.contacts[0].primary = true; paint(); }
   });
   paint();
-  const foot = page.setFoot(html`<a class="btn" href="#/${rec ? `m/customer/${rec.id}` : 'm/customers'}">Cancel</a><button class="btn primary" id="saveC">Save customer</button>`);
+  trackDirty(page.body); // leaving with something typed asks first; Save and Cancel do not
+  const foot = page.setFoot(html`<a class="btn" data-discard href="#/${rec ? `m/customer/${rec.id}` : 'm/customers'}">Cancel</a><button class="btn primary" id="saveC">Save customer</button>`);
   $('#saveC', foot).onclick = e => {
     collect();
-    if (!d.name) { toast('Enter the customer name', 'bad'); return; }
-    if (d.contacts.some(p => !p.name || !p.mobile)) { toast('Every contact needs a name and a mobile', 'bad'); return; }
-    if (d.sites.some(s => !s.name || !s.zoneId)) { toast('Every site needs a name and a zone', 'bad'); return; }
+    // What is missing shows in red under its field, the cursor in the first one.
+    const need = [!d.name && ['name', 'Enter the customer name'],
+      ...d.contacts.flatMap((p, i) => [!p.name && [`c${i}_name`, 'Every contact needs a name'], !p.mobile && [`c${i}_mobile`, 'Every contact needs a mobile']]),
+      ...d.sites.flatMap((s, i) => [!s.name && [`s${i}_name`, 'Every site needs a name'], !s.zoneId && [`s${i}_zone`, 'Choose the zone']])].filter(Boolean);
+    need.forEach(([name, text], i) => fieldError($(`[name="${name}"]`, page.body), text, { focus: i === 0 }));
+    if (need.length) return;
     e.currentTarget.disabled = true; // a double tap saves once
     const dups = d.contacts.flatMap(p => findDuplicates({ mobile: p.mobile, email: p.email }, rec?.id));
     const data = { ...d, phone: d.phone || d.contacts[0].mobile, sites: d.sites.map(s => ({ ...s, address: s.address || s.name })) };
     delete data.id; delete data.tenantId; delete data.status; delete data.statusHistory;
     const saved = rec ? store.update('customers', rec.id, data, `Edited customer ${d.code} on the phone`) : store.insert('customers', data, { status: 'Active', note: `Created customer ${d.code} on the phone` });
     toast(`Customer ${saved.code} saved${dups.length ? ` · check: ${[...new Set(dups.map(x => `${x.customer.name} (${x.reason})`))].join('; ')}` : ''}`);
+    clearDirty();
     go(`m/customer/${saved.id}`);
   };
 }

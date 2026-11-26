@@ -36,7 +36,7 @@ function defaultsFields(type, ro) {
   if (type.key === 'EST' || type.key === 'AMCEST') {
     const d = type.key === 'EST' ? txDefaults() : amcDefaults();
     return html`<div class="form-sec">Defaults for new estimates</div>
-      ${chips('costingLevel', 'Costing Level', vsOptions('COSTING_LEVEL'), d.costingLevel, ro)}
+      ${chips('costingLevel', 'Price', vsOptions('COSTING_LEVEL').map(o => ({ ...o, label: o.value === 'LINE' ? 'A price per line' : 'One price for the job' })), d.costingLevel, ro)}
       ${type.key === 'EST' ? chips('sharedCosts', 'Shared Costs', vsOptions('SHARED_COSTS'), d.sharedCosts, ro, 'Used with Line costing') : ''}
       ${num('overheadPct', 'Overheads', d.overheadPct, { suffix: '% of direct cost', ro, step: '0.5' })}
       ${chips('marginBasis', 'Margin basis', vsOptions('MARGIN_BASIS'), d.marginBasis, ro)}

@@ -26,7 +26,7 @@ export function renderProductSize(el, id) {
   const editable = auth.can('size', setRec ? 'edit' : 'create');
   const sets = sizeSets();
 
-  el.innerHTML = String(html`<div class="page" style="max-width:1200px">
+  el.innerHTML = String(html`<div class="page">
     ${pageHead({ crumb: 'Master', title: 'Product Size', sub: NOTE, actions: auth.can('size', 'create') ? html`<a class="btn primary" href="#/master/size/new">+ New size set</a>` : '' })}
     <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Code</th><th>Size set</th><th>Measured by</th><th>Unit</th><th>Sizes</th><th>Used by</th><th>Status</th></tr></thead><tbody>
       ${sets.length ? sets.map(z => html`<tr class="click ${setRec?.id === z.id ? 'sel' : ''}" data-id="${z.id}"><td>${z.code}</td><td>${z.name}</td><td>${isTwoFigure(z) ? 'Width × height' : 'One figure'}</td>

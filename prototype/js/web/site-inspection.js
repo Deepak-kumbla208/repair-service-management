@@ -100,7 +100,7 @@ export function renderInspection(el, id) {
 
   const tags = site?.shutters?.length ? html`${site.shutters.map(s => html`<span class="pill" style="margin:0 4px 4px 0">${s.tag} ${s.location}${s.sizeCode ? ` · ${s.sizeCode}` : ''}</span>`)}` : html`<span class="muted">None recorded yet</span>`;
   const ro = (k, v) => html`<div class="field"><div class="field-label">${k}</div><div class="ro">${v || html`<span class="muted">—</span>`}</div></div>`;
-  el.innerHTML = String(html`<div class="page stack" style="max-width:1400px">
+  el.innerHTML = String(html`<div class="page stack">
     ${pageHead({
       crumb: html`<a href="#/assessments">Job Assessment</a> › ${e.no}`,
       title: html`Job assessment · ${e.customerName} ${pill(i.status)}`,

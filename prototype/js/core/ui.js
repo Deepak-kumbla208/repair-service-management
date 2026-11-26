@@ -83,16 +83,20 @@ export function fmtNum(n, dp = 2) {
 // ---------- Status pills ----------
 const TONES = {
   amber: ['Waiting for assessment', 'To assign', 'Draft', 'Report in progress', 'Returned', 'To schedule', 'Waiting for estimate', 'Work done'],
-  blue: ['Assessment assigned', 'Assigned', 'In counter-check', 'Quotation in check', 'Sent', 'Quoted', 'Scheduled', 'On the way', 'On site', 'Open'],
+  blue: ['Assessment assigned', 'Assigned', 'In counter-check', 'Waiting for approval', 'Quotation in check', 'Sent', 'Quoted', 'Scheduled', 'On the way', 'On site', 'Open'],
   green: ['Assessed', 'Report submitted', 'Submitted', 'Active', 'Registered', 'Yes', 'Approved', 'Quotation approved', 'Accepted', 'Won', 'Completed', 'Completed & documented', 'Closed', 'Posted', 'Done'],
   purple: ['BOQ study', 'Estimating'],
   red: ['Cancelled', 'Inactive', 'Over target', 'Rejected', 'Expired', 'Lost'],
 };
+// Statuses are stored as before; a few are shown in plainer words (UX audit, finding 8).
+const SHOWN = { 'BOQ study': 'Reviewing the customer\'s list', 'In counter-check': 'Waiting for approval', 'Quotation in check': 'Quotation waiting for approval', 'Estimating': 'Estimate being made' };
+export const statusText = s => SHOWN[s] || s;
 export function pill(text, tone) {
   const t = tone || Object.keys(TONES).find(k => TONES[k].includes(text)) || '';
-  return html`<span class="pill ${t}">${text}</span>`;
+  return html`<span class="pill ${t}">${statusText(text)}</span>`;
 }
-export const placeholderTag = (label = 'placeholder') => html`<span class="tag" title="Value not known yet">${label}</span>`;
+const TAG_WORDS = { placeholder: 'To confirm', 'new item': 'Not in the price list', dummy: 'Sample value' };
+export const placeholderTag = (label = 'To confirm') => html`<span class="tag" title="Value not known yet">${TAG_WORDS[label] || label}</span>`;
 
 // ---------- Count tiles (also filters) ----------
 // list: [{key, label, count, sub, tone: 'warn'|'bad'}]
@@ -123,7 +127,44 @@ const ICON_PATHS = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+  bell: '<path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"/>',
+  mail: '<path d="M3 6h18v12H3zM3 7l9 6 9-6"/>',
+  print: '<path d="M7 8V3h10v5M5 8h14v9h-2v4H7v-4H5zM9 15h6"/>',
+  undo: '<path d="M9 7L4 12l5 5M4 12h11a5 5 0 0 1 0 10h-2"/>',
+  clip: '<path d="M8 12l6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l7-7"/>',
+  flow: '<path d="M3 6h5v4H3zM16 14h5v4h-5zM8 8h5a2 2 0 0 1 2 2v4"/>',
+  // The office menu (finding 13: the same line icons as the phone, not text symbols)
+  dashboard: '<path d="M4 4h7v9H4zM13 4h7v5h-7zM13 11h7v9h-7zM4 15h7v5H4z"/>',
+  customer: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
+  employee: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>',
+  transport: '<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>',
+  equipment: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
+  labour: '<path d="M15 4a5 5 0 0 0-4.6 6.9L4 17.3V20h2.7l6.4-6.4A5 5 0 0 0 20 9l-3 3-3-1-1-3z"/>',
+  product: '<path d="M3 8l9-4 9 4v8l-9 4-9-4zM3 8l9 4 9-4M12 12v8"/>',
+  item: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><circle cx="12" cy="12" r="3"/>',
+  size: '<path d="M3 15L15 3l6 6L9 21zM7 13l2 2M10 10l2 2M13 7l2 2"/>',
+  uom: '<path d="M4 6h16M4 12h10M4 18h6"/>',
+  valueset: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
+  tax: '<path d="M19 5L5 19"/><circle cx="7" cy="7" r="2.5"/><circle cx="17" cy="17" r="2.5"/>',
+  terms: '<path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7"/>',
+  enquiry: '<path d="M4 5h16v10H9l-5 4z"/>',
+  inspection: '<path d="M12 21s7-6 7-11a7 7 0 0 0-14 0c0 5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  estimation: '<path d="M6 3h12v18H6zM9 7h6M9 12h.01M12 12h.01M15 12h.01M9 16h.01M12 16h.01M15 16h.01"/>',
+  quotation: '<path d="M6 3h9l4 4v14H6zM14 3v5h5M9 13h6M9 17h4"/>',
+  job: '<path d="M4 6h16v14H4zM4 10h16M8 3v5M16 3v5"/>',
+  amcContract: '<path d="M6 3h12v18H6zM9 8h6M9 12h6M9 16l1.5 1.5L14 14"/>',
+  amcScheduling: '<path d="M4 6h16v14H4zM4 10h16M8 3v5M16 3v5M12 13v3l2 1"/>',
+  amcExecution: '<path d="M4 7l2 2 3-3M4 13l2 2 3-3M12 8h8M12 14h8M4 19h16"/>',
+  closure: '<path d="M4 5h16v4H4zM6 9v10h12V9M9 14l2 2 4-4"/>',
+  invoice: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6"/>',
+  payment: '<circle cx="12" cy="12" r="8"/><path d="M14.5 9.5c-.4-.9-1.3-1.5-2.5-1.5-1.5 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1 2-2.5 2c-1.200 0-2.100-.6-2.500-1.500M12 6.500v11"/>',
+  companySetup: '<path d="M5 21V5l7-2v18M12 9h7v12M3 21h18M8 8h1M8 12h1M8 16h1M15 13h1M15 17h1"/>',
+  transactionSetup: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
+  userRole: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 9-6M17 12l4 1.5v3c0 2-1.700 3.600-4 4.500-2.300-.9-4-2.500-4-4.500v-3z"/>',
+  menuAccess: '<path d="M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3"/>',
+  authWorkflow: '<path d="M4 6h5v4H4zM15 14h5v4h-5zM9 8h4a2 2 0 0 1 2 2v4M6.5 10v6a2 2 0 0 0 2 2H11"/>',
 };
+export const hasIcon = name => name in ICON_PATHS;
 export const icon = (name, size = 16) => raw(`<svg class="ico" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name] || ''}</svg>`);
 
 // The header of an entry page: customer, site and document details in one full-width card that folds to a summary
@@ -202,16 +243,50 @@ export function readForm(root) {
 }
 
 export function markInvalid(root, names, msg = 'Required') {
-  $$('.field.invalid', root).forEach(f => { f.classList.remove('invalid'); f.querySelector('.err')?.remove(); });
-  names.forEach(n => {
-    const box = $(`[name="${n}"]`, root)?.closest('.field');
-    if (!box) return;
-    box.closest('details:not([open])')?.setAttribute('open', '');
-    box.classList.add('invalid');
-    box.insertAdjacentHTML('beforeend', `<div class="err">${esc(msg)}</div>`);
-  });
-  if (names.length) $(`[name="${names[0]}"]`, root)?.focus();
+  clearErrors(root);
+  names.forEach(n => fieldError($(`[name="${n}"]`, root), msg, { focus: false }));
+  if (names.length) focusField($(`[name="${names[0]}"]`, root));
   return names.length === 0;
+}
+
+// One way to show an error on every screen (UX audit, finding 16): in red under the field, kept until it is put
+// right, with the cursor in the first one. `el` is the control (or any element the message belongs under).
+export function clearErrors(root = document) {
+  $$('.invalid', root).forEach(f => f.classList.remove('invalid'));
+  $$('.err[data-err]', root).forEach(x => x.remove());
+}
+export function focusField(el) {
+  if (!el) return;
+  el.closest('details:not([open])')?.setAttribute('open', '');
+  el.scrollIntoView({ block: 'center' });
+  (el.matches('input, select, textarea, button, a') ? el : el.querySelector('input:not([type=hidden]), select, textarea, button'))?.focus({ preventScroll: true });
+}
+export function fieldError(el, msg, { focus = true } = {}) {
+  if (!el) return false;
+  const box = el.closest('.field') || el.closest('td') || el.parentElement;
+  box.querySelectorAll(':scope > .err[data-err]').forEach(x => x.remove());
+  box.classList.add('invalid');
+  box.insertAdjacentHTML('beforeend', `<div class="err" data-err role="alert">${esc(msg)}</div>`);
+  const clear = () => { box.classList.remove('invalid'); box.querySelector(':scope > .err[data-err]')?.remove(); box.removeEventListener('input', clear); box.removeEventListener('change', clear); };
+  box.addEventListener('input', clear); box.addEventListener('change', clear);
+  if (focus) focusField(el);
+  return false;
+}
+// A date typed by hand must be near today (finding 17: a PO date in the year 0081 was accepted). '' when fine.
+export function dateProblem(value, { label = 'The date', pastYears = 2, futureYears = 2 } = {}) {
+  if (!value) return '';
+  const d = new Date(`${String(value).slice(0, 10)}T00:00`);
+  if (isNaN(d)) return `${label} is not a date.`;
+  const y = new Date().getFullYear();
+  if (d.getFullYear() < y - pastYears || d.getFullYear() > y + futureYears) return `${label} is in the year ${d.getFullYear()}. Check the year.`;
+  return '';
+}
+// A tap on a status button cannot fire twice (finding 3): false while the button is still held from the first tap.
+export function holdTap(btn, ms = 1200) {
+  if (!btn || btn.dataset.held) return false;
+  btn.dataset.held = '1'; btn.setAttribute('aria-disabled', 'true');
+  setTimeout(() => { delete btn.dataset.held; btn.removeAttribute('aria-disabled'); }, ms);
+  return true;
 }
 
 // ---------- Overlays: dialogs, menus, toasts ----------
@@ -221,13 +296,24 @@ export const overlayRoot = () => $('.phone') || document.body;
 export function openModal({ title, body, actions = [], wide = false, cls = '', onOpen }) {
   const back = document.createElement('div');
   back.className = 'modal-back';
-  back.innerHTML = String(html`<div class="modal ${wide ? 'wide' : ''} ${cls}" role="dialog" aria-label="${title}">
+  const opener = document.activeElement;
+  back.innerHTML = String(html`<div class="modal ${wide ? 'wide' : ''} ${cls}" role="dialog" aria-modal="true" aria-label="${title}" tabindex="-1">
     <div class="modal-head"><h2>${title}</h2><button class="x-btn" data-close aria-label="Close">×</button></div>
     <div class="modal-body">${body}</div>
     ${actions.length ? html`<div class="modal-foot">${actions.map((a, i) => html`<button class="btn ${a.kind || ''}" data-a="${i}">${a.label}</button>`)}</div>` : ''}
   </div>`);
-  const close = () => { back.remove(); document.removeEventListener('keydown', onKey); };
-  const onKey = e => { if (e.key === 'Escape') close(); };
+  // The cursor moves into the dialog, Tab stays inside it, and it returns to the button on close (finding 26).
+  const close = () => { back.remove(); document.removeEventListener('keydown', onKey); if (opener?.isConnected) opener.focus?.({ preventScroll: true }); };
+  const tabbable = () => [...back.querySelectorAll('button, a[href], input:not([type=hidden]), select, textarea, [tabindex]:not([tabindex="-1"])')].filter(x => !x.disabled && x.offsetParent !== null);
+  const onKey = e => {
+    if (e.key === 'Escape') return close();
+    if (e.key !== 'Tab' || back !== [...document.querySelectorAll('.modal-back')].pop()) return;
+    const t = tabbable();
+    if (!t.length) return;
+    if (!back.contains(document.activeElement)) { e.preventDefault(); t[0].focus(); }
+    else if (e.shiftKey && document.activeElement === t[0]) { e.preventDefault(); t[t.length - 1].focus(); }
+    else if (!e.shiftKey && document.activeElement === t[t.length - 1]) { e.preventDefault(); t[0].focus(); }
+  };
   document.addEventListener('keydown', onKey);
   back.addEventListener('click', async e => {
     if (e.target === back || e.target.closest('[data-close]')) return close();
@@ -239,6 +325,11 @@ export function openModal({ title, body, actions = [], wide = false, cls = '', o
   });
   overlayRoot().appendChild(back);
   onOpen?.(back.querySelector('.modal-body'), close);
+  if (!back.contains(document.activeElement)) {
+    const body = back.querySelector('.modal-body');
+    (body.querySelector('[autofocus]') || body.querySelector('input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled])')
+      || back.querySelector('.modal-foot .btn.primary') || back.querySelector('.modal'))?.focus({ preventScroll: true });
+  }
   return { el: back, close };
 }
 
@@ -269,13 +360,45 @@ export function popMenu(anchor, items) {
   });
 }
 
-export function toast(msg, kind = '') {
-  const box = $('#toasts');
+// A problem is never a pop-up in the far corner that fades (UX audit, finding 16). When it belongs to one field it is
+// shown under that field (fieldError). Any other problem is a red bar where the person is looking: above the buttons
+// of the open dialog, else under the page title (which stays in view), and it stays until something is changed.
+function errorBar(msg) {
+  const dialog = [...document.querySelectorAll('.modal-back')].pop();
+  const host = dialog ? dialog.querySelector('.modal-foot') || dialog.querySelector('.modal-body') : $('.phone .m-body') || $('#content .page > .page-head');
+  if (!host) return null;
+  document.querySelectorAll('.err-bar').forEach(x => { x.dataset.cleared = '1'; x.remove(); });
+  const bar = Object.assign(document.createElement('div'), { className: 'err-bar', textContent: msg });
+  bar.setAttribute('role', 'alert');
+  if (host.matches('.modal-foot')) host.before(bar); else if (host.matches('.page-head')) host.appendChild(bar); else host.prepend(bar);
+  const clear = e => { if (!bar.isConnected || !e || !bar.contains(e.target)) { bar.dataset.cleared = '1'; bar.remove(); document.removeEventListener('input', clear, true); document.removeEventListener('change', clear, true); } };
+  setTimeout(() => { document.addEventListener('input', clear, true); document.addEventListener('change', clear, true); }, 0);
+  return bar;
+}
+// On the phone the message shows inside the phone frame. opts.undo: a function that takes the action back; the
+// message then stays 8 seconds with an "Undo" button (UX audit, findings 3 and 17).
+export function toast(msg, kind = '', { undo = null, undoLabel = 'Undo', ms = 0 } = {}) {
+  if (kind === 'bad' && !ms) {
+    const bar = errorBar(msg);
+    // If the page is drawn again at once (the message came with a move to another page), it is shown as a message
+    // there instead, and stays longer than a plain one.
+    if (bar) { setTimeout(() => { if (!bar.isConnected && !bar.dataset.cleared) toast(msg, 'bad', { ms: 9000 }); }, 450); return bar; }
+  }
+  const phone = $('.phone');
+  let box = $('#toasts');
+  if (phone) box = $('.toasts', phone) || phone.appendChild(Object.assign(document.createElement('div'), { className: 'toasts' }));
   const t = document.createElement('div');
   t.className = `toast ${kind}`;
-  t.textContent = msg;
+  t.setAttribute('role', kind === 'bad' ? 'alert' : 'status');
+  t.appendChild(Object.assign(document.createElement('span'), { textContent: msg }));
+  if (undo) {
+    const b = Object.assign(document.createElement('button'), { type: 'button', className: 'toast-undo', textContent: undoLabel });
+    b.onclick = () => { t.remove(); undo(); };
+    t.appendChild(b);
+  }
   box.appendChild(t);
-  setTimeout(() => t.remove(), 3800);
+  setTimeout(() => t.remove(), ms || (undo ? 8000 : 4200));
+  return t;
 }
 
 // Empty-state and "not built yet" blocks

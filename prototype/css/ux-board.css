@@ -1,0 +1,61 @@
+/* Drag and drop on the scheduling board (UX audit, finding 18). */
+
+/* ---------- What can be dragged ---------- */
+.jobc, .vcard, .blk, .vb { user-select: none; -webkit-user-select: none; }
+[data-drag][draggable=true] { cursor: grab; }
+[data-drag][draggable=true]:active { cursor: grabbing; }
+.drag-src { opacity: .45; }
+.jobc.on { outline: 2px solid var(--blue-500); }
+.jobc .parts .check { min-height: 28px; }
+.board-h { height: 46px; display: flex; align-items: center; gap: 6px; margin: 0 0 6px; }
+.board-h .btn.link { min-height: 28px; }
+
+/* The suggestion on a job card is a link: it shows the slot on the board */
+.sug-link { display: block; width: 100%; min-height: 28px; margin-top: 8px; padding: 6px 9px; text-align: left; font: inherit; font-size: var(--fs-s); line-height: 1.4;
+  color: var(--blue-600); background: var(--blue-50); border: 1px solid var(--blue-200); border-radius: 6px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.sug-link b { color: var(--navy-800); }
+.sug-link:hover { background: var(--blue-100); }
+
+/* ---------- The line above the calendar: hint, what a day can take, why a drop was refused ---------- */
+/* Two lines are kept free, so a long reason never pushes the calendar down under the pointer */
+.board-say { height: 46px; display: flex; align-items: center; margin: 0 0 6px; padding: 3px 0; font-size: var(--fs-s); line-height: 1.4; color: var(--muted); overflow: hidden; }
+.board-say.ok { color: var(--green-ink); font-weight: 600; }
+.board-say.bad { color: var(--red); font-weight: 600; background: var(--red-bg); border: 1px solid #F09595; border-radius: 6px; padding: 4px 10px; }
+
+/* ---------- The week ---------- */
+.cal .hd.today { font-weight: 700; background: var(--blue-200); }
+.today-tag { display: inline-block; margin-left: 4px; padding: 0 7px; border-radius: 9px; background: var(--blue-600); color: var(--white); font-size: var(--fs-xs); font-weight: 700; }
+.cal .day.today { background-color: var(--blue-50); }
+.cal .day .blk { z-index: 1; }
+.blk.short { padding-top: 1px; padding-bottom: 1px; }
+.blk > b { display: block; white-space: nowrap; overflow: hidden; }
+.blk .bt { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.blk .bt.one { display: block; white-space: nowrap; text-overflow: ellipsis; }
+button.blk { display: block; font: inherit; font-size: var(--fs-s); line-height: 1.25; text-align: left; }
+/* A free day is one big button under its bookings, so it also works from the keyboard */
+.cal .day .place { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; cursor: copy; }
+.cal .day .place:focus-visible { outline: 3px solid var(--blue-600); outline-offset: -3px; }
+.blk.sug.hi { box-shadow: 0 0 0 3px rgba(55, 138, 221, .5); animation: sug-mark 1.1s ease-in-out 3; }
+@keyframes sug-mark { 50% { box-shadow: 0 0 0 7px rgba(55, 138, 221, .18); } }
+@media (prefers-reduced-motion: reduce) { .blk.sug.hi { animation: none; } }
+
+/* ---------- While a job is dragged: days that can take it, and days that cannot (with the reason) ---------- */
+.dragging .day.free { box-shadow: none; }
+.dragging .day.free:hover { background-color: transparent; }
+.dragging .day .place { display: none; }
+.drag-other .blk.sug { visibility: hidden; }
+.cal .day.drop-ok, .mcal .c.drop-ok { background-color: var(--green-bg); box-shadow: inset 0 0 0 2px #97C459; }
+.cal .day.drop-no, .mcal .c.drop-no { background-color: #FBF3F3; box-shadow: inset 0 0 0 1px #F09595;
+  background-image: repeating-linear-gradient(135deg, rgba(163, 45, 45, .09) 0, rgba(163, 45, 45, .09) 6px, transparent 6px, transparent 12px); }
+.cal .day.drop-ok.drop-over, .mcal .c.drop-ok.drop-over { box-shadow: inset 0 0 0 3px var(--green); }
+.cal .day.drop-no.drop-over, .mcal .c.drop-no.drop-over { box-shadow: inset 0 0 0 3px var(--red); }
+.cal .day[data-tag]::after, .mcal .c[data-tag]::after { content: attr(data-tag); position: absolute; z-index: 2; pointer-events: none;
+  padding: 1px 6px; border-radius: 4px; border: 1px solid; font-size: var(--fs-xs); font-weight: 600; line-height: 1.35; text-align: center; background: var(--white); }
+.cal .day[data-tag]::after { left: 4px; right: 4px; bottom: 4px; }
+.mcal .c { position: relative; }
+.mcal .vb { min-height: 28px; padding-top: 5px; padding-bottom: 5px; }
+.mcal .c[data-tag]::after { top: 3px; right: 4px; max-width: calc(100% - 34px); }
+.mcal .c.today[data-tag]::after { top: auto; bottom: 3px; }
+.drop-ok[data-tag]::after { color: var(--green-ink); border-color: #97C459; }
+.drop-no[data-tag]::after { color: var(--red-ink); border-color: #F09595; }
+[data-tag=""]::after { display: none; }

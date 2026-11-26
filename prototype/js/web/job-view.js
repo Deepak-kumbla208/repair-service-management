@@ -54,19 +54,19 @@ export function renderJob(el, id) {
   const gs = j.type === 'GS';
   const step = (label, at) => html`<li><span class="${at ? 'ok' : 'wn'}" style="color:${at ? 'var(--green)' : 'var(--faint)'}">${at ? '✓' : '○'}</span><span class="grow">${label}</span><span class="muted">${at ? fmtDateTime(at) : ''}</span></li>`;
 
-  el.innerHTML = String(html`<div class="page" style="max-width:1400px">
+  el.innerHTML = String(html`<div class="page">
     <div class="page-head"><div class="grow">
       <div class="crumb"><a href="#/jobs">Job Execution</a> › <a href="#/enquiries/${enq.id}">${enq.no}</a></div>
       <h1>${j.no} · ${j.customer} ${pill(j.status)}</h1>
       <div class="page-meta">${gs ? 'General servicing' : 'Repair'} · from <a href="#/quotations/${j.quotationId}">${j.quotationNo}</a> · ${j.site}</div></div>
-      <div class="row"><button class="btn soft" id="wf">⇶ Workflow</button>
+      <div class="row"><button class="btn" id="wf" title="The map of the whole job as a pop-up">Workflow</button>
         ${w ? (gs ? html`<a class="btn" href="#/jobs/${j.id}/service">⎙ Service report</a>` : html`<a class="btn" href="#/jobs/${j.id}/workdone">⎙ Work Done form</a>`) : ''}
         ${inv ? html`<a class="btn" href="#/invoices/${inv.id}">${inv.no || 'Draft invoice'}</a>` : ''}
         ${w?.signedAt && auth.can('closure', 'view') ? html`<a class="btn" href="#/closure/${j.id}">Job closure</a>` : ''}
         ${canRaiseInvoice(j) ? html`<button class="btn primary" id="mkInv">Create invoice</button>` : ''}
         ${edit && ['To schedule', 'Scheduled'].includes(j.status) && !(inv && paymentsFor(inv.id).length) ? html`<button class="btn danger" id="cancel">Cancel job</button>` : ''}
         ${edit && j.termApproved && j.noVisit && j.status === 'To schedule' ? html`<button class="btn primary" id="noVisit">Mark done (no site visit)</button>` : ''}
-        ${edit && j.termApproved && !j.noVisit && ['To schedule', 'Scheduled'].includes(j.status) ? html`<button class="btn primary" id="sched">${j.status === 'To schedule' ? 'Schedule' : 'Move'}</button>` : ''}</div>
+        ${edit && j.termApproved && !j.noVisit && ['To schedule', 'Scheduled'].includes(j.status) ? html`<button class="btn ${j.status === 'To schedule' ? 'primary' : ''}" id="sched">${j.status === 'To schedule' ? 'Schedule' : 'Move to another day'}</button>` : ''}</div>
     </div>
     ${leaveTask ? html`<div class="note bad" style="margin-bottom:10px;display:flex;gap:10px;align-items:center"><span class="grow"><b>${empName(j.technicianId)} asks to leave the site</b> (since ${fmtDateTime(leaveTask.createdAt)}). ${w?.signedAt ? 'The Work Done form is signed.' : 'The Work Done form is not signed yet.'}</span>
       ${canConfirmLeave() ? html`<button class="btn primary small" id="okLeave">✓ OK to leave</button>` : ''}</div>` : ''}
@@ -90,8 +90,8 @@ export function renderJob(el, id) {
       </div></div>` })}
         ${gs ? gsChecklistCard(j) : ''}
         <div class="card"><div class="card-head"><h2>Lines to do</h2></div><table class="lines"><tbody>${j.lines.map((l, i) => html`<tr><td style="width:26px">${i + 1}</td><td>${l.description}</td>
-          <td style="width:120px">${w ? pill(vsLabel('WORK_DONE', w.rows.find(r => r.key === l.key)?.status), w.rows.find(r => r.key === l.key)?.status === 'DONE' ? 'green' : 'amber') : ''}</td></tr>`)}</tbody></table></div>
-        ${j.parts.length ? html`<div class="card"><div class="card-head"><h2>Parts</h2><span class="muted small">ready from ${earliestDate(j)}</span></div>
+          <td style="width:150px">${(st => (!w ? '' : st ? pill(vsLabel('WORK_DONE', st), st === 'DONE' ? 'green' : 'amber') : html`<span class="muted small">Not answered yet</span>`))(w?.rows.find(r => r.key === l.key)?.status)}</td></tr>`)}</tbody></table></div>
+        ${j.parts.length ? html`<div class="card"><div class="card-head"><h2>Parts</h2><span class="muted small">ready from ${fmtDate(earliestDate(j))}</span></div>
           ${j.parts.map(p => html`<div class="row" style="padding:3px 0"><label class="check grow"><input type="checkbox" data-part="${p.key}" ${p.ready ? 'checked' : ''} ${edit && j.status === 'To schedule' ? '' : 'disabled'}> ${p.qty} ${p.unit} × ${p.name}</label>
             <span class="muted small">${p.ready ? 'in stock' : `to order · lead time ${p.leadDays} days`}</span>${w ? html`<span class="small">${w.partsUsed.find(u => u.key === p.key)?.used ? '· used' : '· not used'}</span>` : ''}</div>`)}</div>` : ''}
         <div class="card"><div class="card-head"><h2>On site (from the phone)</h2></div><ul class="chk">

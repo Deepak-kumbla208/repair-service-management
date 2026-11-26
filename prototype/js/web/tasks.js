@@ -3,12 +3,12 @@
 // approvals; the Operations Executive sees technicians' leave-site requests.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
-import { html, $, go, fmtDate, fmtDateTime, fmtDuration, fmtNum, toast, tiles, pill, MIC } from '../core/ui.js';
+import { html, $, go, fmtDate, fmtDateTime, fmtDuration, fmtNum, toast, tiles, pill, MIC, fieldError } from '../core/ui.js';
 import { vsLabel } from '../core/lookups.js';
 import { myTasks, cannotDecide } from '../core/workflow.js';
-import { decideQuotation, autoChecks, repriceAtCheck } from '../core/quotations.js';
+import { decideQuotation, autoChecks, repriceAtCheck, undoApprove } from '../core/quotations.js';
 import { estimateSummary, withMarkup, markupChanged } from '../core/estimates.js';
-import { approveJobTerm, confirmLeave } from '../core/jobs.js';
+import { approveJobTerm, confirmLeave, declineLeave, undoConfirmLeave, leaveChecks } from '../core/jobs.js';
 import { renewContract, declineRenewal, contractProgress } from '../core/contracts.js';
 import { invoiceForJob, balanceOf } from '../core/billing.js';
 import { bindMics } from '../core/capture.js';
@@ -20,14 +20,14 @@ import { render } from '../app.js';
 const m2 = n => Number(n || 0).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const sel = { id: '' };
 // What each button did, for the message after it.
-const DONE = { return: 'returned with your comment', confirm: 'the technician may leave the site', renew: 'renewal enquiry and estimate created', decline: 'marked as not renewing',
+const DONE = { return: 'returned with your comment', confirm: 'the technician may leave the site', notYet: 'the technician was told "not yet", with your reason', renew: 'renewal enquiry and estimate created', decline: 'marked as not renewing',
   snooze: 'you will be reminded again', notWanted: 'later items marked not wanted', quoteRest: 'enquiry and estimate made from the later items' };
 
 export function taskLabel(t) {
   if (t.kind === 'leaveSite') return 'Leave site';
-  if (t.kind === 'renewal') return 'AMC renewal';
+  if (t.kind === 'renewal') return 'Contract renewal';
   if (t.kind === 'laterWork') return 'Later work';
-  return t.docType === 'job' ? 'Payment term' : t.level > 1 ? `Approval level ${t.level}` : 'Counter-check';
+  return t.docType === 'job' ? 'Payment term' : t.level > 1 ? `Approval level ${t.level}` : 'Approval';
 }
 
 // Counter-check: selling price, markup and how the price is made up (drawn again as the Approver changes a figure).
@@ -83,24 +83,22 @@ export function taskDetail(t, { compact = false } = {}) {
   const cur = auth.company().currency;
   if (t.kind === 'leaveSite') {
     const j = store.get('jobs', t.docId);
-    const inv = invoiceForJob(j.id);
-    const w = j.workDone;
+    const checks = leaveChecks(j);
+    const failed = checks.filter(c => !c.ok);
     return html`<div class="card"><div class="card-head"><h2>${t.title}</h2></div>
-      <ul class="chk">
-        <li><span class="${w?.signedAt ? 'ok' : 'wn'}">${w?.signedAt ? '✓' : '!'}</span><span>Work Done form ${w?.signedAt ? `signed by ${w.cust.name}` : 'not signed yet'}</span></li>
-        <li><span class="${(j.photosAfter || []).length ? 'ok' : 'wn'}">${(j.photosAfter || []).length ? '✓' : '!'}</span><span>${(j.photosAfter || []).length} after photo(s), ${(j.photosBefore || []).length} before</span></li>
-        <li><span class="${!inv || inv.status !== 'Posted' || balanceOf(inv) <= 0 || j.paymentTerm !== 'IMMEDIATE' ? 'ok' : 'wn'}">${!inv || balanceOf(inv) <= 0 || j.paymentTerm !== 'IMMEDIATE' ? '✓' : '!'}</span>
-          <span>${inv?.status === 'Posted' ? (balanceOf(inv) <= 0 ? `${inv.no} paid in full` : j.paymentTerm === 'IMMEDIATE' ? `${inv.no}: ${cur} ${m2(balanceOf(inv))} not collected yet` : `${inv.no}: due in ${vsLabel('PAYMENT_TERMS', j.paymentTerm)}`) : 'Invoice goes out from the office'}</span></li>
-      </ul>
+      ${failed.length ? html`<div class="note warn" style="margin-bottom:8px">The app did not give the OK by itself because ${failed.length === 1 ? 'one check' : `${failed.length} checks`} did not pass. Say "Not yet" with what is missing, or give the OK anyway.</div>`
+        : html`<div class="note" style="margin-bottom:8px">Every check passes.</div>`}
+      <ul class="chk">${checks.map(c => html`<li><span class="${c.ok ? 'ok' : 'wn'}">${c.ok ? '✓' : '!'}</span><span>${c.text}</span></li>`)}</ul>
       <div class="muted small" style="margin-top:6px">${j.no} · ${j.customer} · asked ${fmtDateTime(t.createdAt)} (${fmtDuration(Date.now() - new Date(t.createdAt))} ago)</div>
-      <div class="apr-foot"><input type="text" class="grow" name="comment" placeholder="Note (optional)"><button class="btn primary" data-do="confirm">✓ OK to leave</button></div></div>`;
+      <div class="apr-foot"><div class="field grow"><input type="text" name="comment" aria-label="Note for the technician" placeholder="${failed.length ? 'What is missing (needed for “Not yet”)' : 'Note (optional; needed for “Not yet”)'}"></div>
+        <button class="btn" data-do="notYet">Not yet</button><button class="btn primary" data-do="confirm">OK to leave</button></div></div>`;
   }
   if (t.kind === 'renewal') {
     const c = store.get('contracts', t.docId);
     const p = contractProgress(c);
     return html`<div class="card"><div class="card-head"><h2>${t.title}</h2></div>
       <p>${c.no} for ${c.customer} ends on <b>${fmtDate(c.end)}</b>. ${p.done} of ${p.visits} visits done; ${cur} ${m2(p.paid)} paid of ${m2(c.total)}.</p>
-      <p class="small muted">Renew creates a renewal enquiry with an estimate pre-filled from this contract (same sites, products and visits, today's rates). It then goes to the quotation and the counter-check.</p>
+      <p class="small muted">Renew creates a renewal enquiry with an estimate pre-filled from this contract (same sites, products and visits, today's rates). It then goes to the quotation and its approval.</p>
       <div class="apr-foot"><a class="btn" href="#/contracts/${c.id}">Open ${c.no}</a><span class="grow"></span><button class="btn" data-do="decline">Not renewing</button><button class="btn primary" data-do="renew">⟳ Renew now</button></div></div>`;
   }
   if (t.kind === 'laterWork') {
@@ -109,14 +107,14 @@ export function taskDetail(t, { compact = false } = {}) {
     return html`<div class="card"><div class="card-head"><h2>${t.title}</h2></div>
       <table class="tbl"><tbody>${lw.items.map(i => html`<tr><td class="wrap">${i.tag ? html`<b>${i.tag}</b> ${i.location}` : i.description}</td><td class="wrap">${i.action || i.fault}</td><td>${prioPill(i.priority)}</td><td class="num">${m2(i.amount)}</td></tr>`)}</tbody></table>
       <p class="small muted" style="margin:8px 0">${compact ? e.no : html`<a href="#/enquiries/${e.id}">${e.no}</a>`} · ${e.contactName}${e.mobile ? html` · <a href="tel:${e.mobile.replace(/\s/g, '')}">${e.mobile}</a>` : ''} · from ${lw.quotationNo}</p>
-      <div class="apr-foot" style="${compact ? 'flex-direction:column;align-items:stretch' : 'flex-wrap:wrap'}"><input type="text" class="grow" name="comment" placeholder="Note (optional)">
-        <label class="small">Remind again on <input type="date" name="snooze"></label><button class="btn" data-do="snooze">Remind again</button>
+      <div class="apr-foot" style="${compact ? 'flex-direction:column;align-items:stretch' : 'flex-wrap:wrap'}"><div class="field grow"><input type="text" name="comment" aria-label="Note" placeholder="Note (optional)"></div>
+        <div class="field"><label class="small" for="snoozeOn">Remind again on</label><input type="date" id="snoozeOn" name="snooze"></div><button class="btn" data-do="snooze">Remind again</button>
         <button class="btn" data-do="notWanted">Not wanted</button>${compact ? html`<span class="small muted">Quote the rest on the web.</span>` : html`<button class="btn primary" data-do="quoteRest">Quote the rest</button>`}</div></div>`;
   }
   if (t.docType === 'job') {
     const j = store.get('jobs', t.docId);
     return html`<div class="card"><div class="card-head"><h2>${t.title}</h2></div>
-      <p>The customer accepted ${j.quotationNo} with the payment term <b>${vsLabel('PAYMENT_TERMS', j.paymentTerm)}</b>. Scheduling waits for this approval (flow step 6).</p>
+      <p>The customer accepted ${j.quotationNo} with the payment term <b>${vsLabel('PAYMENT_TERMS', j.paymentTerm)}</b>. The job cannot be scheduled until this is approved.</p>
       <div class="muted small">${j.customer} · ${cur} ${m2(j.total)}</div>
       ${decision(compact, t)}</div>`;
   }
@@ -131,7 +129,7 @@ export function taskDetail(t, { compact = false } = {}) {
 }
 
 // The decision buttons; off for the person who submitted the document (nobody approves their own document).
-const decision = (compact = false, t = null, hint = '') => cannotDecide(t) ? html`<div class="note warn small" style="margin-top:10px">${cannotDecide(t)}</div>` : html`<div class="apr-foot" style="${compact ? 'flex-direction:column;align-items:stretch' : ''}"><div class="with-mic grow"><textarea name="comment" placeholder="${hint || 'Comment (needed to return)'}" style="min-height:58px"></textarea><button type="button" class="mic" data-mic="comment" title="Voice input">${MIC}</button></div>
+const decision = (compact = false, t = null, hint = '') => cannotDecide(t) ? html`<div class="note warn small" style="margin-top:10px">${cannotDecide(t)}</div>` : html`<div class="apr-foot" style="${compact ? 'flex-direction:column;align-items:stretch' : ''}"><div class="field grow"><div class="with-mic"><textarea name="comment" aria-label="Comment" placeholder="${hint || 'Comment (needed to return)'}" style="min-height:58px"></textarea><button type="button" class="mic" data-mic="comment" title="Voice input" aria-label="Voice input">${MIC}</button></div></div>
   <div style="display:flex;flex-direction:column;gap:6px"><button class="btn primary" data-do="approve">✓ Approve</button><button class="btn danger" data-do="return">↩ Return</button></div></div>`;
 
 // Carry out a decision; returns an error text or ''. extra: the "Remind again on" date of a later-work task.
@@ -140,6 +138,7 @@ export function actOnTask(t, action, comment, extra = '', markup = null) {
   if (!myTasks().some(x => x.id === t.id)) return 'This task is not for your role.';
   if (cannotDecide(t)) return cannotDecide(t);
   if (action === 'return' && !comment.trim()) return 'Write a comment to say what needs changing.';
+  if (action === 'notYet' && !comment.trim()) return 'Write what is missing, so the technician knows what to do.';
   if (t.kind === 'laterWork') {
     if (action === 'snooze') { if (!extra) return 'Pick the date for the next reminder.'; remindLater(t.docId, extra, comment); return ''; }
     if (action === 'notWanted') { dropLaterWork(t.docId, 'NOT_NEEDED', comment); return ''; }
@@ -148,7 +147,7 @@ export function actOnTask(t, action, comment, extra = '', markup = null) {
     go(`estimates/${r.estimate.id}`);
     return '';
   }
-  if (t.kind === 'leaveSite') { confirmLeave(t.id, comment); return ''; }
+  if (t.kind === 'leaveSite') { if (action === 'notYet') declineLeave(t.id, comment.trim()); else confirmLeave(t.id, comment); return ''; }
   if (t.kind === 'renewal' && action === 'decline') { declineRenewal(t.docId, comment); return ''; }
   if (t.kind === 'renewal') { const r = renewContract(t.docId); go(`estimates/${r.estimate.id}`); return ''; }
   if (t.docType === 'job') { approveJobTerm(t.id, action, comment); return ''; }
@@ -165,7 +164,7 @@ export function renderTasks(el, openId) {
   if (!list.find(t => t.id === sel.id)) sel.id = list[0]?.id || '';
   const t = list.find(x => x.id === sel.id);
   const doneToday = store.list('tasks', x => x.doneBy === store.currentActor() && x.doneAt && new Date(x.doneAt).toDateString() === new Date().toDateString());
-  el.innerHTML = String(html`<div class="page" style="max-width:1500px">
+  el.innerHTML = String(html`<div class="page">
     ${pageHead({ crumb: 'Dashboard › My tasks', title: 'My tasks', sub: `${auth.role().name}: approvals and confirmations waiting for you.` })}
     ${tiles([{ key: 'open', label: 'Waiting for me', count: list.length, tone: 'warn' }, { key: 'ret', label: 'Returned by me today', count: doneToday.filter(x => x.status === 'Returned').length },
       { key: 'ok', label: 'Approved or confirmed today', count: doneToday.filter(x => x.status === 'Done').length }], 'open')}
@@ -184,10 +183,17 @@ export function renderTasks(el, openId) {
     const b = e.target.closest('[data-do]');
     if (!b) return;
     const mk = $('[name="mkPct"]', el);
-    const err = actOnTask(t, b.dataset.do, $('[name="comment"]', el)?.value || '', $('[name="snooze"]', el)?.value || '', mk ? { overheadPct: $('[name="ovPct"]', el)?.value, marginPct: mk.value } : null);
-    if (err) { toast(err, 'bad'); return; }
-    toast(`${t.docNo}: ${DONE[b.dataset.do] || 'approved'}`);
+    const what = b.dataset.do;
+    const markup = mk ? { overheadPct: $('[name="ovPct"]', el)?.value, marginPct: mk.value } : null;
+    const repriced = what === 'approve' && markup && t.docType === 'quotation' && markupChanged(store.get('estimates', store.get('quotations', t.docId).estimateId), withMarkup(store.get('estimates', store.get('quotations', t.docId).estimateId), markup));
+    const err = actOnTask(t, what, $('[name="comment"]', el)?.value || '', $('[name="snooze"]', el)?.value || '', markup);
+    // The problem shows in red under the box it is about (finding 16).
+    if (err) { const box = $(what === 'snooze' ? '[name="snooze"]' : '[name="comment"]', el); if (box) fieldError(box, err); else toast(err, 'bad'); return; }
+    // An approval or an OK can be taken back for a few seconds (finding 17).
+    const undo = what === 'approve' && t.docType === 'quotation' && !repriced ? () => { if (undoApprove(t.id)) { sel.id = t.id; toast(`${t.docNo}: approval taken back`); render(); } else toast('Too late to undo: the quotation has moved on', 'bad'); }
+      : what === 'confirm' ? () => { if (undoConfirmLeave(t.docId)) { toast(`${t.docNo}: OK taken back, the request is waiting again`); render(); } else toast('Too late to undo: the technician has checked out', 'bad'); } : null;
+    toast(`${t.docNo}: ${DONE[what] || 'approved'}`, '', undo ? { undo } : {});
     sel.id = '';
-    if (!['renew', 'quoteRest'].includes(b.dataset.do)) render();
+    if (!['renew', 'quoteRest'].includes(what)) render();
   };
 }

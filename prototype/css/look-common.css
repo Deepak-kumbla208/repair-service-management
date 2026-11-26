@@ -1,0 +1,394 @@
+/* The look's shared rules (chosen by the user on 26 Nov 2026 from the look options mockup), laid over the app's own
+   style sheets. Only colours, type, corners, shadows and spacing change: no element is added, hidden or moved, so every
+   page, field, section and flow stays the same. look.css (Fusion glass) sets the --lk-* values below and adds a few
+   rules of its own. Text sizes stay as the audit set them (web 15 / 13 px, phone 16 / 14 px). */
+
+/* ---------- The app's own colour names, pointed at the look's colours ---------- */
+:root {
+  --navy-900: var(--lk-strong);
+  --navy-800: var(--lk-accent-ink);
+  --blue-600: var(--lk-accent);
+  --blue-500: var(--lk-accent-500);
+  --blue-200: var(--lk-accent-200);
+  --blue-100: var(--lk-accent-100);
+  --blue-50: var(--lk-accent-50);
+  --ink: var(--lk-ink);
+  --ink-2: var(--lk-ink-2);
+  --muted: var(--lk-muted);
+  --faint: var(--lk-faint);
+  --line: var(--lk-border);
+  --line-soft: var(--lk-divider);
+  --zebra: var(--lk-subtle);
+  --page: var(--lk-page);
+  --gray-bg: var(--lk-subtle-2);
+  --gray-ink: var(--lk-ink-2);
+  --radius: var(--lk-r-sm);
+  --radius-lg: var(--lk-r);
+  --shadow-pop: var(--lk-shadow-pop);
+  --font: var(--lk-font);
+  --field-h: 40px;
+}
+body { font-family: var(--lk-font); background: var(--lk-page); color: var(--lk-ink); font-feature-settings: "tnum" 0; }
+h1, h2, h3, h4 { color: var(--lk-strong); letter-spacing: -0.01em; }
+h1 { font-size: var(--lk-h1, 22px); font-weight: var(--lk-h-weight, 650); }
+h2 { font-weight: var(--lk-h-weight, 650); }
+::selection { background: var(--lk-accent-200); color: var(--lk-strong); }
+* { scrollbar-width: thin; scrollbar-color: var(--lk-scroll) transparent; }
+
+/* ---------- Top bar ---------- */
+.topbar { height: 58px; padding: 0 16px; background: var(--lk-top-bg); border-bottom: 1px solid var(--lk-top-line); box-shadow: var(--lk-top-shadow, none); }
+.brand { color: var(--lk-brand-ink, var(--lk-strong)); font-weight: 700; letter-spacing: -0.01em; }
+.brand small { color: var(--lk-brand-sub, var(--lk-faint)); font-weight: 400; letter-spacing: 0; }
+.brand-mark { width: 30px; height: 30px; border-radius: var(--lk-r-sm); background: var(--lk-mark-bg, var(--lk-accent)); color: var(--lk-mark-ink, #FFFFFF); font-weight: 700; }
+.gsearch-btn { height: 38px; border: 1px solid var(--lk-search-line, transparent); border-radius: var(--lk-r-pill, 10px); background: var(--lk-search-bg); color: var(--lk-muted); padding: 6px 12px; }
+.gsearch-btn:hover { border-color: var(--lk-border-strong); background: var(--lk-surface); }
+kbd { border-color: var(--lk-border); background: var(--lk-surface); color: var(--lk-muted); border-radius: 6px; }
+.company-btn { height: 38px; border: 1px solid var(--lk-border); border-radius: var(--lk-r-sm); background: var(--lk-surface); color: var(--lk-ink-2); padding: 6px 12px; }
+.company-btn:hover { background: var(--lk-hover); }
+.avatar { background: var(--lk-avatar, var(--lk-accent)); width: 34px; height: 34px; font-size: var(--fs-s); }
+.seg { border: 0; background: var(--lk-seg-bg); border-radius: var(--lk-r-sm); padding: 3px; gap: 2px; }
+.seg button { border-radius: calc(var(--lk-r-sm) - 3px); background: transparent; color: var(--lk-muted); font-weight: 550; }
+.seg button.on { background: var(--lk-surface); color: var(--lk-strong); box-shadow: 0 1px 2px rgba(16, 24, 40, .12), 0 1px 3px rgba(16, 24, 40, .08); }
+
+/* ---------- Side menu ---------- */
+.sidebar { background: var(--lk-side-bg); color: var(--lk-side-ink); border-right: 1px solid var(--lk-side-line, transparent); padding: 12px 10px 24px; }
+.side-toggle { color: var(--lk-side-head); border-bottom-color: var(--lk-side-sep); }
+.side-toggle:hover { color: var(--lk-side-ink-hover); }
+.side-group > .side-head { color: var(--lk-side-head); font-weight: 600; }
+.side-item { color: var(--lk-side-ink); border-radius: var(--lk-r-sm); padding: 8px 10px; margin: 2px 0; font-weight: 500; }
+.side-item .ic { color: var(--lk-side-icon, currentColor); opacity: 1; }
+.side-item:hover { background: var(--lk-side-hover); color: var(--lk-side-ink-hover); }
+.side-item.on { background: var(--lk-side-on-bg); color: var(--lk-side-on-ink); font-weight: 600; box-shadow: var(--lk-side-on-mark, none); }
+.side-item.on .ic { color: var(--lk-side-on-icon, currentColor); }
+.side-item .soon { border-color: var(--lk-side-sep); color: var(--lk-side-head); }
+.sidebar.collapsed .side-group { border-top-color: var(--lk-side-sep); }
+.sidebar :focus-visible { outline-color: var(--lk-side-focus, #FFFFFF); }
+
+/* ---------- The page and its sticky title ---------- */
+.content { background: var(--lk-page); }
+.page-head { background: var(--lk-head-bg, var(--lk-page)); box-shadow: none; border-bottom: 1px solid var(--lk-head-line, transparent); backdrop-filter: saturate(1.4) blur(8px); padding-top: 16px; padding-bottom: 12px; }
+.crumb, .crumb a { color: var(--lk-faint); }
+.crumb a { text-decoration: none; }
+.crumb a:hover { color: var(--lk-accent); text-decoration: underline; }
+.page-meta, .page-sub { color: var(--lk-muted); }
+a { color: var(--lk-link, var(--lk-accent)); }
+
+/* ---------- Cards ---------- */
+.card { background: var(--lk-surface); border: 1px solid var(--lk-card-line); border-radius: var(--lk-r); box-shadow: var(--lk-shadow); padding: 16px 18px; }
+.card-head { margin-bottom: 12px; }
+.card-head h2, .card-head h3 { font-size: var(--fs-l); }
+.stack > .card, .stack > details.card { margin-bottom: 14px; }
+details.fold > summary::before { color: var(--lk-faint); }
+.fold-t { color: var(--lk-strong); }
+.fold-s { color: var(--lk-muted); }
+.job-sec.card { padding: 14px 18px; }
+.job-sec:has(.sb.now) { border-color: var(--lk-card-line); box-shadow: var(--lk-shadow), inset 3px 0 0 var(--lk-accent); }
+.job-sec[open] > summary { border-bottom-color: var(--lk-divider); }
+.note { border-radius: var(--lk-r-sm); border-color: var(--lk-accent-200); background: var(--lk-accent-50); padding: 10px 14px; }
+.note.warn { background: var(--lk-amber-bg); border-color: var(--lk-amber-line); color: var(--lk-amber-ink); }
+.note.bad, .err-bar { background: var(--lk-red-bg); border-color: var(--lk-red-line); color: var(--lk-red-ink); border-radius: var(--lk-r-sm); }
+.empty { color: var(--lk-faint); }
+.form-sec { color: var(--lk-strong); border-bottom-color: var(--lk-divider); font-size: var(--fs); padding-bottom: 6px; margin-top: 16px; }
+
+/* ---------- Buttons ---------- */
+.btn { border: 1px solid var(--lk-btn-line); background: var(--lk-btn-bg); color: var(--lk-ink-2); border-radius: var(--lk-r-btn, var(--lk-r-sm)); font-weight: 550; min-height: 36px; padding: 7px 14px; box-shadow: var(--lk-btn-shadow); transition: background-color .12s, border-color .12s, box-shadow .12s; }
+.btn:hover { background: var(--lk-hover); border-color: var(--lk-border-strong); }
+.btn.primary { background: var(--lk-accent); border-color: var(--lk-accent); color: #FFFFFF; box-shadow: var(--lk-btn-primary-shadow, 0 1px 2px rgba(16, 24, 40, .08)); }
+.btn.primary:hover { background: var(--lk-accent-hover); border-color: var(--lk-accent-hover); }
+.btn.soft { background: var(--lk-accent-50); border-color: var(--lk-accent-200); color: var(--lk-accent-ink); box-shadow: none; }
+.btn.soft:hover { background: var(--lk-accent-100); }
+.btn.danger { color: var(--lk-red-ink); border-color: var(--lk-red-line); }
+.btn.link { border: 0; background: none; box-shadow: none; color: var(--lk-accent); font-weight: 550; }
+.btn.link:hover { background: none; text-decoration: underline; }
+.btn.small { min-height: 30px; padding: 4px 10px; }
+.add-dashed { border: 1px dashed var(--lk-border-strong); border-radius: var(--lk-r-sm); color: var(--lk-muted); background: var(--lk-subtle); }
+.add-dashed:hover { border-color: var(--lk-accent); color: var(--lk-accent-ink); background: var(--lk-accent-50); }
+input[type=file]::file-selector-button { border-color: var(--lk-btn-line); border-radius: var(--lk-r-sm); background: var(--lk-btn-bg); font-weight: 550; }
+
+/* ---------- Fields (one style in forms and tables) ---------- */
+input[type=text], input[type=search], input[type=number], input[type=date], input[type=time], input[type=email], input[type=tel], input:not([type]), select, textarea,
+.form-lines input:not([type]), .form-lines input[type=text], .form-lines input[type=search], .form-lines input[type=number], .form-lines input[type=date],
+.form-lines input[type=time], .form-lines input[type=email], .form-lines input[type=tel], .form-lines select, .lines input, .lines select {
+  border: 1px solid var(--lk-field-line); border-radius: var(--lk-r-field, var(--lk-r-sm)); background: var(--lk-field-bg); color: var(--lk-ink);
+  box-shadow: var(--lk-field-shadow, none); transition: border-color .12s, box-shadow .12s;
+}
+input:hover:not(:focus):not([readonly]):not(:disabled), select:hover:not(:focus):not(:disabled), textarea:hover:not(:focus):not([readonly]) { border-color: var(--lk-field-hover); }
+input:focus, select:focus, textarea:focus,
+.form-lines input:focus, .form-lines select:focus, .lines input:focus, .lines select:focus {
+  outline: none; border-color: var(--lk-accent); box-shadow: 0 0 0 3px var(--lk-ring); background: var(--lk-surface);
+}
+.form-lines input[readonly], input[readonly], textarea[readonly], input:disabled, select:disabled, textarea:disabled { background: var(--lk-subtle); border-color: var(--lk-border); color: var(--lk-ink-2); }
+.field > label, .field-label, .form-lines .field > label, .form-lines .field > .field-label { color: var(--lk-label); font-weight: var(--lk-label-weight, 500); }
+.field .req, .err { color: var(--lk-red-ink); }
+.invalid > input, .invalid > select, .invalid > textarea, .invalid .pick-in, .form-lines .field.invalid input, .form-lines .field.invalid select { border-color: var(--lk-red); box-shadow: 0 0 0 3px var(--lk-red-ring); }
+.mic { border-color: var(--lk-border); border-radius: var(--lk-r-sm); color: var(--lk-muted); }
+.check input, .shutter input[type=checkbox] { accent-color: var(--lk-accent); }
+
+/* One-click option buttons */
+label.chip span { border: 1px solid var(--lk-field-line); border-radius: 999px; padding: 4px 13px; background: var(--lk-surface); color: var(--lk-ink-2); font-weight: 500; }
+label.chip:hover span { border-color: var(--lk-accent-500); }
+label.chip input:checked + span { background: var(--lk-chip-on-bg, var(--lk-accent-50)); border-color: var(--lk-chip-on-line, var(--lk-accent)); color: var(--lk-chip-on-ink, var(--lk-accent-ink)); font-weight: 600; box-shadow: inset 0 0 0 1px var(--lk-chip-on-line, var(--lk-accent)); }
+.chip-add { border-radius: 999px; border-color: var(--lk-accent-200); background: var(--lk-accent-50); color: var(--lk-accent-ink); }
+
+/* Type-to-search list, menus, the Ctrl+K search */
+.pick-list, .menu-pop, .palette, .notif { border: 1px solid var(--lk-border); border-radius: var(--lk-r); box-shadow: var(--lk-shadow-pop); }
+.pick-o.on, .pick-o:hover, .cust-hit.on, .cust-hit:hover, .p-item.sel { background: var(--lk-accent-50); box-shadow: inset 3px 0 0 var(--lk-accent); }
+.menu-pop button, .menu-pop .mi { border-radius: var(--lk-r-sm); }
+.menu-pop button:hover { background: var(--lk-hover); }
+.p-ic { background: var(--lk-subtle-2); border-radius: var(--lk-r-sm); }
+
+/* ---------- Tables ---------- */
+.tbl-wrap { border: 1px solid var(--lk-card-line); border-radius: var(--lk-r); background: var(--lk-surface); box-shadow: var(--lk-shadow); }
+.tbl th, .lines th, .ycal th, .cal .hd, .mcal .hd {
+  background: var(--lk-th-bg); color: var(--lk-th-ink); font-weight: 600; font-size: var(--fs-s);
+  letter-spacing: var(--lk-th-spacing, 0); text-transform: var(--lk-th-case, none); border-bottom: 1px solid var(--lk-border);
+}
+.tbl th.screen { background: var(--lk-th-bg); }
+.tbl td { border-top: 1px solid var(--lk-divider); }
+.tbl tbody tr:nth-child(even) td { background: var(--lk-zebra, transparent); }
+.tbl tbody tr.click:hover td, .tbl tr.click:focus-within td { background: var(--lk-row-hover); }
+.tbl .lnk, .tbl a.rowlink { color: var(--lk-accent); }
+.tbl tr.sum td, .cost-tbl tr.sum td { background: var(--lk-subtle) !important; }
+.cost-tbl tr.grand td { background: var(--lk-accent-50) !important; color: var(--lk-strong); }
+.tbl tr.sel td { background: var(--lk-accent-50) !important; }
+.tbl tr.grp-row td { background: var(--lk-subtle) !important; color: var(--lk-muted); }
+.lines td { border-top-color: var(--lk-divider); }
+.pinfo { background: var(--lk-subtle-2); border-radius: 6px; }
+.list-foot { color: var(--lk-faint); }
+
+/* ---------- Count tiles, figures, dashboard ---------- */
+.tile, .stat, .kpi > div { border: 1px solid var(--lk-card-line); border-radius: var(--lk-r); background: var(--lk-surface); box-shadow: var(--lk-shadow); }
+.tile { padding: 12px 16px; transition: border-color .12s, box-shadow .12s; }
+.tile:hover, .stat.click:hover { border-color: var(--lk-accent-500); }
+.tile.sel { border: 1px solid var(--lk-accent); background: var(--lk-accent-50); box-shadow: inset 0 0 0 1px var(--lk-accent), var(--lk-shadow); padding: 12px 16px; }
+.tile .t-label { color: var(--lk-muted); font-weight: 500; }
+.tile .t-num { font-size: 28px; font-weight: 700; color: var(--lk-strong); letter-spacing: -0.02em; }
+.tile .t-num.warn { color: var(--lk-amber); }
+.tile .t-num.bad { color: var(--lk-red); }
+.stat { padding: 14px 16px; }
+.stat b { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; color: var(--lk-strong); }
+.stat span { color: var(--lk-muted); font-weight: 500; }
+.kpi > div { padding: 12px 14px; }
+.kpi b { color: var(--lk-strong); font-weight: 700; letter-spacing: -0.01em; }
+.vbars { border-bottom-color: var(--lk-border); }
+.vbars i { background: var(--lk-chart); border-radius: 6px 6px 2px 2px; }
+.vbars > div:hover i { background: var(--lk-accent-hover); }
+.hb i { background: var(--lk-chart); border-radius: 0 6px 6px 0; height: 14px; }
+.bar, .cd-bar, .minibar { background: var(--lk-subtle-2); }
+.minibar i { background: var(--lk-accent); }
+
+/* ---------- Status labels ---------- */
+.pill { border-radius: 999px; padding: 2px 10px; font-weight: 600; font-size: var(--fs-s); background: var(--lk-pill-gray-bg); color: var(--lk-pill-gray-ink); }
+.pill.amber { background: var(--lk-amber-bg); color: var(--lk-amber-ink); }
+.pill.blue { background: var(--lk-accent-100); color: var(--lk-accent-ink); }
+.pill.green { background: var(--lk-green-bg); color: var(--lk-green-ink); }
+.pill.red { background: var(--lk-red-bg); color: var(--lk-red-ink); }
+.pill.purple { background: var(--lk-purple-bg); color: var(--lk-purple-ink); }
+.tag { border-radius: 999px; padding: 0 8px; }
+.zone-chip { border-radius: 6px; border-color: var(--lk-border-strong); }
+.new-dot { background: var(--lk-accent); border-radius: 999px; }
+
+/* ---------- Tabs, step bar, workflow boxes, trail ---------- */
+.etabs { border-bottom: 1px solid var(--lk-border); gap: 4px; }
+.etabs button { color: var(--lk-muted); font-weight: 550; padding: 9px 12px; border-bottom-width: 2px; }
+.etabs button:hover { color: var(--lk-strong); }
+.etabs button.on { color: var(--lk-accent-ink); border-bottom-color: var(--lk-accent); font-weight: 650; }
+.sb { border-radius: var(--lk-r-sm); border-color: var(--lk-border); background: var(--lk-surface); }
+.sb-n { background: var(--lk-subtle-2); color: var(--lk-ink-2); }
+.sb.done { background: var(--lk-green-bg-soft); border-color: var(--lk-green-line); }
+.sb.done .sb-n { background: var(--lk-green); color: #FFFFFF; }
+.sb.now { background: var(--lk-accent-50); border: 1px solid var(--lk-accent); box-shadow: inset 0 0 0 1px var(--lk-accent); padding: 7px 9px 8px; }
+.sb.now .sb-n { background: var(--lk-accent); }
+.sb.now .sb-top b { color: var(--lk-strong); }
+.sb.now .sb-st { color: var(--lk-accent-ink); }
+.sb.next, .sb.skip { background: transparent; border-color: var(--lk-border-strong); }
+.sb.here { box-shadow: 0 0 0 3px var(--lk-ring); }
+.wf-box { border-radius: var(--lk-r); }
+.wf-box.done { background: var(--lk-green-bg-soft); border-color: var(--lk-green-line); color: var(--lk-ink-2); }
+.wf-box.done .wf-num { background: var(--lk-green); color: #FFFFFF; }
+.wf-box.now { background: var(--lk-accent-50); border-color: var(--lk-accent); }
+.wf-box.now .wf-num, .wf-now { background: var(--lk-accent); }
+.wf-box.next, .wf-box.skip { border-color: var(--lk-border-strong); color: var(--lk-muted); }
+.trail a, .trail b, .trail .plain { border-radius: 999px; }
+.trail b { background: var(--lk-accent-100); border-color: var(--lk-accent-200); color: var(--lk-accent-ink); }
+
+/* ---------- Scheduling board, calendars, cards on the board ---------- */
+.cal, .mcal { border-color: var(--lk-card-line); border-radius: var(--lk-r); box-shadow: var(--lk-shadow); }
+.cal .who { background: var(--lk-subtle); border-top-color: var(--lk-divider); }
+.cal .day { border-top-color: var(--lk-divider); border-left-color: var(--lk-divider); }
+.blk, .vb { border-radius: var(--lk-r-sm); }
+.jobc, .vcard, .task, .shl, .lvl .s, .ask, .wl, .mat-row, .file-row { border-color: var(--lk-card-line); border-radius: var(--lk-r); box-shadow: var(--lk-shadow); }
+.task.on { border-color: var(--lk-accent); background: var(--lk-accent-50); box-shadow: inset 0 0 0 1px var(--lk-accent); }
+.ycal th, .ycal td { border-color: var(--lk-divider); }
+.mcal .c { border-top-color: var(--lk-divider); border-left-color: var(--lk-divider); }
+
+/* ---------- Pop-ups and messages ---------- */
+.modal-back, .palette-back { background: var(--lk-backdrop); backdrop-filter: blur(3px); }
+.modal { border-radius: var(--lk-r-lg); box-shadow: var(--lk-shadow-pop); overflow: hidden; }
+.modal-head { border-bottom-color: var(--lk-divider); padding: 14px 18px; }
+.modal-body { padding: 16px 18px; }
+.modal-foot { border-top-color: var(--lk-divider); background: var(--lk-subtle); padding: 12px 18px; }
+.toast { background: var(--lk-toast); border-radius: var(--lk-r); box-shadow: var(--lk-shadow-pop); }
+.guide-bar { background: var(--lk-toast); border-radius: var(--lk-r); }
+
+/* ---------- Login ---------- */
+.login-side { background: var(--lk-login-bg); color: var(--lk-login-ink); }
+.login-side h1 { color: var(--lk-login-title); }
+.login-card { border: 1px solid var(--lk-card-line); border-radius: var(--lk-r-lg); box-shadow: var(--lk-shadow-lg, var(--lk-shadow)); }
+.user-card { border-color: var(--lk-border); border-radius: var(--lk-r); }
+.user-card:hover { border-color: var(--lk-accent); background: var(--lk-accent-50); }
+
+/* ---------- Phone ---------- */
+.mobile-stage { background: var(--lk-stage); }
+.phone { background: var(--lk-m-page); border-color: #0B0F17; }
+.phone .m-body { background: var(--lk-m-page); }
+.m-head { background: var(--lk-m-head); color: var(--lk-m-head-ink); border-bottom: 1px solid var(--lk-m-head-line, transparent); }
+.m-status { color: var(--lk-m-head-sub); }
+.phone .m-titlebar h1 { color: var(--lk-m-head-ink); }
+.m-sub { color: var(--lk-m-head-sub); }
+.phone .m-icon-btn { background: var(--lk-m-icon-bg); color: var(--lk-m-head-ink); }
+.m-head .seg { background: var(--lk-m-icon-bg); }
+.m-head .seg button { color: var(--lk-m-head-sub); }
+.m-head .seg button.on { background: var(--lk-surface); color: var(--lk-strong); }
+.m-head :focus-visible { outline-color: var(--lk-m-head-ink); }
+.phone .m-card, .phone .job-card, .phone .m-body > .card, .phone .m-line, .phone .wl, .phone .shl, .phone .mat-row, .phone .ck, details.pcard,
+.m-kpi a, .m-quick a, .m-tabs3 button, .phone .m-tiles .tile { border-radius: var(--lk-m-r); box-shadow: var(--lk-m-shadow); }
+.phone .job-card { box-shadow: inset 4px 0 0 var(--lk-accent), var(--lk-m-shadow); }
+.phone .m-next .job-card { box-shadow: inset 4px 0 0 var(--lk-accent), var(--lk-shadow-lg, var(--lk-m-shadow)); }
+.phone .job-card .strong, .m-kpi b, .m-quick a, .m-step-head b, .phone h2 { color: var(--lk-strong); }
+.m-quick .ico { color: var(--lk-accent); }
+.phone .btn { border-radius: var(--lk-m-r-btn); }
+.phone input:not([type=checkbox]):not([type=radio]):not([type=file]), .phone select, .phone textarea { border-radius: var(--lk-m-r-btn); border-color: var(--lk-field-line); }
+.phone .m-tabs { background: var(--lk-m-tabs-bg, var(--lk-surface)); border-top-color: var(--lk-border); }
+.phone .m-tab { color: var(--lk-muted); }
+.phone .m-tab.on { color: var(--lk-accent); }
+.m-tabs3 button[aria-selected=true] { background: var(--lk-accent); }
+.m-fab { background: var(--lk-accent); box-shadow: 0 8px 20px var(--lk-ring); }
+.m-steps li.now .n, .m-prog a.now:not(.done):not(.bad):not(.skip) i { background: var(--lk-accent); }
+.m-steps li.now .n, .m-prog a.now i { box-shadow: 0 0 0 4px var(--lk-ring); }
+.m-steps li.now b, .m-prog a.now { color: var(--lk-accent-ink); }
+.phone .check:has(input:checked) { border-color: var(--lk-accent); background: var(--lk-accent-50); }
+.wd-sec { background: var(--lk-strong); border-radius: var(--lk-r-sm); }
+.m-seg { background: var(--lk-subtle-2); }
+
+/* ---------- Thin scroll bars ---------- */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--lk-scroll); border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ======================================================================================================
+   Added 26 Nov 2026 (more looks): every remaining surface, the top bar's buttons and the text on the look's
+   colour come from variables too, so a look can have a coloured top bar, a coloured button with dark text,
+   or a dark page. Fallbacks keep look 1 exactly as it was.
+   ====================================================================================================== */
+:root { color-scheme: var(--lk-scheme, light); }
+
+/* Top bar: its own ink and buttons (a coloured or dark top bar) */
+.topbar .brand { color: var(--lk-brand-ink, var(--lk-strong)); }
+.gsearch-btn { color: var(--lk-search-ink, var(--lk-muted)); }
+.gsearch-btn:hover { background: var(--lk-search-hover, var(--lk-surface)); border-color: var(--lk-search-hover-line, var(--lk-border-strong)); }
+.gsearch-btn kbd { background: var(--lk-kbd-bg, var(--lk-surface)); color: var(--lk-kbd-ink, var(--lk-muted)); border-color: var(--lk-kbd-line, var(--lk-border)); }
+.topbar .company-btn { background: var(--lk-top-btn-bg, var(--lk-surface)); border-color: var(--lk-top-btn-line, var(--lk-border)); color: var(--lk-top-btn-ink, var(--lk-ink-2)); }
+.topbar .company-btn:hover { background: var(--lk-top-btn-hover, var(--lk-hover)); }
+.topbar .seg { background: var(--lk-top-seg-bg, var(--lk-seg-bg)); }
+.topbar .seg button { color: var(--lk-top-seg-ink, var(--lk-muted)); }
+.topbar .seg button.on { background: var(--lk-top-seg-on-bg, var(--lk-surface)); color: var(--lk-top-seg-on-ink, var(--lk-strong)); }
+.avatar { color: var(--lk-avatar-ink, #FFFFFF); }
+.topbar :focus-visible { outline-color: var(--lk-top-focus, var(--lk-accent)); }
+
+/* Text on the look's colour (white on blue; a look with a light colour sets dark text) */
+.btn.primary, .btn.primary:hover, .sb.now .sb-n, .wf-box.now .wf-num, .wf-now, .new-dot, .m-fab, .chan button.on, .dot.on, .prog .n,
+.m-steps li.now .n, .m-prog a.now:not(.done):not(.bad):not(.skip) i, .m-tabs3 button[aria-selected=true], .m-tabs3 button[aria-selected=true] b,
+.etabs button.on.filled { color: var(--lk-on-accent, #FFFFFF); }
+.chan button.on, .dot.on, .prog .n { background: var(--lk-accent); border-color: var(--lk-accent); }
+
+/* Every surface that the app paints white */
+.modal, .menu-pop, .palette, .pick-list, .notif, .mk-pop, .login-card, .user-card, .trail a, .wf-box.next, .wf-box.skip, .task, .vcard, .cal, .mcal, .ycal,
+.shl, .ask, .lvl .s, .wl, .file-row, .mic, .dot, .pf button, .pf span, .chan button, .vb.plan, .sig-pad, .sig-img, label.chip span,
+.phone .m-card, .phone .job-card, .phone .m-body > .card, .phone .m-tiles .tile, .m-kpi a, .m-quick a, .m-line, .m-tabs3 button, .phone .m-line, .phone .wl,
+.phone .shl, .phone .mat-row, .phone .ck, details.pcard, .phone .check, .phone .add-dashed, .m-foot, .m-tabs, .phone .m-steps li.skip .n, .m-prog a.skip i,
+.phone .pf button, .phone input:not([type=checkbox]):not([type=radio]):not([type=file]), .phone select, .phone textarea { background-color: var(--lk-surface); }
+.jobc { background: var(--lk-surface) !important; color: var(--lk-ink) !important; }
+.seg button.on { background: var(--lk-seg-on, var(--lk-surface)); }
+.segc { background: var(--lk-seg-bg); box-shadow: inset 0 0 0 1px var(--lk-border); }
+.segc span { color: var(--lk-muted); }
+.segc input:checked + span { background: var(--lk-seg-on, var(--lk-surface)); color: var(--lk-strong); box-shadow: 0 1px 2px rgba(0, 0, 0, .16), 0 0 0 1px var(--lk-border); }
+.m-seg input:checked + span { background: var(--lk-seg-on, var(--lk-surface)); color: var(--lk-strong); }
+.m-steps .n, .m-prog a i, .pcard .st { background: var(--lk-subtle-2); color: var(--lk-muted); }
+.phone .modal.m-sheet .modal-body { background: var(--lk-subtle-2); }
+.wf-box.next, .wf-box.skip { color: var(--lk-muted); }
+.wf .arr { color: var(--lk-faint); }
+.mic, .dot, .pf button, .pf span, .chan button { color: var(--lk-muted); }
+.sheet { color-scheme: light; }
+
+/* The app's status colours and the phone's own greys follow the look too */
+:root {
+  --amber-bg: var(--lk-amber-bg); --amber-ink: var(--lk-amber-ink); --amber: var(--lk-amber);
+  --green-bg: var(--lk-green-bg); --green-ink: var(--lk-green-ink); --green: var(--lk-green);
+  --red-bg: var(--lk-red-bg); --red-ink: var(--lk-red-ink); --red: var(--lk-red);
+  --purple-bg: var(--lk-purple-bg); --purple-ink: var(--lk-purple-ink);
+}
+.phone { --m-ink: var(--lk-strong); --m-sub: var(--lk-muted); --m-line: var(--lk-border); }
+.phone .m-section, .m-hello { color: var(--lk-muted); }
+.wd-sec { background: var(--lk-wd-bg, var(--lk-strong)); }
+/* Links and small coloured words: their own colour (a dark look needs a lighter one than its buttons) */
+.tbl .lnk, .tbl a.rowlink, .btn.link, .phone .m-tab.on, .m-quick .ico, .crumb a:hover, .cs-change, .rb .arr, .acc-head .tw, .hb.click:hover span,
+.mcal .c.today .d, .m-steps li.now b, .m-prog a.now { color: var(--lk-link, var(--lk-accent)); }
+
+/* The login page's small mark has a fixed blue in the app's code; the look's own colours instead */
+.login-side .brand-mark { background: var(--lk-mark-bg, var(--lk-accent)) !important; color: var(--lk-mark-ink, #FFFFFF); }
+/* Scheduling board: today's column heading and its label */
+.cal .hd.today { background: var(--lk-accent-100); color: var(--lk-accent-ink); }
+.today-tag { background: var(--lk-accent); color: var(--lk-on-accent, #FFFFFF); }
+
+/* ======================================================================================================
+   Added 26 Nov 2026 (the user: "the colour … is constant in all"): colours the app fixed in its own style
+   sheets now follow the look too. A ticked line uses the look's own colour; priorities, notes and warnings
+   use the look's own green, amber and red; tick boxes and radio buttons take the look's colour.
+   ====================================================================================================== */
+input[type=checkbox], input[type=radio] { accent-color: var(--lk-accent); }
+input:focus, select:focus, textarea:focus,
+.form-lines input:focus, .form-lines select:focus, .lines input:focus, .lines select:focus { border-color: var(--lk-focus, var(--lk-accent)); }
+
+/* Site report: a product line that is covered (ticked) */
+.ask.on { background: var(--lk-accent-50); border-color: var(--lk-accent-500); box-shadow: inset 3px 0 0 var(--lk-accent); }
+.find-row { border-top-color: var(--lk-border); }
+/* Priority of a finding: the look's red and amber */
+.prio label.p-URGENT input:checked + span { background: var(--lk-red-bg); border-color: var(--lk-red); color: var(--lk-red-ink); box-shadow: inset 0 0 0 1px var(--lk-red); }
+.prio label.p-NORMAL input:checked + span { background: var(--lk-amber-bg); border-color: var(--lk-amber); color: var(--lk-amber-ink); box-shadow: inset 0 0 0 1px var(--lk-amber); }
+/* Labels, notes and warnings */
+.tag { background: var(--lk-amber-bg); border-color: var(--lk-amber); color: var(--lk-amber-ink); }
+.tag.info { background: var(--lk-accent-50); border-color: var(--lk-accent-500); color: var(--lk-accent-ink); }
+.tag.new { background: var(--lk-green-bg); border-color: var(--lk-green-line); color: var(--lk-green-ink); }
+.from-email { box-shadow: 0 0 0 2px var(--lk-amber-line) !important; }
+.wait, .m-offline, .offline-chip { background: var(--lk-amber-bg); border-color: var(--lk-amber-line); color: var(--lk-amber-ink); }
+.okay, .m-online { background: var(--lk-green-bg); border-color: var(--lk-green-line); color: var(--lk-green-ink); }
+.failbox, .m-probs { background: var(--lk-red-bg); border-color: var(--lk-red-line); color: var(--lk-red-ink); }
+.m-probs a { border-top-color: var(--lk-red-line); color: var(--lk-red-ink); }
+.mx tr.changed td { background: var(--lk-amber-bg) !important; }
+.notif a.ni.unread { background: var(--lk-accent-50); }
+/* Lines, outlines and markers the app drew in fixed greys */
+.sig-pad { border-color: var(--lk-border-strong); }
+.dot, .phone .dot, .phone .pf button, .phone .pf > :first-child, .phone label.chip span, .phone .add-dashed { border-color: var(--lk-field-line); }
+.phone .pf button.na { background: var(--lk-ink-2); border-color: var(--lk-ink-2); }
+.phone .job-card.done { box-shadow: inset 4px 0 0 var(--lk-border-strong), var(--lk-m-shadow); }
+.m-apart { border-top-color: var(--lk-border); }
+.m-prog a::before { background: var(--lk-border-strong); }
+.cal .day { background: repeating-linear-gradient(to bottom, transparent 0, transparent 19px, var(--lk-divider) 19px, var(--lk-divider) 20px); }
+.cal .day.free { box-shadow: inset 0 0 0 2px var(--lk-green-line); }
+.cal .day.free:hover { background-color: var(--lk-green-bg); }
+
+/* ======================================================================================================
+   Printed forms stay exactly as they were (team lead's forms): the look stops at the A4 sheet. Inside it the app's
+   own colours, font and heading weight come back (the values in base.css).
+   ====================================================================================================== */
+.sheet {
+  --navy-900: #042C53; --navy-800: #0C447C; --blue-600: #185FA5; --blue-500: #378ADD; --blue-200: #B5D4F4; --blue-100: #E6F1FB; --blue-50: #F3F8FD;
+  --ink: #2C2C2A; --ink-2: #444441; --muted: #55544F; --faint: #63625C; --line: #D3D1C7; --line-soft: #EEEDE8; --zebra: #F7F6F2; --page: #F1EFE8;
+  --amber-bg: #FAEEDA; --amber-ink: #633806; --amber: #8F5A0A; --green-bg: #EAF3DE; --green-ink: #27500A; --green: #3B6D11;
+  --red-bg: #FCEBEB; --red-ink: #791F1F; --red: #A32D2D; --purple-bg: #EEEDFE; --purple-ink: #3C3489; --gray-bg: #F1EFE8; --gray-ink: #444441;
+  --radius: 5px; --radius-lg: 8px; --shadow-pop: 0 12px 32px rgba(4, 44, 83, .22); --field-h: 38px;
+  --font: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  font-family: var(--font);
+}
+.sheet h1, .sheet h2, .sheet h3, .sheet h4 { font-weight: 600; letter-spacing: normal; }

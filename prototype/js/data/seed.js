@@ -26,7 +26,7 @@ const COMPANIES = [
 const ROLES = [
   ['ADMIN', 'Admin', 'Everything, including setup', 'management'],
   ['OPS', 'Operations Executive', 'Enquiries, assessments, estimates, quotations, scheduling, invoices', 'work'],
-  ['APR', 'Approver', 'Counter-checks quotations; approves non-immediate payment terms', 'approvals'],
+  ['APR', 'Approver', 'Approves quotations; approves non-immediate payment terms', 'approvals'],
   ['TECH', 'Technician', 'Own jobs on the phone', 'phone'],
   ['MGT', 'Management', 'Read-only view of everything; level-2 approvals', 'management'],
 ];
@@ -89,13 +89,13 @@ function rolesAndAccess(t) {
 const USERS = [
   [DSH, 'admin', 'Admin', 'ADMIN', null, 'All menus, web and phone'],
   [DSH, 'ops', 'Operations Executive', 'OPS', 1, 'Enquiries and assessments · web and phone'],
-  [DSH, 'approver', 'Approver', 'APR', 2, 'Counter-checks quotations'],
+  [DSH, 'approver', 'Approver', 'APR', 2, 'Approves quotations'],
   [DSH, 'techA', 'Technician A', 'TECH', 3, 'Zone A (also B) · phone only'],
   [DSH, 'techB', 'Technician B', 'TECH', 4, 'Zone C (also D) · phone only'],
   [DSH, 'mgmt', 'Management', 'MGT', 5, 'Read-only, all transactions'],
   [GDD, 'gadmin', 'Admin', 'ADMIN', null, 'All menus, web and phone'],
   // Nobody approves their own quotation, so the Gulf company needs a second person for the counter-check.
-  [GDD, 'gapprover', 'Approver', 'APR', null, 'Counter-checks quotations'],
+  [GDD, 'gapprover', 'Approver', 'APR', null, 'Approves quotations'],
   [GDD, 'gmgmt', 'Management', 'MGT', null, 'Level-2 approvals (over 10,000)'],
 ];
 

@@ -1,0 +1,225 @@
+/* UX audit (26 Nov 2026): web styles added on top of the four shared files.
+   Text sizes and greys are changed in base.css; the phone has its own file (ux-phone.css). */
+
+/* ---------- Keyboard focus is always visible (finding 26) ---------- */
+:focus-visible { outline: 2px solid var(--blue-600); outline-offset: 2px; }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--blue-600); outline-offset: 0; border-color: var(--blue-600); box-shadow: none; }
+label.chip input:focus-visible + span, .m-seg input:focus-visible + span { outline: 2px solid var(--blue-600); outline-offset: 2px; box-shadow: none; }
+.sidebar :focus-visible, .m-head :focus-visible, .print-bar :focus-visible, .guide-bar :focus-visible { outline-color: #FFFFFF; }
+.tbl a.rowlink { color: var(--blue-600); font-weight: 600; }
+.tbl tr.click:focus-within td { background: var(--blue-50); }
+
+/* ---------- One field style (finding 12): a light box, the same in forms and tables ---------- */
+input[type=text], input[type=search], input[type=number], input[type=date], input[type=time], input[type=email], input[type=tel], input:not([type]), select, textarea {
+  min-height: var(--field-h); padding: 7px 10px; border: 1px solid #8F8D85; border-radius: 6px; background: var(--white);
+}
+.form-lines input:not([type]), .form-lines input[type=text], .form-lines input[type=search], .form-lines input[type=number], .form-lines input[type=date],
+.form-lines input[type=time], .form-lines input[type=email], .form-lines input[type=tel], .form-lines select,
+.lines input, .lines select {
+  border: 1px solid #8F8D85; border-radius: 6px; padding: 7px 10px; background: var(--white);
+}
+.form-lines input:focus, .form-lines select:focus, .lines input:focus, .lines select:focus { border: 1px solid var(--blue-600); background: var(--white); }
+.form-lines input[readonly], input[readonly], textarea[readonly] { background: var(--zebra); border-style: solid; border-color: var(--line); color: var(--ink-2); }
+input:disabled, select:disabled, textarea:disabled { background: var(--zebra); border-color: var(--line); color: var(--muted); }
+.form-lines .field { grid-template-columns: 150px minmax(0, 1fr); margin-bottom: 8px; }
+.form-lines .field > label, .form-lines .field > .field-label { padding-top: 9px; font-size: var(--fs-s); color: var(--muted); }
+.field > label, .field-label { color: var(--muted); }
+.form-lines .with-mic .mic { top: 6px; }
+.with-mic .mic { top: 6px; }
+.ro { padding: 8px 2px; min-height: var(--field-h); }
+.tbl.edit input, .tbl.edit select { min-height: 36px; padding: 5px 8px; }
+.lines td { padding: 5px 6px; }
+.filters select, .filters input { min-height: 36px; }
+.palette-in input { min-height: 0; border: 0; outline: none; }
+/* Errors: red, under the field, kept until fixed (finding 16) */
+.err { font-size: var(--fs-s); color: var(--red); font-weight: 600; margin-top: 3px; }
+.invalid > input, .invalid > select, .invalid > textarea, .invalid .pick-in, .invalid > .row > input, .invalid > .with-mic > input, .invalid > div > input,
+.form-lines .field.invalid input, .form-lines .field.invalid select { border-color: var(--red); box-shadow: 0 0 0 1px var(--red); }
+/* The attach button instead of the browser's grey "Choose Files" (finding 13) */
+.attach { display: inline-flex; align-items: center; gap: 6px; }
+.attach input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+/* ---------- Buttons: one main button per page, the rest lighter (finding 13) ---------- */
+.btn { min-height: 34px; padding: 6px 13px; }
+.btn.small { min-height: 28px; padding: 3px 9px; font-size: var(--fs-s); }
+.btn.link { min-height: 0; }
+.btn[aria-disabled=true] { opacity: .6; pointer-events: none; }
+.seg { font-size: var(--fs-s); }
+.seg button { padding: 5px 11px; }
+
+/* ---------- The page: one width, and it uses a wide screen (findings 13, 19) ---------- */
+.page { max-width: 1680px; margin: 0 auto; padding: 0 20px 48px; }
+.page-head { position: sticky; top: 0; z-index: 6; background: var(--page); margin: 0 -20px 12px; padding: 12px 20px 10px; flex-wrap: wrap; row-gap: 8px; box-shadow: 0 6px 6px -6px rgba(4, 44, 83, .18); }
+.page-head h1 { line-height: 1.25; }
+.page-head .row { flex-wrap: wrap; justify-content: flex-end; }
+.crumb { font-size: var(--fs-s); color: var(--muted); }
+.crumb a { color: var(--muted); text-decoration: underline; }
+.page-meta, .page-sub { font-size: var(--fs-s); }
+.tbl-wrap { max-height: calc(100vh - 250px); }
+.tbl td { white-space: normal; }
+.tbl td.num, .tbl td.nowrap, .tbl th { white-space: nowrap; }
+.tbl th { font-weight: 600; }
+.tbl th.sort { cursor: pointer; user-select: none; }
+.tbl th.sort button { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
+.tbl th.sort button:focus-visible { outline: 2px solid var(--blue-600); outline-offset: 2px; }
+.tbl th.sort .dir { font-size: var(--fs-xs); opacity: .55; }
+.tbl th.sort[aria-sort] .dir { opacity: 1; }
+.topbar { gap: 10px; }
+.brand { width: 196px; }
+.gsearch-btn { flex: 0 1 340px; width: auto; min-width: 150px; color: var(--muted); }
+@media (max-width: 1500px) {
+  .split, .cols2 { grid-template-columns: minmax(0, 1fr) !important; }
+  .dgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 1250px) {
+  .kv.six { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .g4, .g6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .apr { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------- Messages: Undo for a few seconds (findings 3, 17) ---------- */
+.toast { display: flex; align-items: center; gap: 14px; font-size: var(--fs); }
+.toast-undo { background: none; border: 1px solid rgba(255, 255, 255, .7); color: var(--white); border-radius: 5px; padding: 3px 12px; font: inherit; font-weight: 700; cursor: pointer; flex: none; }
+.toast-undo:hover { background: rgba(255, 255, 255, .15); }
+
+/* ---------- Type-to-search (finding 14) ---------- */
+.pick { display: block; position: relative; }
+.pick-in { width: 100%; }
+.pick-list { position: fixed; z-index: 90; background: var(--white); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow-pop); max-height: 320px; overflow-y: auto; padding: 4px 0; }
+.pick-g { font-size: var(--fs-xs); font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); padding: 8px 12px 3px; }
+.pick-o { padding: 7px 12px; cursor: pointer; display: flex; justify-content: space-between; gap: 12px; }
+.pick-o span { color: var(--muted); font-size: var(--fs-s); white-space: nowrap; }
+.pick-o.on, .pick-o:hover { background: var(--blue-100); box-shadow: inset 3px 0 0 var(--blue-600); }
+.pick-more { padding: 7px 12px; color: var(--muted); font-size: var(--fs-s); }
+.chip-add { border: 1px solid var(--blue-500); background: var(--blue-50); color: var(--navy-800); border-radius: 14px; padding: 3px 11px; margin: 0 5px 5px 0; cursor: pointer; font: inherit; font-size: var(--fs-s); }
+.chip-add:hover { background: var(--blue-100); }
+.chip-add::before { content: '+ '; font-weight: 700; }
+
+.row.dt { flex-wrap: wrap; }
+.row.dt > input[type=date] { flex: 1 1 150px; min-width: 0; }
+.row.dt > input[type=time] { flex: 0 0 112px; width: 112px; }
+.cust-hit { border-radius: 5px; padding: 7px 8px; min-height: 0; }
+.cust-hit.on, .cust-hit:hover { background: var(--blue-100); box-shadow: inset 3px 0 0 var(--blue-600); text-decoration: none; }
+.pinfo { font-size: var(--fs-s); color: var(--muted); }
+.pinfo.link { background: var(--green-bg); color: var(--green-ink); }
+.lines th { font-weight: 600; }
+.pm { width: 30px; height: 30px; }
+
+/* ---------- "New" marks and the notification list (findings 4, 20) ---------- */
+.new-dot { display: inline-block; background: var(--blue-600); color: var(--white); border-radius: 9px; padding: 0 8px; font-size: var(--fs-xs); font-weight: 700; margin-right: 6px; vertical-align: 1px; }
+tr.is-new td { box-shadow: inset 0 0 0 9999px rgba(55, 138, 221, .07); }
+tr.is-new td:first-child { box-shadow: inset 3px 0 0 var(--blue-600), inset 0 0 0 9999px rgba(55, 138, 221, .07); }
+.bell { position: relative; }
+.bell .n { display: inline-block; min-width: 20px; text-align: center; background: var(--red); color: var(--white); border-radius: 10px; padding: 0 6px; font-size: var(--fs-xs); font-weight: 700; margin-left: 4px; }
+.bell .n.zero { background: var(--gray-bg); color: var(--muted); }
+.notif { width: 420px; max-width: calc(100vw - 16px); max-height: 70vh; overflow-y: auto; padding: 0; }
+.notif h3 { padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
+.notif a.ni { display: block; padding: 9px 14px; border-top: 1px solid var(--line-soft); color: var(--ink); text-decoration: none; }
+.notif a.ni:first-of-type { border-top: 0; }
+.notif a.ni:hover, .notif a.ni:focus-visible { background: var(--blue-50); }
+.notif a.ni.unread { box-shadow: inset 3px 0 0 var(--blue-600); background: #F7FAFE; }
+.notif .ni small { display: block; color: var(--muted); font-size: var(--fs-s); }
+.notif .empty { padding: 18px; }
+
+/* ---------- Menu: line icons, like the phone (finding 13) ---------- */
+.side-item .ic { width: 18px; display: inline-flex; justify-content: center; flex: none; }
+.side-item .ic svg { display: block; }
+.side-group > .side-head { font-size: var(--fs-xs); letter-spacing: .04em; text-transform: uppercase; color: #9CC4EE; padding: 6px 9px; }
+.side-item { padding: 7px 9px; }
+.sidebar { width: 226px; }
+.side-toggle { font-size: var(--fs-s); }
+
+/* ---------- Counter tiles ---------- */
+.tiles { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.tile .t-label { font-size: var(--fs-s); }
+.tile .t-sub { color: var(--muted); }
+
+/* ---------- The step bar: the map of the job under every document's title (finding 2) ---------- */
+.stepbar { display: flex; gap: 5px; margin: 0 0 12px; align-items: stretch; }
+.sb { flex: 1 1 0; min-width: 0; border-radius: 8px; padding: 7px 9px 8px; border: 1px solid var(--line); background: var(--white); font-size: var(--fs-s); line-height: 1.35; display: flex; flex-direction: column; gap: 1px; }
+.sb-top { display: flex; align-items: center; gap: 6px; }
+.sb-top b { font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.sb-n { flex: none; width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: var(--fs-xs); font-weight: 700; background: var(--gray-bg); color: var(--ink-2); }
+.sb-doc, .sb-st { color: var(--muted); overflow-wrap: anywhere; }
+.sb-doc a { font-weight: 600; }
+.sb.done { background: #F6FAF0; border-color: #C5DBA9; }
+.sb.done .sb-n { background: #C0DD97; color: var(--green-ink); }
+.sb.now { background: var(--blue-100); border: 2px solid var(--blue-600); padding: 6px 8px 7px; }
+.sb.now .sb-n { background: var(--blue-600); color: var(--white); }
+.sb.now .sb-top b { color: var(--navy-900); }
+.sb.now .sb-st { color: var(--navy-800); font-weight: 600; }
+.sb.next, .sb.skip { background: transparent; border-style: dashed; }
+.sb.next .sb-top b, .sb.skip .sb-top b { color: var(--muted); font-weight: 400; }
+.sb.here { box-shadow: 0 0 0 3px rgba(24, 95, 165, .18); }
+.sb-next { margin-top: 5px; }
+.sb-next .btn { white-space: normal; text-align: left; line-height: 1.25; }
+.trail { margin: -4px 0 12px; font-size: var(--fs-s); }
+@media (max-width: 1250px) { .sb-doc, .sb-st { font-size: var(--fs-xs); } .sb { padding: 6px 7px; } }
+
+/* ---------- Enquiry work view (finding 5) ---------- */
+.tbl.work td { vertical-align: top; padding: 9px 10px; }
+.tbl.work td.need { max-width: 360px; min-width: 200px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; border-top: 1px solid var(--line-soft); }
+.tbl.work tr > td.need { display: table-cell; }
+.tbl.work td.need { white-space: normal; }
+.tbl td .small { margin-top: 2px; }
+.tbl td.clip { max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+.tbl.work .need { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 380px; min-width: 200px; }
+
+/* ---------- One page per job (finding 1, working style): each document is a section of the job page ---------- */
+.job-sec { scroll-margin-top: 118px; }
+.jobpage #jpBar .stepbar { margin-bottom: 8px; }
+.job-sec > summary { padding: 2px 0; align-items: center; }
+.job-sec > summary .fold-t { font-size: var(--fs-l); }
+.job-sec[open] > summary { margin-bottom: 8px; border-bottom: 1px solid var(--line-soft); padding-bottom: 8px; }
+.job-sec[open] > summary .fold-s { display: inline; }
+.job-sec .js-ok { color: var(--green); font-weight: 700; }
+.job-sec .js-body > .page { padding: 0; max-width: none; margin: 0; }
+.job-sec .js-body .page-head { position: static; background: none; box-shadow: none; margin: 0 0 10px; padding: 0; }
+.job-sec .js-body .page-head .crumb { display: none; }
+.job-sec .js-body .page-head h1 { font-size: var(--fs-l); }
+.job-sec .js-body .stepbar, .job-sec .js-body > .page > .trail { display: none; }
+.job-sec[data-key=enquiry] .js-body .page-head { display: none; }
+.job-sec .js-body .card { box-shadow: none; }
+.job-sec.card { padding: 12px 16px; }
+.job-sec:has(.sb.now) { border-color: var(--blue-600); }
+
+/* A styled attach button instead of the browser's grey "Choose Files" (finding 13) */
+input[type=file]:not([hidden]) { font-size: var(--fs-s); color: var(--muted); max-width: 100%; }
+input[type=file]::file-selector-button { font: inherit; color: var(--ink-2); background: var(--white); border: 1px solid #B4B2A9; border-radius: var(--radius); padding: 6px 13px; margin-right: 10px; cursor: pointer; }
+input[type=file]::file-selector-button:hover { border-color: var(--blue-500); }
+tr.click[tabindex]:focus-visible { outline: 2px solid var(--blue-600); outline-offset: -2px; }
+.task:focus-visible, .jobc:focus-visible { outline: 2px solid var(--blue-600); outline-offset: 2px; }
+
+/* A problem that is not about one field: a red bar where the person is looking, kept until something changes */
+.err-bar { background: var(--red-bg); border: 1px solid #E8A3A3; color: var(--red-ink); border-radius: 6px; padding: 8px 12px; font-weight: 600; }
+.page-head > .err-bar { flex: 0 0 100%; }
+.modal > .err-bar { margin: 0 16px 10px; }
+.phone .m-body > .err-bar { position: sticky; top: 0; z-index: 4; margin-bottom: 10px; }
+
+/* Click targets at least 24 px (WCAG 2.2 target size), and the small switches of the setup pages at least 28 px */
+.tbl th.sort button { min-height: 26px; }
+.chan button { min-height: 28px; min-width: 32px; font-size: var(--fs-s); }
+.x-btn { min-width: 28px; min-height: 28px; }
+.rb { min-height: 24px; }
+.side-toggle { min-height: 28px; }
+.crumb a, .trail a, .sb-doc a, a.rowlink { display: inline-block; min-height: 24px; line-height: 24px; }
+.btn.link { min-height: 26px; }
+.card-head a, .list-foot a, .page-sub a, .note a { display: inline-block; min-height: 24px; line-height: 24px; }
+.hb.click { min-height: 26px; }
+a.rowlink { white-space: nowrap; }
+.tbl .cd { white-space: normal; }
+.tbl td, .tbl th { padding: 7px 8px; }
+.tbl.work td { padding: 9px 8px; }
+.tbl.work .need { min-width: 150px; }
+
+/* Login: the cards sit in the middle of a wide screen instead of the left third (finding 19) */
+.login-main { display: flex; flex-direction: column; align-items: center; }
+.login-card { width: 100%; max-width: 860px; }
+
+/* Text for screen readers only is placed inside the page area, so it cannot stretch the window */
+.content { position: relative; }
+.sr-only { margin: -1px; padding: 0; border: 0; white-space: nowrap; }
+
+/* The Approver's decision (comment, Approve, Return) stays in view under a long list of checks */
+#detail > .apr-foot { position: sticky; bottom: 0; z-index: 3; background: var(--page); padding: 10px 0 12px; margin-top: 0; box-shadow: 0 -6px 6px -6px rgba(4, 44, 83, .18); }
+a.rowlink { min-width: 24px; }

@@ -7,7 +7,9 @@ import * as store from './store.js';
 import * as auth from './auth.js';
 import { findSite, technicians, empName } from './lookups.js';
 import { openTask, closeTask, cancelTasksFor, startApproval, levelsFor, openLevel, registerFacts } from './workflow.js';
-import { createInvoice, invoiceForJob, paymentsFor, syncDueDate } from './billing.js';
+import { createInvoice, invoiceForJob, paymentsFor, syncDueDate, balanceOf } from './billing.js';
+import { ux } from './ux.js';
+import { vsLabel } from './lookups.js';
 import { round2, amcSiteRow } from './costing.js';
 import { snapshot, registerCounts } from './contracts.js';
 import { workWeek, isWorkday, nextWorkday } from './setup.js';
@@ -294,23 +296,45 @@ export function onMyWay(jobId) {
   store.update('jobs', jobId, { steps: { ...j.steps, onMyWayAt: nowIso() } }, 'Technician on the way');
   store.setStatus('jobs', jobId, 'On the way');
 }
-export function checkIn(jobId) {
+// Undo of an "On my way" tapped a moment ago (UX audit, finding 3): the job waits as scheduled again.
+export function undoOnMyWay(jobId) {
+  const j = store.get('jobs', jobId);
+  if (j?.status !== 'On the way') return false;
+  const steps = { ...j.steps };
+  delete steps.onMyWayAt;
+  store.update('jobs', jobId, { steps }, 'Undo: not on the way yet');
+  store.setStatus('jobs', jobId, 'Scheduled', 'Undo');
+  return true;
+}
+// unanswered: the phone starts every "Works done" line with no status picked (finding 17).
+export function checkIn(jobId, { unanswered = false } = {}) {
   const j = store.get('jobs', jobId);
   const at = nowIso();
-  const wd = j.workDone || workDoneFor(j);
+  const wd = j.workDone || workDoneFor(j, { unanswered });
   store.update('jobs', jobId, { steps: { ...j.steps, checkInAt: at }, workDone: { ...wd, s1: { ...wd.s1, timeIn: hhmm(at) } } }, 'Checked in on site');
   store.setStatus('jobs', jobId, 'On site');
 }
+// Undo of a check-in tapped a moment ago, while the form is not signed (finding 17): Time In is cleared.
+export function undoCheckIn(jobId) {
+  const j = store.get('jobs', jobId);
+  if (j?.status !== 'On site' || j.workDone?.signedAt) return false;
+  const steps = { ...j.steps };
+  delete steps.checkInAt;
+  store.update('jobs', jobId, { steps, workDone: j.workDone ? { ...j.workDone, s1: { ...j.workDone.s1, timeIn: '' } } : null }, 'Undo: not checked in yet');
+  store.setStatus('jobs', jobId, 'On the way', 'Undo');
+  return true;
+}
 
 // The Work Done & Customer Feedback form, pre-filled: section 1 from the job, section 2 one row per line,
-// section 4 names from the technician's record and the customer contact.
-export function workDoneFor(j) {
+// section 4 names from the technician's record and the customer contact. Each line starts as "Done"; with
+// unanswered (the phone) it starts with no status, and signing asks for it.
+export function workDoneFor(j, { unanswered = false } = {}) {
   const tech = store.get('employees', j.technicianId);
   const enq = store.get('enquiries', j.enquiryId);
   const contact = store.get('customers', j.customerId)?.contacts?.find(c => c.id === enq?.contactId);
   return {
     s1: { project: j.site, refNo: j.no, customer: j.customer, date: dstr(new Date()), location: [j.address, j.tags.join(', ')].filter(Boolean).join(' · '), subject: j.subject, timeIn: '', timeOut: '' },
-    rows: j.lines.map(l => ({ key: l.key, description: l.description, status: 'DONE', remark: '' })),
+    rows: j.lines.map(l => ({ key: l.key, description: l.description, status: unanswered ? '' : 'DONE', remark: '' })),
     partsUsed: j.parts.map(p => ({ key: p.key, name: p.name, qty: p.qty, unit: p.unit, used: true })),
     ratings: { punctuality: 0, quality: 0, staff: 0, overall: 0 }, comments: '',
     tech: { name: tech?.name || '', designation: tech?.designation || '', date: dstr(new Date()), signatureId: null },
@@ -319,15 +343,19 @@ export function workDoneFor(j) {
   };
 }
 
-export function workDoneProblems(j) {
+// What is missing before the form can be signed, each with the phone step that holds it: [{ key, step, text }].
+export function workDoneIssues(j) {
   const w = j.workDone, p = [];
-  if (!j.steps?.checkInAt) p.push('Check in first.');
-  if (!w) return p.length ? p : ['Fill in the Work Done form.'];
-  if (Object.values(w.ratings).some(v => !v)) p.push('The customer has not rated all 4 categories.');
-  if (!w.tech.signatureId) p.push('The technician must sign (checked by).');
-  if (!w.cust.signatureId) p.push('The customer must sign.');
+  if (!j.steps?.checkInAt) p.push({ key: 'checkin', step: '', text: 'Check in first.' });
+  if (!w) return p.length ? p : [{ key: 'form', step: 'works', text: 'Fill in the Work Done form.' }];
+  const open = w.rows.filter(r => !r.status).length;
+  if (open) p.push({ key: 'rows', step: 'works', text: `Choose Done, Partly done or Not done for ${open === 1 ? '1 line' : `${open} lines`} of the works done.` });
+  if (Object.values(w.ratings).some(v => !v)) p.push({ key: 'ratings', step: 'feedback', text: 'The customer has not rated all 4 categories.' });
+  if (!w.tech.signatureId) p.push({ key: 'techSign', step: 'signoff', text: 'The technician must sign (checked by).' });
+  if (!w.cust.signatureId) p.push({ key: 'custSign', step: 'signoff', text: 'The customer must sign.' });
   return p;
 }
+export const workDoneProblems = j => workDoneIssues(j).map(i => i.text);
 
 // Signing completes the work; with a non-immediate term the draft invoice is made now for the office.
 export function completeWorkDone(jobId) {
@@ -358,18 +386,62 @@ export function markDoneNoVisit(jobId, note = '') {
 // Who may confirm: the Operations Executive (job edit on all data) or Admin, not the Approver or Management.
 export const canConfirmLeave = () => auth.role()?.code === 'ADMIN' || (auth.can('job', 'edit') && auth.scope('job') !== 'own');
 
-export function requestLeave(jobId) {
+// What the office looked at before saying "OK to leave": the form is signed, there is an after photo, and money due
+// on the spot has been collected. Each check: { key, ok, text }.
+export function leaveChecks(j) {
+  const w = j.workDone, inv = invoiceForJob(j.id);
+  const after = (j.photosAfter || []).length, before = (j.photosBefore || []).length;
+  const owes = !!inv && inv.status === 'Posted' && balanceOf(inv) > 0 && j.paymentTerm === 'IMMEDIATE';
+  const cur = auth.company()?.currency || '';
+  return [
+    { key: 'signed', ok: !!w?.signedAt, text: w?.signedAt ? `Work Done form signed by ${w.cust.name}` : 'Work Done form not signed yet' },
+    { key: 'photos', ok: after > 0, text: `${after} after photo${after === 1 ? '' : 's'}, ${before} before` },
+    { key: 'payment', ok: !owes, text: inv?.status === 'Posted' ? (balanceOf(inv) <= 0 ? `${inv.no} paid in full` : j.paymentTerm === 'IMMEDIATE' ? `${inv.no}: ${cur} ${balanceOf(inv).toFixed(2)} not collected yet` : `${inv.no}: due in ${vsLabel('PAYMENT_TERMS', j.paymentTerm)}`) : 'Invoice goes out from the office' },
+  ];
+}
+// Returns 'auto' (the app gave the OK: every check passed and the company's working style allows it), 'asked' (a
+// task was opened for the office) or '' (not ready). After a "Not yet" from the office the technician can ask again.
+export function requestLeave(jobId, { auto = ux().autoLeave } = {}) {
   const j = store.get('jobs', jobId);
-  if (!j.workDone?.signedAt) return;
-  if (j.leaveSite?.requestedAt && !j.leaveSite.confirmedAt) return;
-  const task = openTask({ kind: 'leaveSite', docType: 'job', docId: j.id, docNo: j.no, title: `${empName(j.technicianId)} asks to leave ${j.site}`, customer: j.customer, amount: null, level: 1, roleCode: 'OPS', roleName: 'Operations Executive', rules: [] });
+  if (!j.workDone?.signedAt) return '';
+  if (j.leaveSite?.confirmedAt) return 'auto';
+  const failed = leaveChecks(j).filter(c => !c.ok);
+  if (j.leaveSite?.requestedAt && !j.leaveSite.declinedAt) {
+    // Still waiting for the office, and every check passes now: the app gives the OK and closes the office's task.
+    if (!auto || failed.length) return 'asked';
+    if (j.leaveSite.taskId) closeTask(j.leaveSite.taskId, 'approve', 'Every check passes: OK given by the app');
+    store.update('jobs', jobId, { leaveSite: { ...j.leaveSite, confirmedAt: nowIso(), confirmedBy: null, auto: true } }, 'Leave site: every check passes now, so the app gave the OK');
+    return 'auto';
+  }
+  if (auto && !failed.length) {
+    const at = nowIso();
+    store.update('jobs', jobId, { leaveSite: { requestedAt: at, taskId: null, confirmedAt: at, confirmedBy: null, auto: true } }, 'Leave site: every check passed, so the app gave the OK');
+    return 'auto';
+  }
+  const task = openTask({ kind: 'leaveSite', docType: 'job', docId: j.id, docNo: j.no, title: `${empName(j.technicianId)} asks to leave ${j.site}`, customer: j.customer, amount: null, level: 1, roleCode: 'OPS', roleName: 'Operations Executive', rules: [], failed: failed.map(c => c.text) });
   store.update('jobs', jobId, { leaveSite: { requestedAt: nowIso(), taskId: task.id, confirmedAt: null, confirmedBy: null } }, 'Leave-site request sent to the office');
+  return 'asked';
 }
 export function confirmLeave(taskId, comment = '') {
   const t = closeTask(taskId, 'approve', comment);
   if (!t) return;
   const j = store.get('jobs', t.docId);
-  store.update('jobs', j.id, { leaveSite: { ...j.leaveSite, confirmedAt: t.doneAt, confirmedBy: store.currentActor() } }, `Leave site confirmed${comment ? `: ${comment}` : ''}`);
+  store.update('jobs', j.id, { leaveSite: { ...j.leaveSite, confirmedAt: t.doneAt, confirmedBy: store.currentActor(), declinedAt: null, declineReason: '' } }, `Leave site confirmed${comment ? `: ${comment}` : ''}`);
+}
+// "Not yet" from the office, with the reason the technician sees on the phone (UX audit, finding 17).
+export function declineLeave(taskId, reason) {
+  const t = closeTask(taskId, 'return', reason);
+  if (!t) return;
+  const j = store.get('jobs', t.docId);
+  store.update('jobs', j.id, { leaveSite: { ...j.leaveSite, taskId: null, declinedAt: t.doneAt, declinedBy: store.currentActor(), declineReason: reason } }, `Leave site: not yet (${reason})`);
+}
+// Undo of an OK given a moment ago, while the technician has not checked out (finding 17).
+export function undoConfirmLeave(jobId) {
+  const j = store.get('jobs', jobId);
+  if (!j?.leaveSite?.confirmedAt || j.steps?.checkOutAt) return false;
+  const task = openTask({ kind: 'leaveSite', docType: 'job', docId: j.id, docNo: j.no, title: `${empName(j.technicianId)} asks to leave ${j.site}`, customer: j.customer, amount: null, level: 1, roleCode: 'OPS', roleName: 'Operations Executive', rules: [], failed: leaveChecks(j).filter(c => !c.ok).map(c => c.text) });
+  store.update('jobs', jobId, { leaveSite: { requestedAt: j.leaveSite.requestedAt, taskId: task.id, confirmedAt: null, confirmedBy: null } }, 'Leave-site OK taken back');
+  return true;
 }
 export function checkOut(jobId) {
   const j = store.get('jobs', jobId);

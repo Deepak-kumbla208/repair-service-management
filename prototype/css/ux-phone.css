@@ -1,0 +1,231 @@
+/* The phone (UX audit, findings 20 to 25, and 10, 11, 16, 17 on the phone).
+   Loads after the shared files. Text 16 / 14 px, nothing under 12 px; greys at 4.5 to 1 or better; every control
+   at least 44 px high with 8 px between neighbours; the drawn phone body only on a wide screen. */
+
+/* ---------- Text sizes and greys (findings 10, 11) ---------- */
+.phone {
+  --fs: 16px; --fs-s: 14px; --fs-xs: 12px; --fs-m: 17px; --fs-l: 18px; --fs-xl: 20px;
+  --m-ink: #102A43; --m-sub: #52606D; --m-line: #CBD2D9;
+  font-size: var(--fs);
+}
+.phone .muted, .phone .empty, .phone .hint, .phone .sub { color: var(--m-sub); }
+.m-hello, .phone .m-kpi span, .phone .m-steps .s, .phone .m-step-head span, .phone .tile .t-label, .phone .tile .t-sub,
+.phone .field > label, .phone .field-label, .phone .kv .k, .phone .wd-kv .k { color: var(--m-sub); }
+.phone .field > label, .phone .field-label { font-size: var(--fs-s); font-weight: 600; }
+.phone .wf-box.done, .phone .wf-box.next, .phone .wf-box.skip { color: var(--m-sub); }
+.phone .wf .arr { color: var(--m-sub); }
+.phone h2 { font-size: var(--fs-xl); line-height: 1.25; }
+.phone .tag { font-size: var(--fs-xs); padding: 1px 7px; }
+.phone .pill { padding: 3px 10px; border-radius: 12px; }
+.phone .x-btn { color: var(--m-sub); }
+
+/* ---------- Frame (finding 21): no drawn phone body and no second clock on a narrow screen ---------- */
+@media (max-width: 599px) {
+  .mobile-stage { display: block; padding: 0; min-height: 0; background: #F3F5F8; }
+  .phone { width: 100%; height: 100vh; height: 100dvh; border: 0; border-radius: 0; box-shadow: none; }
+  .phone .m-status { display: none; }
+  .phone .m-head { padding-top: 10px; }
+}
+
+/* ---------- Header: back, title (customer and site) with the number under it, search (finding 25) ---------- */
+.phone .m-titlebar { gap: 8px; min-height: 44px; }
+.phone .m-icon-btn { width: 44px; height: 44px; }
+.m-tt { flex: 1; min-width: 0; }
+.phone .m-titlebar h1 { font-size: var(--fs-m); line-height: 1.25; white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.m-sub { font-size: var(--fs-s); color: var(--blue-200); line-height: 1.3; margin-top: 1px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+
+/* ---------- Tap targets (finding 22): 44 px and 8 px apart ---------- */
+.phone .btn { min-height: 44px; min-width: 44px; padding: 8px 14px; font-size: var(--fs); white-space: normal; text-align: center; line-height: 1.25; }
+.phone .btn .ico { flex: none; }
+.phone .btn.small { min-height: 44px; padding: 6px 12px; font-size: var(--fs-s); }
+.phone .btn.link { min-height: 44px; min-width: 44px; padding: 6px 8px; }
+.phone .btn.quiet { border-color: transparent; background: transparent; color: var(--m-sub); font-weight: 400; }
+.phone .btn.quiet.danger { color: var(--red); }
+.phone .m-foot { gap: 8px; }
+.phone .m-foot .btn { min-height: 48px; font-size: var(--fs); white-space: normal; line-height: 1.2; text-align: center; }
+.phone .m-acts, .phone .job-card .actions { gap: 8px; }
+.phone .stack > * + * { margin-top: 10px; }
+.phone .row { gap: 8px; }
+.phone .modal-foot { gap: 8px; flex-wrap: wrap; }
+.phone .modal-foot .btn { flex: 1; }
+.phone .x-btn { width: 44px; height: 44px; }
+.phone .seg button { min-height: 44px; padding: 6px 14px; }
+.phone input:not([type=checkbox]):not([type=radio]):not([type=file]), .phone select, .phone textarea { min-height: 44px; font-size: var(--fs); border-color: #9AA5B1; }
+.phone input[readonly] { color: var(--m-sub); }
+.phone .m-search { min-height: 46px; }
+.phone .with-mic > input, .phone .with-mic > textarea { padding-right: 50px; }
+.phone .with-mic .mic { top: 0; right: 0; width: 44px; height: 44px; border: 0; border-left: 1px solid var(--m-line); border-radius: 0 10px 10px 0; background: transparent; }
+.phone .with-mic .mic.live { background: var(--red); border-radius: 0 10px 10px 0; }
+.phone .photo .del { top: 0; right: 0; width: 44px; height: 44px; border-radius: 0 0 0 14px; font-size: var(--fs-xl); background: #1F2933; color: #FFFFFF; }
+.phone .add-dashed { min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 10px; border-color: #9AA5B1; color: var(--m-ink); background: var(--white); font-size: var(--fs); }
+.phone .m-fab { width: 56px; height: 56px; }
+.phone .m-offline, .phone .m-online { min-height: 44px; display: flex; align-items: center; font-size: var(--fs-s); }
+/* Bottom tabs */
+.phone .m-tabs { padding: 2px 4px 6px; }
+.phone .m-tab { min-height: 56px; justify-content: center; padding: 4px 0; font-size: var(--fs-s); color: var(--m-sub); }
+.phone .m-tab.on { color: var(--blue-600); }
+/* Tick boxes and radio rows: the whole row is the target */
+.phone .check { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 12px; background: var(--white); border: 1px solid var(--m-line); border-radius: 10px; line-height: 1.3; }
+.phone .check input { width: 22px; height: 22px; flex: none; }
+.phone .check:has(input:checked) { border-color: var(--blue-500); background: var(--blue-50); }
+.phone .check:has(input:disabled) { opacity: .6; }
+.phone .checks { gap: 8px; grid-template-columns: 1fr; }
+.phone .checks.two { grid-template-columns: 1fr 1fr; }
+.phone .check-with { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.phone .check-with > input { width: 96px; }
+/* One-tap option buttons: sizes S / M / L / XL, priority, work status, payment method */
+.phone .chips { gap: 8px; padding-top: 0; }
+.phone label.chip span { min-height: 44px; min-width: 48px; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; border-radius: 22px; border-color: #9AA5B1; font-size: var(--fs); }
+.phone .wl .chips, .phone .chips.prio { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
+.phone .wl .chips label.chip span, .phone .chips.prio label.chip span { width: 100%; padding: 0 6px; }
+.phone .pf > .err { grid-column: 1 / -1; }
+.phone .m-seg span { min-height: 44px; display: flex; align-items: center; justify-content: center; font-size: var(--fs-s); }
+/* Count tiles used as filters, and the three tabs of My jobs */
+.phone .m-tiles { gap: 8px; }
+.phone .m-tiles .tile { min-height: 60px; padding: 8px 10px; }
+.phone .m-tiles .tile.sel { padding: 8px 10px; box-shadow: inset 0 0 0 2px var(--blue-600); background: var(--blue-50); }
+.m-tabs3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.m-tabs3 button { min-height: 56px; border: 0; border-radius: 12px; background: var(--white); box-shadow: 0 1px 3px rgba(16, 42, 67, .1); color: var(--m-sub); font: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2; }
+.m-tabs3 button b { font-size: var(--fs-xl); color: var(--m-ink); }
+.m-tabs3 button[aria-selected=true] { background: var(--blue-600); color: var(--white); font-weight: 600; }
+.m-tabs3 button[aria-selected=true] b { color: var(--white); }
+/* Home counters */
+.phone .m-kpi { gap: 8px; }
+.phone .m-kpi a { min-height: 64px; padding: 8px 10px; display: flex; flex-direction: column; justify-content: center; }
+.phone .m-kpi b { font-size: var(--fs-xl); line-height: 1.2; }
+.phone .m-quick a { min-height: 52px; }
+
+/* ---------- Cards and lists ---------- */
+.phone .job-card { position: relative; }
+.phone .job-card .card-link { color: inherit; text-decoration: none; }
+.phone .job-card .card-link::after { content: ''; position: absolute; inset: 0; border-radius: 14px; }
+.phone .job-card .actions, .phone .job-card .m-acts { position: relative; z-index: 1; }
+.phone .job-card.is-new { box-shadow: inset 4px 0 0 var(--blue-600), 0 0 0 2px #B5D4F4, 0 4px 12px rgba(16, 42, 67, .14); }
+.phone .job-card.done { opacity: 1; box-shadow: inset 4px 0 0 #9AA5B1, 0 1px 3px rgba(16, 42, 67, .08); }
+.phone .job-card .when { font-weight: 700; color: var(--m-ink); text-align: right; }
+.phone .new-dot { margin-right: 0; padding: 1px 9px; }
+.m-list-link { display: block; color: inherit; text-decoration: none; }
+.phone .m-steps li { padding: 8px 0; }
+.phone .m-steps .n { width: 28px; height: 28px; }
+.phone .m-steps li.skip .n { background: var(--white); border: 2px dashed var(--amber); color: var(--amber-ink); }
+.phone .m-steps li.bad .n { background: var(--red); color: var(--white); }
+.phone .m-line, .phone .wl, .phone .shl, .phone .mat-row { border: 0; border-radius: 12px; background: var(--white); box-shadow: 0 1px 3px rgba(16, 42, 67, .1); padding: 12px; margin-bottom: 10px; }
+.phone .kv.two { gap: 10px 12px; }
+.phone .wd-sec { font-size: var(--fs-s); padding: 7px 10px; border-radius: 8px; }
+.phone .wd-kv { grid-template-columns: 112px 1fr; gap: 5px 10px; font-size: var(--fs-s); }
+.phone .note { padding: 10px 12px; }
+.phone .failbox { border-radius: 10px; padding: 10px; font-size: var(--fs-s); }
+.m-info { color: var(--m-sub); font-size: var(--fs-s); margin: 0 2px 10px; }
+.m-apart { margin-top: 28px; padding-top: 14px; border-top: 1px solid #D9DEE4; }
+
+/* ---------- The step bar: one tappable step each, green only when the step is really done ---------- */
+.phone .m-step-head { margin-bottom: 4px; }
+.m-prog { display: flex; margin: 4px -6px 12px; }
+.m-prog a { flex: 1; min-width: 0; min-height: 48px; position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 1px 2px; text-decoration: none; text-align: center; color: var(--m-sub); font-size: var(--fs-xs); line-height: 1.2; }
+.m-prog a::before { content: ''; position: absolute; top: 17px; left: -50%; right: 50%; height: 2px; background: #C5CCD4; }
+.m-prog a:first-child::before { display: none; }
+.m-prog a i { position: relative; z-index: 1; width: 28px; height: 28px; border-radius: 50%; background: #E3E6EA; color: var(--m-sub); font-style: normal; font-weight: 700; font-size: var(--fs-s); display: flex; align-items: center; justify-content: center; }
+.m-prog a.done i { background: var(--green); color: var(--white); }
+.m-prog a.skip i { background: var(--white); border: 2px dashed var(--amber); color: var(--amber-ink); }
+.m-prog a.bad i { background: var(--red); color: var(--white); }
+.m-prog a.bad { color: var(--red); font-weight: 700; }
+.m-prog a.now i { box-shadow: 0 0 0 4px #BFD9F2; }
+.m-prog a.now:not(.done):not(.bad):not(.skip) i { background: var(--blue-600); color: var(--white); }
+.m-prog a.now { color: var(--blue-600); font-weight: 700; }
+.m-prog a.now.bad { color: var(--red); }
+
+/* ---------- Problems (finding 16): a list that jumps to the step and field; the message under the field ---------- */
+.m-probs { background: var(--red-bg); border: 1px solid #E8A3A3; border-radius: 12px; padding: 10px 12px 4px; margin-bottom: 12px; color: var(--red-ink); }
+.m-probs b { display: block; margin-bottom: 4px; }
+.m-probs a { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 0; border-top: 1px solid #F0C4C4; color: var(--red-ink); text-decoration: none; line-height: 1.3; }
+.m-probs a::after { content: '›'; margin-left: auto; font-size: var(--fs-xl); padding-left: 8px; }
+.m-probs a span.st { flex: none; background: var(--red); color: var(--white); border-radius: 10px; padding: 1px 8px; font-size: var(--fs-xs); font-weight: 700; }
+.phone .err { font-size: var(--fs-s); }
+.phone .invalid.check, .phone .invalid > .check, .phone .rate.invalid, .phone .sig-wrap.invalid .sig-pad, .phone .wl.invalid, .phone details.pcard.invalid { border-color: var(--red); box-shadow: 0 0 0 1px var(--red); }
+.phone .rate.invalid { border-radius: 10px; padding-left: 8px; padding-right: 8px; }
+
+/* ---------- Ratings: five wide buttons under the question ---------- */
+.phone .rate { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding: 10px 0; font-size: var(--fs); }
+.phone .rate > span:first-child { grid-column: 1 / -1; font-weight: 600; color: var(--m-ink); }
+.phone .rate > .err { grid-column: 1 / -1; }
+.phone .dot { width: 100%; height: 48px; border-radius: 12px; border-color: #9AA5B1; font-size: var(--fs-m); color: var(--m-ink); }
+.phone .dot.on { color: var(--white); }
+
+/* ---------- Check list: Pass / Fail / N/A as one row of three wide buttons under each item ---------- */
+.phone .ck { border: 0; background: var(--white); border-radius: 12px; box-shadow: 0 1px 3px rgba(16, 42, 67, .1); padding: 12px; margin-bottom: 10px; }
+.phone .ck .t { display: block; font-size: var(--fs); }
+.phone .ck .t b { display: block; }
+.phone .ck .t small { font-size: var(--fs-s); color: var(--m-sub); margin-top: 2px; }
+.phone .ck.na { box-shadow: none; background: transparent; padding: 4px 2px; }
+.phone .ck.na .t b { color: var(--m-sub); }
+.phone .pf { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; border: 0; border-radius: 0; overflow: visible; margin-top: 10px; }
+.phone .pf button { min-height: 48px; border: 1px solid #9AA5B1; border-radius: 10px; font-size: var(--fs); font-weight: 600; color: var(--m-ink); background: var(--white); }
+.phone .pf > :first-child { border-left: 1px solid #9AA5B1; }
+.phone .pf button.p { background: var(--green); border-color: var(--green); color: var(--white); }
+.phone .pf button.f { background: var(--red); border-color: var(--red); color: var(--white); }
+.phone .pf button.na { background: #52606D; border-color: #52606D; color: var(--white); }
+.phone .pf button:disabled { opacity: .6; }
+.phone .failbox .fail-photo { width: 76px; min-height: 76px; flex: none; flex-direction: column; font-size: var(--fs-s); padding: 6px; }
+.phone .shl { min-height: 64px; }
+.phone .minibar { height: 8px; margin-top: 8px; }
+
+/* ---------- Site report on the phone (finding 23) ---------- */
+.m-sum { display: grid; grid-template-columns: 108px 1fr; gap: 6px 10px; font-size: var(--fs-s); }
+.m-sum .k { color: var(--m-sub); }
+.m-sum .v { color: var(--m-ink); word-break: break-word; }
+.phone .m-one .grid { grid-template-columns: 1fr; }
+.phone .asked { gap: 10px; }
+details.pcard { background: var(--white); border: 1px solid transparent; border-radius: 14px; box-shadow: 0 1px 3px rgba(16, 42, 67, .1); }
+details.pcard > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 10px 12px; }
+details.pcard > summary::-webkit-details-marker { display: none; }
+details.pcard > summary::after { content: '▾'; color: var(--m-sub); flex: none; font-size: var(--fs-l); }
+details.pcard[open] > summary::after { content: '▴'; }
+details.pcard[open] > summary { border-bottom: 1px solid #E3E6EA; }
+.pcard .st { width: 28px; height: 28px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: var(--fs-s); background: #E3E6EA; color: var(--m-sub); }
+.pcard.on .st { background: var(--green); color: var(--white); }
+.pcard .hd { flex: 1; min-width: 0; line-height: 1.3; }
+.pcard .hd b { display: block; color: var(--m-ink); }
+.pcard .hd span { display: block; font-size: var(--fs-s); color: var(--m-sub); }
+.pcard .hd .ok { color: var(--green-ink); font-weight: 600; }
+.pcard .hd .urgent { color: var(--red); font-weight: 600; }
+.pcard .bd { padding: 12px; }
+.pcard .bd > * + * { margin-top: 12px; }
+.phone .ask-prod { margin: 0; }
+.phone .find-row { border-top: 0; padding: 0; gap: 10px; }
+.phone .find-row + .find-row { border-top: 1px dashed var(--m-line); padding-top: 12px; }
+.phone .ask .measure, .phone .pcard .measure { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; white-space: normal; margin-top: 8px; font-size: var(--fs-s); }
+.phone .pcard .measure input { width: 84px; }
+.phone .mat-row .grid, .phone .pcard .grid { gap: 10px; }
+.phone .sig-pad { border-color: #9AA5B1; }
+.sig-wrap .hint { margin-top: 4px; }
+
+/* ---------- Messages inside the phone, under the header: they never cover the buttons at the bottom ---------- */
+.m-toast-at { position: relative; height: 0; z-index: 80; flex: none; }
+.phone .toasts { position: absolute; left: 12px; right: 12px; top: 8px; bottom: auto; align-items: stretch; z-index: 80; }
+.phone .toast { max-width: none; justify-content: space-between; border-radius: 12px; padding: 12px 14px; }
+.phone .toast-undo { min-height: 44px; min-width: 76px; border-radius: 10px; font-size: var(--fs); }
+.phone .modal-back { padding: 24px 10px; }
+.phone .modal.m-sheet .modal-body { max-height: none; }
+.phone .modal-head h2 { font-size: var(--fs-l); }
+
+/* ---------- Leave site (finding 24) ---------- */
+.m-checks { list-style: none; margin: 0; padding: 0; }
+.m-checks li { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 0; border-top: 1px solid #E3E6EA; }
+.m-checks li:first-child { border-top: 0; }
+.m-checks .mk { width: 28px; height: 28px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-weight: 700; background: var(--green); color: var(--white); }
+.m-checks li.no .mk { background: var(--amber-bg); color: var(--amber-ink); border: 1px solid var(--amber); }
+.m-checks li span.tx { flex: 1; line-height: 1.3; }
+.phone .wait, .phone .okay { border-radius: 14px; padding: 16px 12px; }
+.phone .wait .dots::after { content: ''; animation: m-dots 1.5s steps(4, end) infinite; }
+@keyframes m-dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+@media (prefers-reduced-motion: reduce) { .phone .wait .dots::after { animation: none; content: '...'; } }
+
+/* ---------- Forms on the phone ---------- */
+.phone .form-lines .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.phone .form-lines .field > label, .phone .form-lines .field > .field-label { padding-top: 0; }
+.phone .m-fields .field > label { font-size: var(--fs-s); }
+.phone .m-fields .row { align-items: flex-start; }
+.phone .m-phone-task .apr-foot { gap: 8px; }
+.phone .m-phone-task .tbl td { padding: 8px 6px; }
+.phone .palette-in input { min-height: 44px; }
+.phone .p-item { min-height: 48px; }

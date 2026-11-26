@@ -13,6 +13,7 @@ import { amcChecks } from './amc-estimates.js';
 import { letterhead, termsFor, termTexts } from './setup.js';
 import { qtyRate } from './costing.js';
 import { splitOf, recordLater } from './later-work.js';
+import { findingRows } from './inspections.js';
 
 const isoDate = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 export const todayIso = () => isoDate(new Date());
@@ -139,7 +140,7 @@ export function saveWording(id, patch) {
   return store.update('quotations', id, next, false);
 }
 
-const info = q => ({ docNo: `${q.no} Rev ${q.rev}`, title: `Counter-check ${q.no} Rev ${q.rev}`, customer: q.customer, amount: q.total, submittedBy: q.submittedBy });
+const info = q => ({ docNo: `${q.no} Rev ${q.rev}`, title: `Approve ${q.no} Rev ${q.rev}`, customer: q.customer, amount: q.total, submittedBy: q.submittedBy });
 
 // A customer with no won enquiry before this one counts as new.
 export const isNewCustomer = (customerId, enquiryId) => !store.list('enquiries', e => e.customerId === customerId && e.id !== enquiryId && e.stage === 'Won').length;
@@ -154,7 +155,7 @@ registerFacts('quotation', q => {
 export function submitForCheck(id) {
   const q = store.get('quotations', id);
   if (!EDITABLE.includes(q.status)) return q;
-  store.update('quotations', id, { submittedAt: new Date().toISOString(), submittedBy: store.currentActor(), returnNote: null }, `${q.no} Rev ${q.rev} submitted for the counter-check`);
+  store.update('quotations', id, { submittedAt: new Date().toISOString(), submittedBy: store.currentActor(), returnNote: null }, `${q.no} Rev ${q.rev} submitted for approval`);
   const { task } = startApproval('quotation', q, info(store.get('quotations', id)));
   if (!task) return approveFinal(q.id);
   store.setStatus('quotations', id, 'Submitted', `Waiting for ${task.roleName}`);
@@ -165,7 +166,7 @@ export function submitForCheck(id) {
 function approveFinal(id) {
   const q = store.get('quotations', id);
   store.update('quotations', id, { termApproved: q.paymentTerm !== 'IMMEDIATE', approvedAt: new Date().toISOString() }, false);
-  store.setStatus('quotations', id, 'Approved', 'Counter-checked; ready to send');
+  store.setStatus('quotations', id, 'Approved', 'Approved; ready to send');
   store.setStatus('enquiries', q.enquiryId, 'Quotation approved', `${q.no} Rev ${q.rev} ready to send`);
   return store.get('quotations', id);
 }
@@ -179,7 +180,7 @@ export function repriceAtCheck(id, markup, comment = '') {
   const next = withMarkup(est, markup);
   if (!markupChanged(est, next)) return null;
   if (!auth.changesMarkup()) return { error: 'Your role cannot change overhead or markup.' };
-  if (q.status !== 'Submitted') return { error: 'This quotation is no longer in the counter-check.' };
+  if (q.status !== 'Submitted') return { error: 'This quotation is no longer waiting for approval.' };
   const figures = [next.marginPct, ...next.overheads.map(o => o.value)].map(Number);
   if (figures.some(v => !Number.isFinite(v) || v < 0) || (est.marginBasis === 'MARGIN' && Number(next.marginPct) >= 100)) return { error: 'Enter overhead and markup as 0 or more.' };
   if (!comment.trim()) return { error: 'Write in the comment why overhead or markup changed.' };
@@ -188,14 +189,14 @@ export function repriceAtCheck(id, markup, comment = '') {
   const changes = [oldOv && Number(oldOv.value) !== Number(newOv.value) && `Overhead ${oldOv.value} % → ${newOv.value} %`,
     Number(est.marginPct) !== Number(next.marginPct) && `${est.marginBasis === 'MARGIN' ? 'Margin' : 'Markup'} ${est.marginPct} % → ${next.marginPct} %`].filter(Boolean).join(', ');
   const before = q.subtotal;
-  store.update('estimates', est.id, { overheads: next.overheads, marginPct: next.marginPct }, `${changes} at the counter-check of ${q.no} Rev ${q.rev}: ${comment}`);
+  store.update('estimates', est.id, { overheads: next.overheads, marginPct: next.marginPct }, `${changes} at the approval of ${q.no} Rev ${q.rev}: ${comment}`);
   const { s, rows } = rowsFromEstimate(store.get('estimates', est.id));
   // Job costing: one row, which keeps its wording.
   const priced = est.costingLevel === 'LINE' ? rows : rows.map((r, i) => ({ ...r, description: q.rows[i]?.description ?? r.description }));
   const amc = q.amc ? { ...q.amc, plan: s.plan, perMonth: s.metrics.perMonth } : null;
   const entry = { at: new Date().toISOString(), by: store.currentActor(), changes, from: before, to: s.subtotal };
   store.update('quotations', id, { rows: priced, subtotal: s.subtotal, tax: s.tax, total: s.total, amc, repriced: [...(q.repriced || []), entry] },
-    `${changes} at the counter-check (price ${money(before)} → ${money(s.subtotal)}): ${comment}`);
+    `${changes} at the approval (price ${money(before)} → ${money(s.subtotal)}): ${comment}`);
   return entry;
 }
 
@@ -221,6 +222,26 @@ export function decideQuotation(taskId, decision, comment = '') {
   return approveFinal(q.id);
 }
 
+// Undo of an approval given a moment ago (UX audit, finding 17): the task opens again and the quotation goes back to
+// waiting. Only while nothing has happened since (not sent, no price change made with the approval).
+export function undoApprove(taskId) {
+  const t = store.get('tasks', taskId);
+  if (!t || t.status !== 'Done' || t.docType !== 'quotation' || t.decision !== 'approve') return false;
+  const q = store.get('quotations', t.docId);
+  const last = (q.approvals || [])[(q.approvals || []).length - 1];
+  if (!q || !['Approved', 'Submitted'].includes(q.status) || !last || last.at !== t.doneAt) return false;
+  if ((q.repriced || []).some(r => r.at >= t.doneAt || Math.abs(new Date(r.at) - new Date(t.doneAt)) < 5000)) return false;
+  store.list('tasks', x => x.docType === 'quotation' && x.docId === q.id && x.status === 'Open').forEach(x => store.setStatus('tasks', x.id, 'Cancelled', 'The approval before it was taken back'));
+  store.update('quotations', q.id, { approvals: q.approvals.slice(0, -1), ...(q.status === 'Approved' ? { termApproved: false, approvedAt: null } : {}) }, `Approval at level ${t.level} taken back`);
+  if (q.status === 'Approved') {
+    store.setStatus('quotations', q.id, 'Submitted', `Waiting for ${t.roleName}`);
+    store.setStatus('enquiries', q.enquiryId, 'Quotation in check', `${q.no} Rev ${q.rev}`);
+  }
+  store.update('tasks', taskId, { doneAt: null, doneBy: null, decision: null, comment: '' }, false);
+  store.setStatus('tasks', taskId, 'Open', 'Approval taken back');
+  return true;
+}
+
 // Send is locked until the counter-check is done (flow step 5: no quote goes out unchecked).
 export const canSend = q => ['Approved', 'Sent'].includes(q.status) && auth.can('quotation', 'edit');
 export function markSent(id, via) {
@@ -242,7 +263,7 @@ export function markSent(id, via) {
 // schedule = { technicianId, helperIds, date, start, hours } books the new job at once (Repair and General Servicing).
 export function accept(id, { method, poNo, poDate, contact, attachments = [], paymentTerm, lineKeys, decisions, reasons, followUp, schedule = null }) {
   const q = store.get('quotations', id);
-  if (q.status !== 'Sent') return { error: 'Only a counter-checked quotation that was sent can be accepted.', quotation: q };
+  if (q.status !== 'Sent') return { error: 'Only an approved quotation that was sent can be accepted.', quotation: q };
   const parts = decisions && q.type === 'REPAIR' ? Object.values(decisions) : [];
   if (parts.length && !parts.includes('NOW')) return { error: 'Choose "Now" for at least one item. If the customer wants everything later, leave the quotation as sent.', quotation: q };
   const split = parts.some(v => v !== 'NOW') ? { ...splitOf(q, decisions), decisions, reasons: reasons || {} } : null;
@@ -313,18 +334,27 @@ export function autoChecks(q) {
     add(est.shutters.map(s => s.tag).filter(Boolean).sort().join(', ') === tags, `Products match the site report ${rep.no} (${tags || 'none'})`);
     const names = rep.s5.rows.filter(r => r.name).map(r => r.name.toLowerCase());
     const hit = est.materials.filter(m => names.includes(m.name.toLowerCase())).length;
-    add(hit === names.length, `Materials match the site report (${hit} of ${names.length})`);
+    const extra = est.materials.filter(m => !names.includes(m.name.toLowerCase()));
+    if (hit !== names.length) add(false, `Parts on the site report missing from the estimate (${hit} of ${names.length} found)`);
+    else if (extra.length) add(false, `${extra.length} part${extra.length > 1 ? 's' : ''} added in the estimate, not on the site report: ${extra.map(m => m.name).join(', ')}`);
+    else add(true, `Parts match the site report (${hit} of ${names.length})`);
+    // The wording the customer reads against what the technician wrote (UX audit, finding 7).
+    const acts = findingRows(rep).map(f => String(f.action || '').trim()).filter(Boolean);
+    const text = `${q.description || ''} ${q.rows.map(r => r.description).join(' ')}`.toLowerCase();
+    const unsaid = acts.filter(a => !text.includes(a.toLowerCase()));
+    if (acts.length) add(!unsaid.length, unsaid.length ? `The description does not say ${unsaid.length} of the ${acts.length} action${acts.length > 1 ? 's' : ''} written on site: ${unsaid.slice(0, 2).join('; ')}` : `The description says the ${acts.length} action${acts.length > 1 ? 's' : ''} written on site`);
+    else if (String(q.description || '').trim() === String(enq.description || '').trim()) add(false, 'The description is the customer\'s own words: no action was written on site');
   } else if (est.kind !== 'AMC') add(!!enq.fromService, enq.fromService ? `Lines from the failed check-list items of ${enq.fromService.no}` : 'No site report: lines were taken from the enquiry');
   add(Math.abs(estimateSummary(est).subtotal - q.subtotal) < 0.005, `Prices match ${q.estimateNo}`);
   const tax = companyTax();
   // The quotation's tax against today's company setting; a difference says what each side has.
   const setting = tax.taxRate ? `${tax.taxLabel} ${tax.taxRate} %${tax.taxCode ? ` (${tax.taxCode})` : ''}` : 'no tax';
-  add(q.taxRate === tax.taxRate, q.taxRate === tax.taxRate ? (q.taxRate ? `${q.taxLabel} ${q.taxRate} % from the Tax master (${tax.taxCode})` : 'No tax charged (Company Setup)')
+  add(q.taxRate === tax.taxRate, q.taxRate === tax.taxRate ? (q.taxRate ? `${q.taxLabel} ${q.taxRate} %, as set in the Tax list` : 'No tax charged (Company Setup)')
     : `${q.taxRate ? `${q.taxLabel} ${q.taxRate} %` : 'No tax'} on this quotation, but Company Setup now charges ${setting}`);
   const termCount = termsFor(termsDocType(est)).length;
   add(q.terms.length >= termCount, `All ${termCount} ${termsDocType(est) === 'AMC' ? 'AMC' : 'quotation'} terms included`);
   const ph = (est.materials || []).filter(m => m.placeholder || m.noRate);
-  if (ph.length) add(false, `${ph.length} placeholder rate${ph.length > 1 ? 's' : ''}: ${ph.map(m => `${m.name} (${Number(m.rate).toFixed(2)})`).join(', ')}`);
+  if (ph.length) add(false, `${ph.length} rate${ph.length > 1 ? 's' : ''} still to confirm: ${ph.map(m => `${m.name} (${Number(m.rate).toFixed(2)})`).join(', ')}`);
   add(q.paymentTerm === 'IMMEDIATE', q.paymentTerm === 'IMMEDIATE' ? 'Payment term Immediate: no extra approval needed' : 'Payment term is not immediate: approving also approves the term');
   return out;
 }

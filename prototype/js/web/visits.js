@@ -64,7 +64,7 @@ export function renderVisit(el, id) {
   const repair = v.repairEnquiryId ? store.get('enquiries', v.repairEnquiryId) : null;
   const added = (v.repairAddedTo || []).map(x => store.get('enquiries', x)).filter(Boolean);
   const canFile = v.status === 'Done' && auth.can('amcExecution', 'edit');
-  el.innerHTML = String(html`<div class="page" style="max-width:1400px">
+  el.innerHTML = String(html`<div class="page">
     <div class="page-head"><div class="grow">
       <div class="crumb"><a href="#/amc-visits">AMC Execution</a> › <a href="#/contracts/${c.id}">${c.no}</a></div>
       <h1>${c.no} · visit ${v.n} of ${v.of} · ${v.customer} ${isOverdue(v) ? pill(`Overdue · ${v.status}`, 'red') : pill(v.status)}</h1>

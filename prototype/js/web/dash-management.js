@@ -40,7 +40,7 @@ export function renderManagement(el) {
   const tasks = admin ? myTasks() : [];
   const can = m => auth.can(m);
 
-  el.innerHTML = String(html`<div class="page" style="max-width:1500px">
+  el.innerHTML = String(html`<div class="page">
     ${pageHead({ crumb: 'Dashboard', title: admin ? `Welcome, ${auth.user().name}` : 'Management', sub: `${c.name} · revenue = posted invoices before ${c.taxLabel || 'tax'} · ${c.currency}` })}
     <div class="filters"><span class="chips">${PERIODS.map(([v, l]) => html`<label class="chip"><input type="radio" name="period" value="${v}" ${s.period === v ? 'checked' : ''}><span>${l}</span></label>`)}</span>
       <span class="chips"><label class="chip"><input type="radio" name="zone" value="" ${!z ? 'checked' : ''}><span>All zones</span></label>${zones().map(x => html`<label class="chip"><input type="radio" name="zone" value="${x.id}" ${z === x.id ? 'checked' : ''}><span>${x.code}</span></label>`)}</span></div>

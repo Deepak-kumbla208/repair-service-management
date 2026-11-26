@@ -50,7 +50,7 @@ export function renderCustomerForm(el, id) {
   let q = '';
   const ro = editable ? '' : 'readonly';
 
-  el.innerHTML = String(html`<div class="page" style="max-width:1250px">
+  el.innerHTML = String(html`<div class="page">
     ${pageHead({
       crumb: html`Master › <a href="#/master/customer">Customer</a>${rec ? ` › ${rec.code}` : ''}`,
       title: rec ? html`${rec.code} · ${rec.name} ${pill(rec.status || 'Active')}` : 'New customer',

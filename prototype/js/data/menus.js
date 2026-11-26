@@ -21,7 +21,7 @@ export const MENUS = [
   { key: 'terms', label: 'Terms', group: 'Master', icon: '¶', route: 'master/terms', stretch: 1 },
 
   { key: 'enquiry', label: 'Sales Enquiry', group: 'Transactions', icon: '✎', route: 'enquiries', stretch: 1 },
-  { key: 'inspection', label: 'Site Inspection', group: 'Transactions', icon: '⌖', route: 'inspections', stretch: 1 },
+  { key: 'inspection', label: 'Job Assessment', group: 'Transactions', icon: '⌖', route: 'assessments', stretch: 1 },
   { key: 'estimation', label: 'Estimation', group: 'Transactions', icon: '∑', route: 'estimates', stretch: 2 },
   { key: 'quotation', label: 'Sales Quotation', group: 'Transactions', icon: '▤', route: 'quotations', stretch: 2 },
   { key: 'job', label: 'Job Execution', group: 'Transactions', icon: '⚑', route: 'jobs', stretch: 2 },

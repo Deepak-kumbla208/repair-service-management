@@ -38,9 +38,9 @@ export function globalSearch(query, channel = auth.view()) {
   if (can('inspection')) {
     const own = auth.scope('inspection') === 'own';
     const rows = store.list('inspections').filter(i => auth.seesInspection(i) && i.status !== 'Cancelled').map(i => ({ i, e: store.get('enquiries', i.enquiryId), r: i.reportId ? store.get('siteReports', i.reportId) : null }));
-    add(own ? 'My jobs' : 'Site inspections', rows
-      .filter(({ i, e, r }) => hit(e.no, e.customerName, e.siteName, empName(i.technicianId), r?.no, 'site inspection'))
-      .map(({ i, e, r }) => ({ icon: '⌖', title: `${r ? r.no : 'Site inspection'} · ${e.customerName}`, sub: `${e.no} · ${e.siteName} · ${i.status}`, route: mobile ? `m/job/${i.id}` : `inspections/${i.id}` })));
+    add(own ? 'My jobs' : 'Job assessments', rows
+      .filter(({ i, e, r }) => hit(e.no, e.customerName, e.siteName, empName(i.technicianId), r?.no, 'job assessment'))
+      .map(({ i, e, r }) => ({ icon: '⌖', title: `${r ? r.no : 'Job assessment'} · ${e.customerName}`, sub: `${e.no} · ${e.siteName} · ${i.status}`, route: mobile ? `m/job/${i.id}` : `assessments/${i.id}` })));
   }
 
   // Stretch 2 documents (a technician finds only their own jobs).

@@ -25,7 +25,7 @@ export function bindTech(b, q, ctx) {
   const tick = $('[name="assignNow"]', b), box = $('#techBox', b), off = $('#techOff', b);
   const btn = b.closest('.modal')?.querySelector('.modal-foot .btn.primary');
   const st = { draft: null, hours: null };
-  // The technician who did the site inspection (for later work: on the first enquiry).
+  // The technician who did the job assessment (for later work: on the first enquiry).
   const enq = store.get('enquiries', q.enquiryId);
   const inspector = new Set(store.list('inspections', i => [q.enquiryId, enq?.laterOf?.enquiryId].includes(i.enquiryId) && i.technicianId && i.status !== 'Cancelled').map(i => i.technicianId));
 
@@ -47,7 +47,7 @@ export function bindTech(b, q, ctx) {
     const tech = techId || sug?.technicianId || techs[0]?.id || '';
     const opts = techs.map(t => {
       const f = firstFree(d, t.id);
-      return { value: t.id, label: [t.name, ['zone match', 'extra zone', ''][rank(t)], inspector.has(t.id) ? 'did the site inspection' : '',
+      return { value: t.id, label: [t.name, ['zone match', 'extra zone', ''][rank(t)], inspector.has(t.id) ? 'did the job assessment' : '',
         misses(t).length ? `does not work on ${misses(t).map(g => vsLabel('PRODUCT_GROUP', g)).join(', ')}` : '',
         f ? `free ${dayText(f.date)} ${fmtHour(f.start)}` : 'no free time in 2 weeks'].filter(Boolean).join(' · ') };
     });

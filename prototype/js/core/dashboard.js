@@ -14,7 +14,7 @@ import { fmtDate } from './ui.js';
 const ym = ds => String(ds || '').slice(0, 7);
 const zoneOf = enquiryId => store.get('enquiries', enquiryId)?.zoneId || '';
 const DONE_JOB = ['Work done', 'Completed & documented', 'Closed'];
-export const STAGES = ['New', 'Inspection', 'Quoted', 'Won', 'Lost'];
+export const STAGES = ['New', 'Assessment', 'Quoted', 'Won', 'Lost'];
 
 // The months of a period, oldest first ('month' shows the last 6 months with this month highlighted).
 export function periodMonths(period) {
@@ -108,8 +108,8 @@ export function nextActions() {
   store.list('quotations', q => q.status === 'Returned').forEach(q => add('quotation', 2, 'Quotation returned', `${q.no} Rev ${q.rev}`, q.customer, q.returnNote?.comment || 'by the Approver', `quotations/${q.id}`, 'Revise', q.updatedAt));
   store.list('jobs', j => j.status === 'To schedule').forEach(j => add('job', 2, 'Job to schedule', j.no, j.customer, j.termApproved || j.paymentTerm === 'IMMEDIATE' ? 'PO received' : 'waiting for the term approval', 'jobs', 'Schedule', j.createdAt));
   store.list('contracts', c => c.status === 'Draft').forEach(c => add('amcContract', 2, 'Contract to activate', c.no, c.customer, 'PO received', `contracts/${c.id}`, 'Activate', c.createdAt));
-  store.list('enquiries', e => ['Inspected', 'BOQ study', 'Waiting for estimate'].includes(e.status)).forEach(e => add('estimation', 3, 'Estimate to make', e.no, e.customerName, e.status === 'Inspected' ? 'report received' : e.status.toLowerCase(), `enquiries/${e.id}`, 'Create estimate', e.receivedAt));
-  store.list('inspections', i => i.status === 'To assign').forEach(i => { const e = store.get('enquiries', i.enquiryId); add('inspection', 1, 'Inspection to assign', e?.no || '', e?.customerName || '', 'no technician yet', `inspections/${i.id}`, 'Assign', i.createdAt); });
+  store.list('enquiries', e => ['Assessed', 'BOQ study', 'Waiting for estimate'].includes(e.status)).forEach(e => add('estimation', 3, 'Estimate to make', e.no, e.customerName, e.status === 'Assessed' ? 'report received' : e.status.toLowerCase(), `enquiries/${e.id}`, 'Create estimate', e.receivedAt));
+  store.list('inspections', i => i.status === 'To assign').forEach(i => { const e = store.get('enquiries', i.enquiryId); add('inspection', 1, 'Assessment to assign', e?.no || '', e?.customerName || '', 'no technician yet', `assessments/${i.id}`, 'Assign', i.createdAt); });
   const drafts = store.list('invoices', i => i.status === 'Draft');
   if (drafts.length) add('invoice', 3, 'Invoices to post', `${drafts.length} draft${drafts.length > 1 ? 's' : ''}`, [...new Set(drafts.map(i => i.customer))].slice(0, 2).join(', '), `${drafts.filter(i => i.contractId).length} AMC instalment(s)`, 'invoices', 'Post', '');
   store.list('amcVisits', v => v.status === 'Done').forEach(v => add('amcExecution', 3, 'Service report to file', `${v.contractNo} · ${v.n} of ${v.of}`, v.customer, 'signed by the customer', `amc-visits/${v.id}`, 'Check & file', v.updatedAt));

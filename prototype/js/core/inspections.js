@@ -1,4 +1,4 @@
-// Site inspection rules: technicians by zone, assignment with a confirmed visit time,
+// Job assessment rules: technicians by zone, assignment with a confirmed visit time,
 // and the Site Viewing Report (SVR) from start to submission.
 import * as store from './store.js';
 import { technicians, empName, findSite, productName, vsOptions, vsDefault } from './lookups.js';
@@ -34,7 +34,7 @@ export function assignTechnician(inspId, { technicianId, visitAt, confirmedBy, n
     `${again ? 'Re-assigned' : 'Assigned'} ${name}; visit confirmed with customer by ${confirmedBy || 'phone'}`);
   if (insp.status === 'To assign') store.setStatus('inspections', inspId, 'Assigned', name);
   const enq = store.get('enquiries', insp.enquiryId);
-  if (['Waiting for inspection', 'Inspection assigned'].includes(enq.status)) store.setStatus('enquiries', enq.id, 'Inspection assigned', name);
+  if (['Waiting for assessment', 'Assessment assigned'].includes(enq.status)) store.setStatus('enquiries', enq.id, 'Assessment assigned', name);
 }
 
 // Product lines that name a part or material become rows of section 5 (Materials / spare parts).
@@ -260,7 +260,7 @@ export function reportProblems(rep, { paper = false } = {}) {
 }
 
 // Submit: new products are recorded as the customer's products at the site and their rows link them from now on (a
-// work-only product, not kept, is not recorded); the inspection and enquiry move on.
+// work-only product, not kept, is not recorded); the assessment and enquiry move on.
 export function submitReport(id, { paper = false } = {}) {
   const rep = store.get('siteReports', id);
   const problems = reportProblems(rep, { paper });
@@ -280,6 +280,6 @@ export function submitReport(id, { paper = false } = {}) {
     paper ? `${rep.no} received on paper and entered by the office` : `${rep.no} submitted`);
   store.setStatus('siteReports', id, 'Submitted');
   store.setStatus('inspections', rep.inspectionId, 'Report submitted', rep.no);
-  store.setStatus('enquiries', rep.enquiryId, 'Inspected', rep.no);
+  store.setStatus('enquiries', rep.enquiryId, 'Assessed', rep.no);
   return [];
 }

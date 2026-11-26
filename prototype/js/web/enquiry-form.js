@@ -63,7 +63,7 @@ export function renderEnquiryForm(el, id) {
         <div id="fileList"></div><div class="sub">For example a BOQ, photos from the customer or the original email. Up to 10 MB each; kept in this browser.</div></div>
       <div class="card"><div class="card-head"><h2>Next step</h2></div>
         <div class="form-lines fcols">
-        ${field({ name: 'siteInspection', label: 'Site Inspection', type: 'chips', options: vsOptions('YES_NO'), value: enq?.siteInspection || 'YES' })}
+        ${field({ name: 'siteInspection', label: 'Job Assessment', type: 'chips', options: vsOptions('YES_NO'), value: enq?.siteInspection || 'YES' })}
         <div id="inspBox" style="display:contents"></div></div></div>
       ${enq ? html`<div class="card"><div class="card-head"><h2>Activity</h2></div>${activityHtml(enq)}</div>` : ''}
     </form>
@@ -196,16 +196,16 @@ export function renderEnquiryForm(el, id) {
     paintInspection();
   }
 
-  // ---------- Next step: site inspection, technician (any; zone matches first), optional visit ----------
+  // ---------- Next step: job assessment, technician (any; zone matches first), optional visit ----------
   function paintInspection() {
     const yes = radio('siteInspection') === 'YES';
     const box = $('#inspBox', el);
     const type = v('type').value;
-    const nextText = yes ? 'Goes to Site Inspection (target: within 2 hours of the call).'
-      : type === 'REPAIR' ? 'No site inspection: goes straight to estimation.' : `BOQ study for ${vsLabel('ENQ_TYPE', type)}.`;
+    const nextText = yes ? 'Goes to Job Assessment (target: within 2 hours of the call).'
+      : type === 'REPAIR' ? 'No job assessment: goes straight to estimation.' : `BOQ study for ${vsLabel('ENQ_TYPE', type)}.`;
     if (!yes) { box.innerHTML = String(html`<div class="sub" style="grid-column:1/-1;margin:0">${nextText}</div>`); return; }
     if (inspLocked) {
-      box.innerHTML = String(row('Technician', `${store.get('employees', insp.technicianId)?.name || '—'} · ${insp.status}`, 'Change it from the site inspection page.'));
+      box.innerHTML = String(row('Technician', `${store.get('employees', insp.technicianId)?.name || '—'} · ${insp.status}`, 'Change it from the job assessment page.'));
       return;
     }
     const keep = (n, d) => v(n)?.value ?? d;

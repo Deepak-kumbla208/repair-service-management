@@ -25,7 +25,7 @@ const VALUE_SETS = [
   ['PAYMENT_TERMS', 'Payment Terms', 'Extensible', [['IMMEDIATE', 'Immediate'], ['D7', '7 days'], ['D15', '15 days'], ['D30', '30 days']]],
   ['WORK_COMPLETION', 'Work Completion Status', 'System', [['NOT_STARTED', 'Not started'], ['IN_PROGRESS', 'In progress'], ['COMPLETED', 'Completed']]],
   ['PAYMENT_RECEIVED', 'Payment Received', 'System', [['NOT_PAID', 'Not paid'], ['PARTLY', 'Partly paid'], ['PAID', 'Paid']]],
-  ['STAGE', 'Stage (hidden, for the dashboard)', 'System', ['New', 'Inspection', 'Quoted', 'Won', 'Lost']],
+  ['STAGE', 'Stage (hidden, for the dashboard)', 'System', ['New', 'Assessment', 'Quoted', 'Won', 'Lost']],
   ['MARGIN_BASIS', 'Margin Basis', 'System', [['MARKUP', 'Markup on cost'], ['MARGIN', 'Margin on price']]],
   ['OVERHEAD_BASIS', 'Overhead Basis', 'System', [['PCT', '% of direct cost'], ['FIXED', 'Fixed amount']]],
   ['PAYMENT_METHOD', 'Payment Method', 'Extensible', [['CASH', 'Cash'], ['CHEQUE', 'Cheque'], ['BANK', 'Bank transfer'], ['PAYNOW', 'PayNow']]],

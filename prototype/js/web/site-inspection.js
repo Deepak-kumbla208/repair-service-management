@@ -1,4 +1,4 @@
-// Site Inspection (web): the list with tiles and search, assigning a technician by zone with a visit time
+// Job Assessment (web): the list with tiles and search, assigning a technician by zone with a visit time
 // confirmed with the customer, the countdown against the 1–2 hour target, and the returned report.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
@@ -35,10 +35,10 @@ export function renderInspectionList(el) {
   const company = auth.company();
   const state = loadState();
   el.innerHTML = String(html`<div class="page">
-    ${pageHead({ crumb: 'Transactions › Site Inspection', title: 'Site inspections', sub: `Assign a technician by zone and confirm the visit time. Target: inspection within ${company.inspectionTargetHours || 2} hours of the call.` })}
+    ${pageHead({ crumb: 'Transactions › Job Assessment', title: 'Job assessments', sub: `Assign a technician by zone and confirm the visit time. Target: assessment within ${company.inspectionTargetHours || 2} hours of the call.` })}
     <div id="tiles"></div>
     <div class="filters">
-      <input type="search" class="search" id="q" placeholder="Search inspections: enquiry no, customer, site, technician, report no" value="${state.q}">
+      <input type="search" class="search" id="q" placeholder="Search assessments: enquiry no, customer, site, technician, report no" value="${state.q}">
       <select id="zone"><option value="">All zones</option>${zones().map(z => html`<option value="${z.id}" ${z.id === state.zone ? 'selected' : ''}>Zone ${z.code} · ${z.name}</option>`)}</select>
       <select id="tech"><option value="">All technicians</option>${technicians().map(t => html`<option value="${t.id}" ${t.id === state.tech ? 'selected' : ''}>${t.name}</option>`)}</select>
       <select id="status"><option value="">All statuses</option>${STATUSES.map(s => html`<option ${s === state.status ? 'selected' : ''}>${s}</option>`)}</select>
@@ -68,12 +68,12 @@ export function renderInspectionList(el) {
       <td class="lnk">${x.e.no}</td><td>${x.e.customerName}</td><td>${x.e.siteName}</td><td><span class="zone-chip">${zoneCode(x.i.zoneId)}</span></td>
       <td>${fmtDateTime(x.e.receivedAt)}</td><td style="min-width:200px">${clockHtml(clock(x))}</td><td>${empName(x.i.technicianId) || html`<span class="muted">—</span>`}</td>
       <td>${fmtDateTime(x.i.visitAt)}</td><td>${pill(x.i.status)}</td><td>${x.r ? html`${x.r.no} ${pill(x.r.status)}` : ''}</td></tr>`)}`
-      : emptyRow(10, all.length ? 'No inspections match the search and filters.' : 'No site inspections yet.'));
-    $('#count', el).textContent = `${shown.length} of ${all.length} inspections`;
+      : emptyRow(10, all.length ? 'No assessments match the search and filters.' : 'No job assessments yet.'));
+    $('#count', el).textContent = `${shown.length} of ${all.length} assessments`;
     sessionStorage.setItem(KEY, JSON.stringify(state));
   }
   on(el, 'click', '[data-tile]', (e, b) => { state.tile = state.tile === b.dataset.tile ? '' : b.dataset.tile; paint(); });
-  on(el, 'click', 'tr[data-id]', (e, tr) => go(`inspections/${tr.dataset.id}`));
+  on(el, 'click', 'tr[data-id]', (e, tr) => go(`assessments/${tr.dataset.id}`));
   $('#q', el).addEventListener('input', debounce(e => { state.q = e.target.value; paint(); }, 150));
   ['zone', 'tech', 'status'].forEach(k => $(`#${k}`, el).addEventListener('change', e => { state[k] = e.target.value; paint(); }));
   paint();
@@ -88,7 +88,7 @@ function nextHour() {
 
 export function renderInspection(el, id) {
   const i = store.get('inspections', id);
-  if (!i || !auth.seesInspection(i)) { el.innerHTML = '<div class="page"><div class="empty">Site inspection not found.</div></div>'; return; }
+  if (!i || !auth.seesInspection(i)) { el.innerHTML = '<div class="page"><div class="empty">Job assessment not found.</div></div>'; return; }
   const e = store.get('enquiries', i.enquiryId);
   const r = i.reportId ? store.get('siteReports', i.reportId) : null;
   const { site } = findSite(e.siteId);
@@ -102,8 +102,8 @@ export function renderInspection(el, id) {
   const ro = (k, v) => html`<div class="field"><div class="field-label">${k}</div><div class="ro">${v || html`<span class="muted">—</span>`}</div></div>`;
   el.innerHTML = String(html`<div class="page stack" style="max-width:1400px">
     ${pageHead({
-      crumb: html`<a href="#/inspections">Site Inspection</a> › ${e.no}`,
-      title: html`Site inspection · ${e.customerName} ${pill(i.status)}`,
+      crumb: html`<a href="#/assessments">Job Assessment</a> › ${e.no}`,
+      title: html`Job assessment · ${e.customerName} ${pill(i.status)}`,
       sub: `${e.siteName} · Zone ${zoneLabel(i.zoneId)} · received ${fmtDateTime(e.receivedAt)}`,
       actions: html`<div class="row"><a class="btn" href="#/enquiries/${e.id}">Open ${e.no}</a>
         ${r?.status === 'Submitted' ? html`<a class="btn" href="#/reports/${r.id}">View report</a>` : ''}</div>`,
@@ -115,7 +115,7 @@ export function renderInspection(el, id) {
         <div><div class="form-sec">Site</div>${ro('Site', `${site?.address || e.siteName} ${site?.blockUnit || ''}`)}${ro('Zone', zoneLabel(i.zoneId))}${ro('Customer products', tags)}</div>
       </div>` })}
     <div class="card"><div class="card-head"><h2>What the customer reported</h2></div>${linesTable(e.lines)}</div>
-    <div class="card"><div class="field-label">Target: inspection within ${company.inspectionTargetHours || 2} hours of the call</div>${clockHtml(inspectionClock(e, company))}
+    <div class="card"><div class="field-label">Target: assessment within ${company.inspectionTargetHours || 2} hours of the call</div>${clockHtml(inspectionClock(e, company))}
       <div id="assignCard" style="margin-top:10px"></div></div>
     <div class="card"><div class="card-head"><h2>Site viewing report</h2>${r ? pill(r.status) : ''}</div>
       ${r ? html`<div class="kv six"><div><div class="k">Report No</div>${r.no}</div><div><div class="k">Technician</div>${empName(r.technicianId)}</div>

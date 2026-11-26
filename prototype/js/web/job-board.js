@@ -1,5 +1,5 @@
 // Job Execution: the scheduling board (flow step 7). Left: jobs not scheduled yet, with their parts check and the
-// suggested technician and day. Right: the week by technician, site inspections included, coloured by zone.
+// suggested technician and day. Right: the week by technician, job assessments included, coloured by zone.
 // Pick a job, then "Schedule" (the suggestion) or click a free day; the dialog confirms the slot.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
@@ -48,8 +48,8 @@ function calendar(days, sel, sug) {
         const free = sel && freeJobStart(t.id, ds, sel) != null && ds >= earliestDate(sel) && ds >= today;
         const isSug = sug && sug.technicianId === t.id && sug.date === ds;
         return html`<div class="day ${free ? 'free' : ''}" ${free ? html`data-slot="${t.id}|${ds}" title="Place ${sel.no} here"` : ''}>
-          ${items.map(b => html`<a class="blk ${zc(b.zoneId)} ${b.kind === 'amc' ? 'amc' : ''}" href="#/${{ job: 'jobs', amc: 'amc-visits', inspection: 'inspections' }[b.kind]}/${b.id}" style="top:${(b.from - dayStart()) * PX}px;height:${Math.max(28, (b.to - b.from) * PX - 2)}px">
-            <b>${fmtHour(b.from)}–${fmtHour(b.to)}</b><br>${b.kind === 'job' ? b.no : b.kind === 'amc' ? `AMC · ${b.no}` : 'Site inspection'} · ${b.title}</a>`)}
+          ${items.map(b => html`<a class="blk ${zc(b.zoneId)} ${b.kind === 'amc' ? 'amc' : ''}" href="#/${{ job: 'jobs', amc: 'amc-visits', inspection: 'assessments' }[b.kind]}/${b.id}" style="top:${(b.from - dayStart()) * PX}px;height:${Math.max(28, (b.to - b.from) * PX - 2)}px">
+            <b>${fmtHour(b.from)}–${fmtHour(b.to)}</b><br>${b.kind === 'job' ? b.no : b.kind === 'amc' ? `AMC · ${b.no}` : 'Job assessment'} · ${b.title}</a>`)}
           ${isSug ? html`<div class="blk ${zc(sel.zoneId)} sug" data-slot="${t.id}|${ds}" style="top:${(sug.start - dayStart()) * PX}px;height:${jobDuration(sel) * PX - 2}px"><b>${fmtHour(sug.start)}–${fmtHour(sug.end)}</b><br>${sel.no} · suggested</div>` : ''}
         </div>`;
       })}`)}
@@ -87,7 +87,7 @@ export function renderJobBoard(el) {
         ${unscheduled.length ? html`${unscheduled.map(j => jobCard(j, j.id === state.sel ? sug : null))}` : html`<div class="card"><div class="empty">No jobs waiting. Accepted quotations appear here.</div></div>`}</div>
       <div>${calendar(days, sel, sug)}
         <div class="legend" style="margin-top:8px"><span><i style="background:#378ADD"></i>Zone A</span><span><i style="background:#1D9E75"></i>Zone B</span><span><i style="background:#BA7517"></i>Zone C</span><span><i style="background:#7F77DD"></i>Zone D</span>
-          <span>Dashed = suggested${sel ? ` · free days for ${sel.no} are highlighted; click one to place it` : ''} · a site inspection blocks ${INSPECTION_HOURS} h</span></div></div>
+          <span>Dashed = suggested${sel ? ` · free days for ${sel.no} are highlighted; click one to place it` : ''} · a job assessment blocks ${INSPECTION_HOURS} h</span></div></div>
     </div>
   </div>`);
 

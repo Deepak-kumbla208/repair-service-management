@@ -32,7 +32,7 @@ const chips = (name, label, options, value, ro, hint = '') => html`<div class="f
 
 function defaultsFields(type, ro) {
   const c = auth.company();
-  if (type.key === 'ENQ') return html`<div class="form-sec">Site inspection</div>${num('inspectionTargetHours', 'Target', c.inspectionTargetHours ?? 2, { suffix: 'hours from the call', hint: 'The "Over 2 h target" tile and the clocks use it', ro })}`;
+  if (type.key === 'ENQ') return html`<div class="form-sec">Job assessment</div>${num('inspectionTargetHours', 'Target', c.inspectionTargetHours ?? 2, { suffix: 'hours from the call', hint: 'The "Over 2 h target" tile and the clocks use it', ro })}`;
   if (type.key === 'EST' || type.key === 'AMCEST') {
     const d = type.key === 'EST' ? txDefaults() : amcDefaults();
     return html`<div class="form-sec">Defaults for new estimates</div>
@@ -99,7 +99,7 @@ export function renderTxSetup(el) {
   const audit = [
     ...(type.series ? store.list('audit', a => a.coll === 'series' && a.recordId === store.findOne('series', x => x.docType === type.series)?.id) : []),
     ...store.auditFor('companies', c.id).filter(a => (type.terms || []).some(d => a.summary.startsWith(TERM_DOCS[d])) || (['AMCEST', 'AMC'].includes(type.key) && a.summary.startsWith('AMC / GS defaults'))
-      || (['EST', 'QT'].includes(type.key) && a.summary.startsWith('Defaults:')) || (type.key === 'ENQ' && a.summary.startsWith('Inspection target'))),
+      || (['EST', 'QT'].includes(type.key) && a.summary.startsWith('Defaults:')) || (type.key === 'ENQ' && a.summary.startsWith('Assessment target'))),
     ...(type.rules ? store.list('audit', a => a.coll === 'approvalRules' && store.get('approvalRules', a.recordId)?.docType === type.rules) : []),
   ].sort((a, b) => b.at.localeCompare(a.at));
 

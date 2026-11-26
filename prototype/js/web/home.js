@@ -69,9 +69,9 @@ function renderWork(el) {
             <td style="text-align:right"><button class="btn small ${a.rank === 1 ? 'primary' : ''}" data-go="${a.route}">${a.button}</button></td></tr>`)}</tbody></table>`
           : html`<div class="muted">Nothing waiting. Well done.</div>`}</div>
       <div>
-        ${auth.can('inspection') ? html`<div class="card"><div class="card-head"><h2>Site inspections not finished</h2><a href="#/inspections">Open the list</a></div>
+        ${auth.can('inspection') ? html`<div class="card"><div class="card-head"><h2>Job assessments not finished</h2><a href="#/assessments">Open the list</a></div>
           ${open.length ? html`<table class="tbl"><thead><tr><th>Enquiry</th><th>Since the call</th></tr></thead><tbody>
-            ${open.map(x => html`<tr class="click" data-go="inspections/${x.i.id}"><td class="lnk">${x.e.no} <span class="zone-chip">${zoneCode(x.i.zoneId)}</span><br><span class="muted small">${empName(x.i.technicianId) || 'no technician'}</span></td><td class="w">${clockHtml(inspectionClock(x.e, c))}</td></tr>`)}
+            ${open.map(x => html`<tr class="click" data-go="assessments/${x.i.id}"><td class="lnk">${x.e.no} <span class="zone-chip">${zoneCode(x.i.zoneId)}</span><br><span class="muted small">${empName(x.i.technicianId) || 'no technician'}</span></td><td class="w">${clockHtml(inspectionClock(x.e, c))}</td></tr>`)}
           </tbody></table>` : html`<div class="muted">Nothing waiting.</div>`}</div>` : ''}
         ${money ? html`<div class="card"><div class="card-head"><h2>Money</h2><a href="#/payments">Payment Collection</a></div>
           <div class="kv two"><div class="click" data-pay="open"><div class="k">Owed to us</div><div class="v"><b>${m2(money.total)}</b> · ${money.count} invoice${money.count === 1 ? '' : 's'}</div></div>

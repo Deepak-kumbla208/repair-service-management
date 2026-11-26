@@ -35,7 +35,7 @@ function renderEditor(el, rep, insp) {
 
   el.innerHTML = String(html`<div class="page" style="max-width:1500px">
     <div class="page-head"><div class="grow">
-      <div class="crumb"><a href="#/inspections">Site Inspection</a> › <a href="#/enquiries/${e.id}">${e.no}</a> › Site viewing report</div>
+      <div class="crumb"><a href="#/assessments">Job Assessment</a> › <a href="#/enquiries/${e.id}">${e.no}</a> › Site viewing report</div>
       <h1>${rep.no} · Site viewing report ${pill(rep.status)}</h1>
       <div class="page-meta">${e.customerName} · ${empName(rep.technicianId)}${insp.visitAt ? ` · visit ${fmtDateTime(insp.visitAt)}` : ''} · pre-filled from <a href="#/enquiries/${e.id}">${e.no}</a> · the technician can continue it on the phone${rep.submittedAt ? ` · ${rep.paper ? 'received on paper' : 'submitted'} ${fmtDateTime(rep.submittedAt)}` : ''}</div></div>
       <div class="row"><button class="btn" id="saveBtn">Save</button>
@@ -107,7 +107,7 @@ function renderReadOnly(el, rep, insp) {
   const e = store.get('enquiries', rep.enquiryId);
   el.innerHTML = String(html`<div class="page stack" style="max-width:1400px">
     ${pageHead({
-      crumb: html`<a href="#/inspections">Site Inspection</a> › <a href="#/inspections/${insp.id}">${e.no}</a> › ${rep.no}`,
+      crumb: html`<a href="#/assessments">Job Assessment</a> › <a href="#/assessments/${insp.id}">${e.no}</a> › ${rep.no}`,
       title: html`${rep.no} · Site viewing report ${pill(rep.status)}`,
       sub: `${e.customerName} · ${e.siteName} · by ${empName(rep.technicianId)}${rep.submittedAt ? ` · submitted ${fmtDateTime(rep.submittedAt)}` : ''}`,
       actions: html`<div class="row"><a class="btn" href="#/enquiries/${e.id}">Open ${e.no}</a>

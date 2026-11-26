@@ -25,7 +25,7 @@ export function renderEstimateList(el) {
       ['Costing', e => `${vsLabel('COSTING_LEVEL', e.costingLevel)}${e.costingLevel === 'LINE' ? ` · ${(e.kind === 'AMC' ? e.sites : e.lines).length} lines` : ''}`],
       [`Selling price (${auth.company().currency})`, e => m2(estimateSummary(e).subtotal), 'num'], ...(auth.seesMarkup() ? [['Markup', e => `${estimateSummary(e).markupPct.toFixed(1)} %`, 'num']] : []), ['Status', e => pill(e.status)]],
     search: e => [e.no, e.header.customer, e.header.site, store.get('enquiries', e.enquiryId)?.no], route: e => `estimates/${e.id}`,
-    empty: 'No estimates yet. Open an inspected enquiry and click "Create estimate".',
+    empty: 'No estimates yet. Open an assessed enquiry and click "Create estimate".',
   });
 }
 

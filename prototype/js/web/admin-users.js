@@ -1,5 +1,5 @@
 // User Role (Admin Setup): Users and Roles. A role that sees only its own work needs each user linked to an employee;
-// deactivating a user first moves their open inspections, jobs and visits; the Admin role is locked and the last active
+// deactivating a user first moves their open assessments, jobs and visits; the Admin role is locked and the last active
 // Admin cannot be deactivated. New users appear on the login screen at once (no passwords in the prototype).
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';

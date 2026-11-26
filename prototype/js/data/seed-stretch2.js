@@ -22,7 +22,7 @@ const hist = (...steps) => steps.map(([status, iso, by, note]) => ({ status, at:
 const localDate = iso => { const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const hhmm = iso => { const d = new Date(iso); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
-// ENQ-…-0003: Kosmic, RS-1 motor and RS-2 springs (the team lead's sample job), inspected by Technician A.
+// ENQ-…-0003: Kosmic, RS-1 motor and RS-2 springs (the team lead's sample job), assessed by Technician A.
 // at(daysAgo, hh, mm) gives a time relative to now, so the sample always looks recent.
 export function kosmicRepair(t, cust, at) {
   const ops = `usr_${t}_ops`;
@@ -42,8 +42,8 @@ export function kosmicRepair(t, cust, at) {
     lines: [{ itemRef: '', itemName: '', qty: null, description: 'RS-1 front shop shutter motor not working; RS-2 side godown shutter jammed.' }],
     description: 'RS-1 front shop shutter motor not working; RS-2 side godown shutter jammed.',
     customerId: k.id, customerName: k.name, contactId: con.id, contactName: con.name, mobile: con.mobile, email: con.email,
-    siteId: site.id, siteName: site.name, zoneId: site.zoneId, inspectionId: inspId, stage: 'Inspection', status: 'Inspected',
-    statusHistory: hist(['Waiting for inspection', recv, ops], ['Inspection assigned', assigned, ops, 'Technician A'], ['Report in progress', timeIn, `usr_${t}_techA`, `SVR-${year}-0001`], ['Inspected', done, ops, `SVR-${year}-0001 received on paper`]),
+    siteId: site.id, siteName: site.name, zoneId: site.zoneId, inspectionId: inspId, stage: 'Assessment', status: 'Assessed',
+    statusHistory: hist(['Waiting for assessment', recv, ops], ['Assessment assigned', assigned, ops, 'Technician A'], ['Report in progress', timeIn, `usr_${t}_techA`, `SVR-${year}-0001`], ['Assessed', done, ops, `SVR-${year}-0001 received on paper`]),
     createdAt: recv, updatedAt: done, createdBy: ops,
   };
   const inspection = {

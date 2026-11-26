@@ -109,7 +109,7 @@ export function dropLaterWork(enqId, reason = 'NOT_NEEDED', note = '') {
     `Later work not wanted: ${reasonLabel(reason)}${note ? ` (${note})` : ''}`);
 }
 
-// "Quote the rest": a new repair enquiry linked to this one, no site inspection; its estimate takes the products, faults
+// "Quote the rest": a new repair enquiry linked to this one, no job assessment; its estimate takes the products, faults
 // and parts from the same site report at today's rates, with its own transport for the second visit.
 export function quoteLaterWork(enqId) {
   const e = store.get('enquiries', enqId);

@@ -19,7 +19,7 @@ import { groupsOf, missingGroups } from './products.js';
 export const dayStart = () => workWeek().start;
 export const dayEnd = () => workWeek().end;
 export { isWorkday, nextWorkday };
-export const INSPECTION_HOURS = 2;               // a site inspection blocks 2 hours on the board
+export const INSPECTION_HOURS = 2;               // a job assessment blocks 2 hours on the board
 export const OPEN_JOB = ['To schedule', 'Scheduled', 'On the way', 'On site'];
 const pad = n => String(n).padStart(2, '0');
 const dstr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -212,7 +212,7 @@ export function scheduleProblems(job, slot) {
     if (blocks[0].date !== slot.date) p.push(`${fmtDate(slot.date)} is not a working day.`);
     blocks.forEach((b, i) => {
       const clash = clashOn(slot.technicianId, b.date, b.from, slot.hours, job.id);
-      const what = clash?.kind === 'job' ? clash.no : clash?.kind === 'amc' ? `AMC visit ${clash.no}` : 'a site inspection';
+      const what = clash?.kind === 'job' ? clash.no : clash?.kind === 'amc' ? `AMC visit ${clash.no}` : 'a job assessment';
       if (clash) p.push(`${empName(slot.technicianId)} already has ${what} ${fmtHour(clash.from)}–${fmtHour(clash.to)} ${i ? `on ${fmtDate(b.date)} (day ${i + 1} of the job)` : 'that day'}.`);
     });
   }

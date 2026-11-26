@@ -1,5 +1,5 @@
 // Transaction-wise workflow of an enquiry (the "Workflow" button): one box per transaction,
-// with the current one marked "now". Stretch 2 fills the repair boxes after the site inspection; Stretch 3 the AMC
+// with the current one marked "now". Stretch 2 fills the repair boxes after the job assessment; Stretch 3 the AMC
 // boxes (contract, visits, instalment invoices, payment, contract closure). General Servicing uses the job boxes.
 import * as store from './store.js';
 import { empName } from './lookups.js';
@@ -12,7 +12,7 @@ const FLOWS = {
   GS: ['enquiry', 'inspection', 'estimation', 'quotation', 'job', 'invoice', 'payment', 'closure'],
 };
 const NAMES = {
-  enquiry: 'Enquiry', inspection: 'Site inspection', estimation: 'Estimation', quotation: 'Quotation', job: 'Job',
+  enquiry: 'Enquiry', inspection: 'Job assessment', estimation: 'Estimation', quotation: 'Quotation', job: 'Job',
   amcContract: 'AMC contract', amcVisits: 'AMC visits', invoice: 'Invoice', payment: 'Payment', closure: 'Job closure', contractClosure: 'Contract closure',
 };
 
@@ -41,7 +41,7 @@ export function stagesFor(enq) {
   } else {
     const who = insp.technicianId ? empName(insp.technicianId) : '';
     Object.assign(si, {
-      state: 'now', route: `inspections/${insp.id}`,
+      state: 'now', route: `assessments/${insp.id}`,
       doc: report ? report.no : who ? `Technician: ${who}` : 'Not assigned yet',
       status: report ? 'Report in progress' : who ? 'Visit booked' : 'Waiting for technician',
     });

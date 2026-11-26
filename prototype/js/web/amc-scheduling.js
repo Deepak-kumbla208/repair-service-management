@@ -1,7 +1,7 @@
 // AMC Scheduling: every visit of the active contracts by month and zone. The year strip shows the months ahead per
 // zone; the month calendar shows each visit (dashed = Planned, light = Confirmed, solid = Scheduled, red = overdue).
 // The left list holds what needs action; "Confirm & assign" takes the suggestion (zone technician, first free time,
-// helper) and the customer's agreement in one step. Repair jobs and inspections are checked for clashes.
+// helper) and the customer's agreement in one step. Repair jobs and assessments are checked for clashes.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, go, on, fmtDate, pill, toast, openModal, readForm, chipGroup, tiles, debounce } from '../core/ui.js';
@@ -59,7 +59,7 @@ export function renderAmcScheduling(el) {
   };
 
   el.innerHTML = String(html`<div class="page" style="max-width:1500px">
-    ${pageHead({ crumb: 'Transactions', title: 'AMC Scheduling', sub: 'Visits of the active contracts. Repair jobs and inspections are checked for clashes.' })}
+    ${pageHead({ crumb: 'Transactions', title: 'AMC Scheduling', sub: 'Visits of the active contracts. Repair jobs and assessments are checked for clashes.' })}
     ${tiles(tileDefs, state.tile)}
     <div class="filters"><input type="search" class="search" id="q" placeholder="Search customer, contract, site, technician" value="${state.q}">
       ${chipGroup('zone', [{ value: '', label: 'All zones' }, ...zs.map(z => ({ value: z.id, label: z.code }))], state.zone)}

@@ -1,6 +1,6 @@
 // Phone: a new or edited sales enquiry, for roles that may create / edit enquiries on the phone (Menu Access).
 // The same rules as the web form: customer search or quick-create, contact, mobile (required), site or a new site,
-// type, product lines (Product, Qty, Unit, Description), and the site inspection with a technician.
+// type, product lines (Product, Qty, Unit, Description), and the job assessment with a technician.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, $$, go, readForm, markInvalid, toast, confirmBox, dateInput, timeInput, joinDateTime, icon, MIC } from '../core/ui.js';
@@ -32,7 +32,7 @@ export function mEnquiryForm(page, id) {
     siteId: enq?.siteId || '', newSite: false, siteName: '', siteAddress: '', siteZone: '',
     type: enq?.type || 'REPAIR', channel: enq?.channel || 'CALL', channelOther: enq?.channelOther || '', enquiryStatus: enq?.enquiryStatus || 'WARM', priority: enq?.priority || 'MEDIUM',
     lines: enq?.lines?.length ? enq.lines.map(l => ({ ...l })) : [blankLine()], remarks: enq?.remarks || '',
-    // Like the web form, the Type sets Site inspection (Repair: Yes; AMC, General Servicing: No) until it is changed by hand.
+    // Like the web form, the Type sets Job assessment (Repair: Yes; AMC, General Servicing: No) until it is changed by hand.
     siteInspection: enq?.siteInspection || 'YES', inspectionTouched: !!enq, technicianId: insp?.technicianId || '', visitDate: visit ? dateInput(visit) : '', visitTime: visit ? timeInput(visit) : '', confirmedBy: insp?.confirmedBy || 'Call',
   };
   if (st.customerId && !enq) fillContact(store.get('customers', st.customerId));
@@ -92,10 +92,10 @@ export function mEnquiryForm(page, id) {
     </div>`)}<button type="button" class="add-dashed" id="addLine">${icon('plus', 14)} Add a line</button>`;
   }
   function nextPart() {
-    if (!assignable) return html`<div class="m-card small">Site inspection: ${insp.status} · change it from the site inspection.</div>`;
+    if (!assignable) return html`<div class="m-card small">Job assessment: ${insp.status} · change it from the job assessment.</div>`;
     const yes = st.siteInspection === 'YES';
     const opts = techniciansFor(zoneNow(), st.visitDate ? joinDateTime(st.visitDate, st.visitTime) : new Date().toISOString(), groupsOf(st.lines.filter(l => l.itemRef?.startsWith('prd:')).map(l => l.itemRef.slice(4))));
-    return html`${fld('Site inspection', seg('siteInspection', vsOptions('YES_NO'), st.siteInspection))}
+    return html`${fld('Job assessment', seg('siteInspection', vsOptions('YES_NO'), st.siteInspection))}
       ${yes ? html`${fld('Technician', html`<select name="technicianId"><option value="">Assign later</option>${opts.map(x => html`<option value="${x.tech.id}" ${x.tech.id === st.technicianId ? 'selected' : ''}>${x.tech.name}${x.match ? ' · covers the zone' : ''}${x.missing.length ? ' · not all products' : ''}</option>`)}</select>`)}
         <div class="row">${fld('Visit date', html`<input type="date" name="visitDate" value="${st.visitDate}">`)}${fld('Time', html`<input type="time" name="visitTime" value="${st.visitTime}">`)}</div>
         ${fld('Confirmed by', html`<select name="confirmedBy">${CONFIRM_BY.map(x => html`<option ${x === st.confirmedBy ? 'selected' : ''}>${x}</option>`)}</select>`)}` : ''}`;

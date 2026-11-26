@@ -37,7 +37,7 @@ export const COMPANY_LABELS = {
   name: 'Company name', country: 'Country', currency: 'Currency', regLabel: 'Registration label', regNo: 'Registration no.', chargesTax: 'Tax on documents',
   taxLabel: 'Tax label', taxRegLabel: 'Tax number label', taxRegNo: 'Tax number', defaultTaxCode: 'Default tax code', address: 'Address', tel: 'Tel',
   mobile: 'Mobile', email: 'Email', bank: 'Bank', payNow: 'PayNow', logoId: 'Logo', workDays: 'Working days', workStart: 'Day starts', workEnd: 'Day ends',
-  dpo: 'DPO contact', inspectionTargetHours: 'Inspection target (hours)',
+  dpo: 'DPO contact', inspectionTargetHours: 'Assessment target (hours)',
 };
 export const hasPostedInvoices = () => store.list('invoices', i => !!i.no).length > 0;
 export const LOCKED_ONCE_POSTED = ['country', 'currency'];
@@ -144,7 +144,7 @@ export function openWorkOf(employeeId) {
   const out = [];
   store.list('inspections', i => i.technicianId === employeeId && ['To assign', 'Assigned', 'Report in progress'].includes(i.status)).forEach(i => {
     const e = store.get('enquiries', i.enquiryId);
-    out.push({ coll: 'inspections', id: i.id, what: `Site inspection ${e?.no || ''}`, site: e?.siteName || '', zoneId: i.zoneId, at: i.visitAt, movable: i.status === 'Assigned', why: 'The report is in progress' });
+    out.push({ coll: 'inspections', id: i.id, what: `Job assessment ${e?.no || ''}`, site: e?.siteName || '', zoneId: i.zoneId, at: i.visitAt, movable: i.status === 'Assigned', why: 'The report is in progress' });
   });
   store.list('jobs', j => j.technicianId === employeeId && ['Scheduled', 'On the way', 'On site'].includes(j.status)).forEach(j =>
     out.push({ coll: 'jobs', id: j.id, what: `${j.type === 'GS' ? 'GS job' : 'Repair job'} ${j.no}`, site: j.site || '', zoneId: j.zoneId, at: j.start, movable: j.status === 'Scheduled', why: 'The technician is on the way or on site' }));
@@ -234,7 +234,7 @@ export function accessImpact(roleId, next) {
     effects.push(`AMC visits leave the phones of ${users.length} user${users.length === 1 ? '' : 's'}${n ? `, including ${n} booked visit${n > 1 ? 's' : ''}` : ''}. The office still sees them in AMC Scheduling.`);
   }
   if (lost('job')) effects.push(`Repair and GS jobs leave the phones of ${users.length} user${users.length === 1 ? '' : 's'}.`);
-  if (lost('inspection')) effects.push(`Site inspections leave the phones of ${users.length} user${users.length === 1 ? '' : 's'}.`);
+  if (lost('inspection')) effects.push(`Job assessments leave the phones of ${users.length} user${users.length === 1 ? '' : 's'}.`);
   MENUS.forEach(m => { if (cur[m.key] && !next[m.key]) effects.push(`${m.label} disappears for ${users.length} user${users.length === 1 ? '' : 's'}; its pages are refused.`); });
   return { problems, effects: [...new Set(effects)].slice(0, 6) };
 }

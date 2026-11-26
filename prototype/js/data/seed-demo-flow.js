@@ -329,9 +329,9 @@ async function gulf() {
 }
 
 // Products of the new trades (user, 25 Nov 2026): a new enquiry at Demo Towers with a shutter, a pump and lightning tape
-// by the metre (site inspection still to assign: no technician works on all three groups), one for a sanitary plan
-// submission and a BIM model (fixed prices, no site inspection) at Demo Food Factory, and a DB panel repair at Demo
-// Towers inspected by Technician B and quoted, waiting for the counter-check.
+// by the metre (job assessment still to assign: no technician works on all three groups), one for a sanitary plan
+// submission and a BIM model (fixed prices, no job assessment) at Demo Food Factory, and a DB panel repair at Demo
+// Towers assessed by Technician B and quoted, waiting for the counter-check.
 async function mixedSamples() {
   T = 'co_dsh';
   as('ops');

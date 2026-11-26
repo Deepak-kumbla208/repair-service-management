@@ -25,7 +25,7 @@ const COMPANIES = [
 // [code, name, what it does, dashboard type (User Role)]
 const ROLES = [
   ['ADMIN', 'Admin', 'Everything, including setup', 'management'],
-  ['OPS', 'Operations Executive', 'Enquiries, inspections, estimates, quotations, scheduling, invoices', 'work'],
+  ['OPS', 'Operations Executive', 'Enquiries, assessments, estimates, quotations, scheduling, invoices', 'work'],
   ['APR', 'Approver', 'Counter-checks quotations; approves non-immediate payment terms', 'approvals'],
   ['TECH', 'Technician', 'Own jobs on the phone', 'phone'],
   ['MGT', 'Management', 'Read-only view of everything; level-2 approvals', 'management'],
@@ -88,7 +88,7 @@ function rolesAndAccess(t) {
 
 const USERS = [
   [DSH, 'admin', 'Admin', 'ADMIN', null, 'All menus, web and phone'],
-  [DSH, 'ops', 'Operations Executive', 'OPS', 1, 'Enquiries and inspections · web and phone'],
+  [DSH, 'ops', 'Operations Executive', 'OPS', 1, 'Enquiries and assessments · web and phone'],
   [DSH, 'approver', 'Approver', 'APR', 2, 'Counter-checks quotations'],
   [DSH, 'techA', 'Technician A', 'TECH', 3, 'Zone A (also B) · phone only'],
   [DSH, 'techB', 'Technician B', 'TECH', 4, 'Zone C (also D) · phone only'],
@@ -132,7 +132,7 @@ function sampleTransactions(cust) {
     status: 'BOQ study', stage: 'New', statusHistory: hist(['BOQ study', e1At, ops, 'AMC enquiry: BOQ study']) });
   const e2 = enquiry(DSH, 2, { receivedAt: e2At, channel: 'WHATSAPP', type: 'REPAIR', enquiryStatus: 'HOT', priority: 'MEDIUM', siteInspection: 'YES', recordedBy: ops,
     lines: [{ itemRef: '', itemName: '', qty: null, description: 'Shop-front shutter stuck halfway; cannot close it at night.' }], description: 'Shop-front shutter stuck halfway; cannot close it at night.', channelOther: '', ...fromCustomer(retail), inspectionId: `ins_${DSH}_2`,
-    status: 'Inspection assigned', stage: 'Inspection', statusHistory: hist(['Waiting for inspection', e2At, ops], ['Inspection assigned', e2Assigned, ops, 'Technician B']) });
+    status: 'Assessment assigned', stage: 'Assessment', statusHistory: hist(['Waiting for assessment', e2At, ops], ['Assessment assigned', e2Assigned, ops, 'Technician B']) });
   const visit = new Date(); visit.setDate(visit.getDate() + 1); visit.setHours(10, 0, 0, 0);
   const i2 = { id: `ins_${DSH}_2`, tenantId: DSH, enquiryId: e2.id, zoneId: e2.zoneId, technicianId: `emp_${DSH}_4`, visitAt: visit.toISOString(), confirmedBy: 'WhatsApp', notes: 'Customer confirmed by WhatsApp', assignedAt: e2Assigned, assignedBy: ops,
     status: 'Assigned', statusHistory: hist(['To assign', e2At, ops], ['Assigned', e2Assigned, ops, 'Technician B']), createdAt: e2At, updatedAt: e2Assigned };
@@ -147,7 +147,7 @@ function gulfTransactions(cust) {
   const e = enquiry(GDD, 1, { receivedAt: recv, channel: 'CALL', type: 'REPAIR', enquiryStatus: 'HOT', priority: 'HIGH', siteInspection: 'YES', recordedBy: by,
     lines: [{ itemRef: '', itemName: '', qty: null, description: 'Gate 2 motorised shutter makes a loud noise and stops halfway.' }], description: 'Gate 2 motorised shutter makes a loud noise and stops halfway.', channelOther: '', customerId: c.id, customerName: c.name, contactId: c.contacts[0].id, contactName: c.contacts[0].name,
     mobile: c.contacts[0].mobile, email: c.contacts[0].email, siteId: c.sites[0].id, siteName: c.sites[0].name, zoneId: c.sites[0].zoneId, inspectionId: `ins_${GDD}_1`,
-    status: 'Waiting for inspection', stage: 'Inspection', statusHistory: hist(['Waiting for inspection', recv, by]) });
+    status: 'Waiting for assessment', stage: 'Assessment', statusHistory: hist(['Waiting for assessment', recv, by]) });
   const i = { id: `ins_${GDD}_1`, tenantId: GDD, enquiryId: e.id, zoneId: e.zoneId, technicianId: '', visitAt: null, confirmedBy: '', notes: '', status: 'To assign', statusHistory: hist(['To assign', recv, by]), createdAt: recv, updatedAt: recv };
   return { enquiries: [e], inspections: [i] };
 }

@@ -9,7 +9,7 @@ import { pageHead } from './shell.js';
 import { channelText } from './enquiry-view.js';
 
 export const REGISTER_COLUMNS = ['Enquiry No', 'Enquiry Date', 'Enquiry Time', 'Customer Name', 'Contact Person', 'Mobile', 'Email', 'Site Location',
-  'Enquiry Status', 'Enquiry Channel', 'Type', 'Enquiry Description', 'Priority', 'Recorded By', 'Remarks', 'Site Inspection',
+  'Enquiry Status', 'Enquiry Channel', 'Type', 'Enquiry Description', 'Priority', 'Recorded By', 'Remarks', 'Job Assessment',
   'Quotation Date', 'Quotation Status', 'Quotation Value', 'Job Status', 'Work Completion Status', 'Work Completion Date',
   'Invoice Date', 'Invoice No', 'Invoice Value', 'Payment Received'];
 
@@ -22,7 +22,7 @@ export function registerRow(e) {
     l.invoiceDate, l.invoiceNo, l.invoiceValue, l.paymentReceived];
 }
 
-const OPEN_INSPECTION = ['Waiting for inspection', 'Inspection assigned', 'Report in progress'];
+const OPEN_INSPECTION = ['Waiting for assessment', 'Assessment assigned', 'Report in progress'];
 
 // Count tiles shared with the dashboard. Each tile is also a filter.
 export function enquiryTiles(list, company) {
@@ -33,10 +33,10 @@ export function enquiryTiles(list, company) {
   const oldest = waiting.reduce((m, e) => Math.max(m, now - new Date(e.receivedAt).getTime()), 0);
   const defs = [
     { key: 'today', label: 'New today', sub: 'received since 00:00', test: e => isToday(e.receivedAt) },
-    { key: 'waiting', label: 'Waiting for inspection', sub: waiting.length ? `oldest ${fmtDuration(oldest)}` : 'none open', tone: 'warn', test: e => OPEN_INSPECTION.includes(e.status) },
-    { key: 'over', label: `Over ${target} h target`, sub: 'inspection not done in time', tone: 'bad', test: e => { const c = clock(e); return c && !c.done && c.state === 'bad'; } },
+    { key: 'waiting', label: 'Waiting for assessment', sub: waiting.length ? `oldest ${fmtDuration(oldest)}` : 'none open', tone: 'warn', test: e => OPEN_INSPECTION.includes(e.status) },
+    { key: 'over', label: `Over ${target} h target`, sub: 'assessment not done in time', tone: 'bad', test: e => { const c = clock(e); return c && !c.done && c.state === 'bad'; } },
     { key: 'boq', label: 'BOQ study', sub: 'AMC and servicing', test: e => e.status === 'BOQ study' },
-    { key: 'inspected', label: 'Inspected, to estimate', sub: 'report received', test: e => ['Inspected', 'Waiting for estimate'].includes(e.status) },
+    { key: 'inspected', label: 'Assessed, to estimate', sub: 'report received', test: e => ['Assessed', 'Waiting for estimate'].includes(e.status) },
   ];
   return defs.map(d => ({ ...d, count: list.filter(d.test).length }));
 }

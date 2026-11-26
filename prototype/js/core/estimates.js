@@ -56,7 +56,7 @@ function lineText(s, mats) {
 const fixedRow = (l, lineKey) => { const p = productOf(l.itemRef.slice(4)); return { key: rid(), lineKey, productId: p?.id || '', name: l.itemName, qty: Number(l.qty) || 1, unit: l.unit || p?.unit || 'Nos', price: Number(p?.price) || 0 }; };
 const isFixedLine = l => l.itemRef?.startsWith('prd:') && isFixed(productOf(l.itemRef.slice(4)));
 const escTag = t => String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-// With no site report (repair without inspection), the enquiry's lines about products are the products to repair:
+// With no site report (repair without assessment), the enquiry's lines about products are the products to repair:
 // the customer's products a line names by tag ("RS-1 motor not working": their size is known), else the product
 // picked on the line with its qty (a product with a size set has its size picked in the estimate). A part, a
 // fixed-price product or a line with no product stays a line of its own. lineOf: the enquiry line it came from.
@@ -91,7 +91,7 @@ function productsFromLines(enqLines, site) {
   });
 }
 
-// Everything an estimate needs, pre-filled. rep may be null (repair without inspection).
+// Everything an estimate needs, pre-filled. rep may be null (repair without assessment).
 export function prefill(enq, rep) {
   const { site } = findSite(enq.siteId);
   const d = txDefaults();
@@ -255,9 +255,9 @@ export const laterReport = enq => {
 export const currentEstimate = enqId => store.list('estimates', e => e.enquiryId === enqId && e.status !== 'Superseded').sort((a, b) => b.rev - a.rev)[0] || null;
 export const revisions = no => store.list('estimates', e => e.no === no).sort((a, b) => a.rev - b.rev);
 
-// "Create estimate" is offered on an inspected repair enquiry (or one waiting for an estimate) with none yet.
+// "Create estimate" is offered on an assessed repair enquiry (or one waiting for an estimate) with none yet.
 // AMC and General Servicing enquiries get it in BOQ study or after their (optional) site report.
-export const canCreateFor = enq => (enq.type === 'REPAIR' ? ['Inspected', 'Waiting for estimate'] : ['BOQ study', 'Inspected']).includes(enq.status)
+export const canCreateFor = enq => (enq.type === 'REPAIR' ? ['Assessed', 'Waiting for estimate'] : ['BOQ study', 'Assessed']).includes(enq.status)
   && !currentEstimate(enq.id) && auth.can('estimation', 'create');
 
 export function createEstimate(enqId, opts = {}) {
@@ -346,7 +346,7 @@ export function estimateProblems(est) {
   const s = estimateSummary(est);
   const p = [];
   if (!s.direct && !s.fixed) p.push('The estimate has no cost yet.');
-  // A product with a size set but no size (no site inspection) and no labour typed for it.
+  // A product with a size set but no size (no job assessment) and no labour typed for it.
   est.shutters.filter(x => setOfProduct(productOf(x.productId)) && (!x.sizeCode || !sizeOf(productOf(x.productId), x.sizeCode)) && !est.labour.some(r => r.lineKey === x.key))
     .forEach(x => p.push(`Pick the size of ${x.tag ? `${x.tag} ` : ''}${x.typeName} (Products to repair tab), or add its labour.`));
   if (est.materials.some(m => m.noRate && !m.rate)) p.push('A material has no rate (not in the Material/Item master).');

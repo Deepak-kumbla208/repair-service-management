@@ -81,7 +81,7 @@ export function usersWhoCan(menuKey, action) {
   return store.all('users').filter(u => u.tenantId === t && u.status !== 'Inactive' && roleIds.includes(u.roleId));
 }
 
-// Row-level check for site inspections and their reports.
+// Row-level check for job assessments and their reports.
 export function seesInspection(insp) {
   return scope('inspection') !== 'own' || insp.technicianId === user()?.employeeId;
 }

@@ -1,5 +1,5 @@
 // Phone: the enquiry list (search, tiles, ＋ New when the role may create on the phone) and an enquiry with its product
-// lines, Edit, the technician assignment (roles that may edit all inspections on the phone) and its workflow.
+// lines, Edit, the technician assignment (roles that may edit all assessments on the phone) and its workflow.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, on, debounce, tiles, pill, fmtDateTime, icon, readForm, toast, dateInput, timeInput, joinDateTime } from '../core/ui.js';
@@ -40,7 +40,7 @@ export function mEnquiry(page, id) {
   page.setTitle(e ? e.no : 'Enquiry', 'm/enquiries');
   if (!e || !auth.can('enquiry', 'view', 'mobile')) { page.body.innerHTML = '<div class="empty">Enquiry not found.</div>'; return; }
   const insp = e.inspectionId ? store.get('inspections', e.inspectionId) : null;
-  // Roles that may edit site inspections on the phone (all of them, not only their own) can assign the technician here.
+  // Roles that may edit job assessments on the phone (all of them, not only their own) can assign the technician here.
   const canAssign = insp && ['To assign', 'Assigned'].includes(insp.status) && auth.can('inspection', 'edit', 'mobile') && auth.scope('inspection') !== 'own';
   const visit = insp?.visitAt ? new Date(insp.visitAt) : null;
   page.body.innerHTML = String(html`
@@ -53,7 +53,7 @@ export function mEnquiry(page, id) {
     <div class="m-section">What the customer needs</div>
     ${cleanLines(e.lines).map(l => html`<div class="m-line">${l.itemName ? html`<b>${l.qty} ${l.unit && l.unit !== 'Nos' ? l.unit : '×'} ${l.itemName}</b><br>` : ''}<span class="${l.itemName ? 'small muted' : ''}">${l.description}</span></div>`)}
     <div class="m-card small">Received ${fmtDateTime(e.receivedAt)} by ${vsLabel('ENQ_CHANNEL', e.channel)} · Priority ${vsLabel('PRIORITY', e.priority)} · ${vsLabel('ENQ_STATUS', e.enquiryStatus)}
-      ${insp && insp.status !== 'Cancelled' ? html`<br>Site inspection: ${insp.status}${insp.technicianId ? ` · ${empName(insp.technicianId)} · ${fmtDateTime(insp.visitAt)}` : ''}` : ''}</div>
+      ${insp && insp.status !== 'Cancelled' ? html`<br>Job assessment: ${insp.status}${insp.technicianId ? ` · ${empName(insp.technicianId)} · ${fmtDateTime(insp.visitAt)}` : ''}` : ''}</div>
     ${canAssign ? html`<div class="m-section">Assign technician</div>
       <form class="m-card m-fields" id="asg" onsubmit="return false">
         <div class="field"><label>Technician</label><select name="technicianId">${techniciansFor(insp.zoneId, insp.visitAt || new Date().toISOString(), enquiryGroups(e)).map(x => html`<option value="${x.tech.id}" ${x.tech.id === insp.technicianId ? 'selected' : ''}>${x.tech.name}${x.match ? ' · covers the zone' : ''}${x.missing.length ? ' · not all products' : ''}${x.visits ? ` · ${x.visits} visit(s) that day` : ''}</option>`)}</select></div>

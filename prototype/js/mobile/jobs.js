@@ -1,5 +1,5 @@
-// Phone: My jobs (the technician's own site inspections, repair jobs, General Servicing jobs and AMC visits), with search
-// and tiles, and the inspection details.
+// Phone: My jobs (the technician's own job assessments, repair jobs, General Servicing jobs and AMC visits), with search
+// and tiles, and the assessment details.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, $, on, go, debounce, tiles, pill, fmtDate, fmtTime, toast, icon } from '../core/ui.js';
@@ -16,12 +16,12 @@ import { serviceCard } from './service.js';
 
 const DONE = 'Report submitted';
 
-// My work: site inspections, scheduled jobs and AMC visits assigned to me, by visit time.
+// My work: job assessments, scheduled jobs and AMC visits assigned to me, by visit time.
 export function myWork() {
   const insp = store.list('inspections', i => i.status !== 'Cancelled' && auth.seesInspection(i) && i.technicianId)
     .map(i => ({ i, e: store.get('enquiries', i.enquiryId), r: i.reportId ? store.get('siteReports', i.reportId) : null }))
     .filter(x => x.e)
-    .map(x => ({ at: x.i.visitAt, done: x.i.status === DONE, text: [x.e.no, x.e.customerName, x.e.siteName, x.r?.no, 'site inspection'], card: () => jobCard(x) }));
+    .map(x => ({ at: x.i.visitAt, done: x.i.status === DONE, text: [x.e.no, x.e.customerName, x.e.siteName, x.r?.no, 'job assessment'], card: () => jobCard(x) }));
   const jobs = !auth.can('job', 'view', 'mobile') ? [] : store.list('jobs', j => seesJob(j) && j.technicianId && j.start && j.status !== 'Cancelled')
     .map(j => ({ at: j.start, done: !!j.steps?.checkOutAt || ['Completed & documented', 'Closed'].includes(j.status), text: [j.no, j.customer, j.site, j.quotationNo, j.type === 'GS' ? 'general servicing' : 'repair job'],
       card: () => (j.type === 'GS' ? serviceCard('gjob', j) : repairCard(j)) }));
@@ -45,7 +45,7 @@ export function jobCard(x) {
   const done = x.i.status === DONE;
   const products = productsText(x.e);
   return html`<div class="job-card" style="${done ? 'opacity:.75' : ''}">
-    <div class="row"><span class="pill amber">Site inspection</span>${pill(x.i.status)}<span class="grow"></span><b>${when(x.i.visitAt)}</b></div>
+    <div class="row"><span class="pill amber">Job assessment</span>${pill(x.i.status)}<span class="grow"></span><b>${when(x.i.visitAt)}</b></div>
     <div class="strong" style="margin-top:6px">${x.e.customerName}</div>
     <div class="muted small">${x.e.siteName} · Zone ${zoneLabel(x.e.zoneId)} · ${x.e.no}</div>
     ${products ? html`<div class="small" style="margin-top:3px">${products}</div>` : ''}
@@ -86,7 +86,7 @@ export function mJobs(page) {
   paint();
 }
 
-// The steps of a site inspection on the phone, the current one highlighted:
+// The steps of a job assessment on the phone, the current one highlighted:
 // preview the form → start → fill in → the customer signs → submit → view the report.
 function inspectionSteps(r) {
   const started = !!r, submitted = r?.status === 'Submitted';
@@ -94,7 +94,7 @@ function inspectionSteps(r) {
   const state = (done, now) => (done ? 'done' : now ? 'now' : '');
   return [
     ['Preview the form', 'Pre-filled from the enquiry · optional', state(started, !started)],
-    ['Start inspection', started ? `Time In ${r.s1.timeIn || '—'}` : 'Opens the 7 sections and sets Time In', state(started, false)],
+    ['Start assessment', started ? `Time In ${r.s1.timeIn || '—'}` : 'Opens the 7 sections and sets Time In', state(started, false)],
     ['Fill in the report', '7 sections, photos and materials', state(submitted, started && !submitted)],
     ['Customer signs', 'After seeing the preview (section 7)', state(submitted || signed, false)],
     ['Submit', 'The office sees it at once', state(submitted, false)],
@@ -104,7 +104,7 @@ function inspectionSteps(r) {
 
 export function mJob(page, id) {
   const i = store.get('inspections', id);
-  page.setTitle('Site inspection', 'm/jobs');
+  page.setTitle('Job assessment', 'm/jobs');
   if (!i || !auth.seesInspection(i)) { page.body.innerHTML = '<div class="empty">Job not found.</div>'; return; }
   const e = store.get('enquiries', i.enquiryId);
   const r = i.reportId ? store.get('siteReports', i.reportId) : null;
@@ -115,7 +115,7 @@ export function mJob(page, id) {
   page.body.innerHTML = String(html`
     ${submitted ? html`<div class="m-ok">✓<b>Report submitted</b>${r.no} · ${fmtDate(r.submittedAt)} ${fmtTime(r.submittedAt)} · the office can see it now</div>` : ''}
     <div class="m-card">
-      <div class="row"><span class="pill amber">Site inspection</span>${pill(i.status)}<span class="grow"></span><b>${when(i.visitAt)}</b></div>
+      <div class="row"><span class="pill amber">Job assessment</span>${pill(i.status)}<span class="grow"></span><b>${when(i.visitAt)}</b></div>
       <div class="strong" style="margin-top:6px;font-size:16px">${e.customerName}</div>
       <div class="muted small">${e.no} · ${e.siteName} · Zone ${zoneLabel(e.zoneId)}</div>
       <div class="small" style="margin-top:4px">${address}${site?.access ? html`<br>Access: ${site.access}` : ''}</div>
@@ -135,10 +135,10 @@ export function mJob(page, id) {
   // Preview: the saved report, or before the start the pre-filled form built in memory (nothing saved, no Time In).
   const preview = () => openDocSheet(r ? `Preview · ${r.no}` : 'Preview · Site Viewing Report',
     svrSheetHtml(r || { no: 'given when you start', ...reportDraft(i.id) }, auth.company()),
-    { actions: [{ label: 'Close' }, ...(canWork && !submitted ? [{ label: r ? 'Continue report' : 'Start inspection', kind: 'primary', onClick: () => openReport(i.id) }] : [])] });
+    { actions: [{ label: 'Close' }, ...(canWork && !submitted ? [{ label: r ? 'Continue report' : 'Start assessment', kind: 'primary', onClick: () => openReport(i.id) }] : [])] });
   if (submitted) page.setFoot(html`<a class="btn" href="#/m/jobs">My jobs</a><a class="btn primary" href="#/m/report/${r.id}/view">${icon('eye', 15)} View report</a>`);
   else if (canWork) {
-    const foot = page.setFoot(html`<button class="btn" id="pv">${icon('eye', 15)} ${r ? 'Preview' : 'Preview form'}</button><button class="btn primary" id="go">${r ? `Continue ${r.no}` : html`${icon('play', 14)} Start inspection`}</button>`);
+    const foot = page.setFoot(html`<button class="btn" id="pv">${icon('eye', 15)} ${r ? 'Preview' : 'Preview form'}</button><button class="btn primary" id="go">${r ? `Continue ${r.no}` : html`${icon('play', 14)} Start assessment`}</button>`);
     $('#pv', foot).onclick = preview;
     $('#go', foot).onclick = () => openReport(i.id);
   }

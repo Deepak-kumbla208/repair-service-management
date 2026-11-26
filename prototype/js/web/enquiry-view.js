@@ -1,6 +1,6 @@
 // Inside an enquiry, stacked like the form: Customer · Site · Enquiry in a header folded to one line, then Later work
 // (items the customer will do later; web/later-work.js), "What the customer needs", attachments, Next step (with the
-// site inspection), the register's automatic columns and the activity; plus the Workflow popup.
+// job assessment), the register's automatic columns and the activity; plus the Workflow popup.
 import * as store from '../core/store.js';
 import * as auth from '../core/auth.js';
 import { html, fmtDateTime, pill, openModal, foldHeader } from '../core/ui.js';
@@ -70,7 +70,7 @@ export function renderEnquiryView(el, id) {
         <button class="btn soft" id="wfBtn">⇶ Workflow</button>
         ${auth.can('enquiry', 'edit') && e.status !== 'Cancelled' ? html`<a class="btn" href="#/enquiries/${e.id}/edit">✎ Edit</a>` : ''}
         ${report && auth.can('inspection', 'view') ? html`<a class="btn" href="#/reports/${report.id}">Site viewing report</a>` : ''}
-        ${canAssign ? html`<a class="btn primary" href="#/inspections/${insp.id}">${insp.technicianId ? 'Change technician' : 'Assign technician'}</a>` : ''}
+        ${canAssign ? html`<a class="btn primary" href="#/assessments/${insp.id}">${insp.technicianId ? 'Change technician' : 'Assign technician'}</a>` : ''}
         ${next}
       </div>
     </div>
@@ -102,8 +102,8 @@ export function renderEnquiryView(el, id) {
           ? html`<div class="files">${e.attachments.map(a => html`<div class="file-row">📎 <a href="#" data-open="${a.id}">${a.name}</a><span class="muted small">${fmtSize(a.size)}</span></div>`)}</div>`
           : html`<div class="muted">No files attached.</div>`}</div>
         <div class="card"><div class="card-head"><h2>Next step</h2>${openInsp ? html`${pill(insp.status)}${report ? html`<span>${report.no} ${pill(report.status)}</span>` : ''}
-          <span class="grow"></span><a class="btn small" href="#/inspections/${insp.id}">Open the site inspection</a>` : ''}</div>
-          <div class="form-lines fcols">${row('Site Inspection', vsLabel('YES_NO', e.siteInspection))}
+          <span class="grow"></span><a class="btn small" href="#/assessments/${insp.id}">Open the job assessment</a>` : ''}</div>
+          <div class="form-lines fcols">${row('Job Assessment', vsLabel('YES_NO', e.siteInspection))}
           ${openInsp ? html`${row('Technician', insp.technicianId ? empName(insp.technicianId) : 'No technician yet')}${row('Visit', fmtDateTime(insp.visitAt))}${row('Confirmed by', insp.confirmedBy)}
             ${row(`Target (${company.inspectionTargetHours || 2} h)`, clockHtml(inspectionClock(e, company)))}` : ''}</div></div>
         <div class="card"><div class="card-head"><h2>Register columns filled automatically</h2><span class="muted small">from the quotation, job, invoice and payment</span></div>
@@ -127,9 +127,9 @@ export function openWorkflow(e) {
     body: html`<p class="muted" style="margin:0 0 10px">One box per transaction. The current one is highlighted; click a finished box to open its document.</p>
       ${workflowHtml(e)}
       <div class="muted small" style="margin-top:14px;line-height:1.8"><b>The three enquiry types</b><br>
-        Repair: Enquiry → Site inspection → Estimation → Quotation → Job → Invoice → Payment → Job closure<br>
-        AMC: Enquiry → Site inspection (optional) → Estimation → Quotation → AMC contract → AMC visits → Invoice → Payment → Contract closure<br>
-        General Servicing: Enquiry → Site inspection (optional) → Estimation → Quotation → Job → Invoice → Payment → Job closure</div>`,
+        Repair: Enquiry → Job assessment → Estimation → Quotation → Job → Invoice → Payment → Job closure<br>
+        AMC: Enquiry → Job assessment (optional) → Estimation → Quotation → AMC contract → AMC visits → Invoice → Payment → Contract closure<br>
+        General Servicing: Enquiry → Job assessment (optional) → Estimation → Quotation → Job → Invoice → Payment → Job closure</div>`,
     actions: [{ label: 'Close' }],
   });
 }

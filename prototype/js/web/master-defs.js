@@ -21,13 +21,13 @@ function costText(p, company) {
 export const DEFS = {
   employee: {
     coll: 'employees', title: 'Employee / Technician', codePrefix: 'EMP-', codePad: 3,
-    note: 'Used to assign site inspections and jobs by zone; technicians log in to the phone.',
+    note: 'Used to assign job assessments and jobs by zone; technicians log in to the phone.',
     fields: [
       { name: 'code', label: 'Code', required: true }, { name: 'name', label: 'Name', required: true },
       { name: 'designation', label: 'Designation' }, { name: 'type', label: 'Type', type: 'select', options: ['Office', 'Technician'], required: true },
       { name: 'mainZoneId', label: 'Main zone', type: 'select', options: zoneOptions }, { name: 'skills', label: 'Skills' },
       { name: 'extraZoneIds', label: 'Extra zones', type: 'multi', options: zoneOptions, cls: 'spanall' },
-      { name: 'groups', label: 'Works on (product groups)', type: 'multi', options: () => vsOptions('PRODUCT_GROUP'), cls: 'spanall', hint: 'Listed first when a job or inspection has products of these groups' },
+      { name: 'groups', label: 'Works on (product groups)', type: 'multi', options: () => vsOptions('PRODUCT_GROUP'), cls: 'spanall', hint: 'Listed first when a job or assessment has products of these groups' },
       { name: 'mobile', label: 'Mobile', type: 'tel' }, { name: 'email', label: 'Email', type: 'email' },
     ],
     columns: [['code', 'Code'], ['name', 'Name'], ['designation', 'Designation'], ['type', 'Type'], [r => zoneLabel(r.mainZoneId), 'Main zone'],

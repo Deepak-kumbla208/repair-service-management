@@ -1,19 +1,19 @@
-// Enquiry rules: numbering, first status by type, item lines (the Enquiry Description), the site-inspection
+// Enquiry rules: numbering, first status by type, item lines (the Enquiry Description), the job-assessment
 // hand-off (optionally with the technician chosen on the enquiry), the register's automatic columns and
-// the 1–2 hour inspection target.
+// the 1–2 hour assessment target.
 import * as store from './store.js';
 import { quickCreate, addSite } from './customers.js';
 import { assignTechnician } from './inspections.js';
 import { contractFor, contractProgress, invoicesOf } from './contracts.js';
 import { unitOf } from './lookups.js';
 
-export const ENQ_STATUSES = ['Waiting for inspection', 'Inspection assigned', 'Report in progress', 'Inspected', 'BOQ study', 'Waiting for estimate',
+export const ENQ_STATUSES = ['Waiting for assessment', 'Assessment assigned', 'Report in progress', 'Assessed', 'BOQ study', 'Waiting for estimate',
   'Estimating', 'Quotation in check', 'Quotation approved', 'Quoted', 'Won', 'Contract active', 'Completed', 'Closed', 'Lost', 'Cancelled'];
 
-// Enquiry Type decides the next step: Repair goes to site inspection; AMC and General Servicing go to BOQ study
-// (site inspection optional, decided by the "Site Inspection" Yes / No column).
+// Enquiry Type decides the next step: Repair goes to job assessment; AMC and General Servicing go to BOQ study
+// (job assessment optional, decided by the "Job Assessment" Yes / No column).
 function firstStatus(type, needsInspection) {
-  if (needsInspection) return 'Waiting for inspection';
+  if (needsInspection) return 'Waiting for assessment';
   return type === 'REPAIR' ? 'Waiting for estimate' : 'BOQ study';
 }
 
@@ -36,12 +36,12 @@ export const rowText = r => (Number(r.qty) > 1 ? lineText({ itemName: r.descript
 
 function openInspection(enq) {
   const insp = store.insert('inspections', { enquiryId: enq.id, zoneId: enq.zoneId, technicianId: '', visitAt: null, confirmedBy: '', notes: '' },
-    { status: 'To assign', note: `Site inspection opened for ${enq.no}` });
+    { status: 'To assign', note: `Job assessment opened for ${enq.no}` });
   store.update('enquiries', enq.id, { inspectionId: insp.id }, false);
   return insp;
 }
 
-// A technician chosen on the enquiry assigns the inspection straight away (visit time optional).
+// A technician chosen on the enquiry assigns the assessment straight away (visit time optional).
 function applyAssignment(enq, assign) {
   if (!assign?.technicianId || !enq.inspectionId) return;
   const insp = store.get('inspections', enq.inspectionId);
@@ -71,7 +71,7 @@ export function saveNewEnquiry(data, { newCustomer, newSite, assign } = {}) {
   const enq = store.insert('enquiries', {
     ...data, lines, description: composeDescription(lines), no, contactId, customerId: customer.id, customerName: customer.name,
     siteId: site.id, siteName: site.name, zoneId: site.zoneId || '', recordedBy: data.recordedBy || store.currentActor(),
-    stage: needsInspection ? 'Inspection' : 'New', inspectionId: null,
+    stage: needsInspection ? 'Assessment' : 'New', inspectionId: null,
   }, { status: firstStatus(data.type, needsInspection), note: `${no} registered` });
   if (needsInspection) {
     openInspection(enq);
@@ -91,10 +91,10 @@ export function saveEnquiryChanges(id, data, { newSite, assign } = {}) {
   const open = insp && insp.status !== 'Cancelled';
   if (data.siteInspection === 'YES' && !open) {
     openInspection(store.get('enquiries', id));
-    store.setStatus('enquiries', id, 'Waiting for inspection', 'Site inspection added');
+    store.setStatus('enquiries', id, 'Waiting for assessment', 'Job assessment added');
   } else if (data.siteInspection !== 'YES' && open && insp.status === 'To assign') {
-    store.setStatus('inspections', insp.id, 'Cancelled', 'Site inspection not needed');
-    store.setStatus('enquiries', id, firstStatus(data.type, false), 'Site inspection not needed');
+    store.setStatus('inspections', insp.id, 'Cancelled', 'Job assessment not needed');
+    store.setStatus('enquiries', id, firstStatus(data.type, false), 'Job assessment not needed');
   } else if (open && insp.zoneId !== (site.zoneId || '')) {
     store.update('inspections', insp.id, { zoneId: site.zoneId || '' }, false);
   }
@@ -148,7 +148,7 @@ function amcColumns(e, q, sent) {
   };
 }
 
-// Inspection clock: flow step 3 says the site inspection should be done within 1–2 hours of the call.
+// Assessment clock: flow step 3 says the job assessment should be done within 1–2 hours of the call.
 // state: ok (under half the target) | warn | bad (over target); done = report submitted.
 export function inspectionClock(enq, company, now = Date.now()) {
   const insp = enq.inspectionId ? store.get('inspections', enq.inspectionId) : null;

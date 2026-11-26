@@ -56,8 +56,8 @@ const WEB = [
   [/^enquiries\/new$/, 'enquiry', el => renderEnquiryForm(el, null)],
   [/^enquiries\/([^/]+)\/edit$/, 'enquiry', renderEnquiryForm],
   [/^enquiries\/([^/]+)$/, 'enquiry', renderEnquiryView],
-  [/^inspections$/, 'inspection', renderInspectionList],
-  [/^inspections\/([^/]+)$/, 'inspection', renderInspection],
+  [/^assessments$/, 'inspection', renderInspectionList],
+  [/^assessments\/([^/]+)$/, 'inspection', renderInspection],
   [/^reports\/([^/]+)$/, 'inspection', renderReport],
   [/^estimates$/, 'estimation', renderEstimateList],
   [/^estimates\/([^/]+)$/, 'estimation', renderEstimate],
@@ -114,7 +114,7 @@ const MOBILE = [
 // Which sidebar item to highlight for a web route.
 function activeMenu(route) {
   const [a, b] = route.split('/');
-  return { home: 'dashboard', tasks: 'dashboard', enquiries: 'enquiry', inspections: 'inspection', reports: 'inspection', estimates: 'estimation', quotations: 'quotation',
+  return { home: 'dashboard', tasks: 'dashboard', enquiries: 'enquiry', assessments: 'inspection', reports: 'inspection', estimates: 'estimation', quotations: 'quotation',
     jobs: 'job', invoices: 'invoice', payments: 'payment', closure: 'closure', contracts: 'amcContract', 'amc-scheduling': 'amcScheduling', 'amc-visits': 'amcExecution',
     master: b, admin: b, soon: b }[a] || '';
 }
@@ -124,7 +124,7 @@ export function routeForView(route, view) {
   let m;
   if (view === 'mobile') {
     if ((m = route.match(/^enquiries\/([^/]+)/)) && m[1] !== 'new') return `m/enquiry/${m[1]}`;
-    if ((m = route.match(/^inspections\/([^/]+)/)) && auth.scope('inspection') === 'own') return `m/job/${m[1]}`;
+    if ((m = route.match(/^assessments\/([^/]+)/)) && auth.scope('inspection') === 'own') return `m/job/${m[1]}`;
     if ((m = route.match(/^jobs\/([^/]+)$/)) && m[1] !== 'list') return store.get('jobs', m[1])?.type === 'GS' ? `m/gjob/${m[1]}` : `m/rjob/${m[1]}`;
     if ((m = route.match(/^amc-visits\/([^/]+)$/)) && auth.can('amcExecution', 'view', 'mobile')) return `m/visit/${m[1]}`;
     if (route === 'tasks') return 'm/tasks';
@@ -132,7 +132,7 @@ export function routeForView(route, view) {
     return route.startsWith('m/') ? route : 'm/home';
   }
   if ((m = route.match(/^m\/enquiry\/([^/]+)/))) return `enquiries/${m[1]}`;
-  if ((m = route.match(/^m\/job\/([^/]+)/))) return `inspections/${m[1]}`;
+  if ((m = route.match(/^m\/job\/([^/]+)/))) return `assessments/${m[1]}`;
   if ((m = route.match(/^m\/report\/([^/]+)/))) return `reports/${m[1]}`;
   if ((m = route.match(/^m\/(rjob|gjob)\/([^/]+)/))) return `jobs/${m[2]}`;
   if ((m = route.match(/^m\/visit\/([^/]+)/))) return `amc-visits/${m[1]}`;
